@@ -98,6 +98,27 @@ export const ar: Record<string, string> = {
     '{profile_email} *البريد الحالي:* `{current}`',
   'profile.orders.empty': 'لا توجد طلبات بعد.',
   'profile.orders.title': '🧾 *طلباتي*',
+  // ---------- My Orders screen (new keys) ----------
+  'orders.title': '{orders_title} *طلباتي*',
+  'orders.body': 'اضغط على أي طلب لعرض تفاصيله، أو أرسل رقم الطلب العام الموجود في إيصالك.',
+  'orders.empty':
+    '{orders_title} *طلباتي*\n\n' +
+    '🌙 لا توجد طلبات بعد.\n' +
+    '✨ اضغط على *🛍 المتجر* بالأسفل لإجراء أول طلب!',
+  'orders.page': 'الصفحة {page}/{pages}',
+  'orders.export.caption':
+    '{orders_title} *كل طلباتك في ملف واحد.* 📎\n' +
+    '{orders_total} *{count}* بالمجمل — احتفظ به لسجلاتك.',
+  'orders.export.filename': 'safwantiger-orders-{id}.txt',
+  'orders.export.header':
+    '====================================\n' +
+    'SAFWANTIGER SHOP — تصدير طلباتي\n' +
+    '====================================\n' +
+    'معرّف تيليجرام : {id}\n' +
+    'اسم المستخدم  : @{username}\n' +
+    'تم الإنشاء    : {generated}\n' +
+    'إجمالي الطلبات: {count}\n' +
+    '====================================',
   'profile.orders.line': '#{id} • {name} ×{qty} • {total} • {date}',
   'profile.notify.stock_on': 'تنبيهات المخزون: ✅ مفعلة',
   'profile.notify.stock_off': 'تنبيهات المخزون: ⛔ معطلة',

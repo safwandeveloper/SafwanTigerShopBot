@@ -158,8 +158,26 @@ export const en: Record<string, string> = {
   // ---------- My Orders screen ----------
   'orders.title': '{orders_title} *My Orders*',
   'orders.body': 'Tap any order below to open details, or send the public Order ID shown in your receipt.',
-  'orders.empty': 'You haven\'t placed any orders yet.',
+  'orders.empty':
+    '{orders_title} *My Orders*\n\n' +
+    '🌙 No orders yet.\n' +
+    '✨ Tap *🛍 Shop* below to place your first order!',
   'orders.page': 'Page {page}/{pages}',
+  // Caption + filename used when the bot attaches a .txt export of
+  // every order on the My Orders screen.
+  'orders.export.caption':
+    '{orders_title} *All your orders, in one file.* 📎\n' +
+    '{orders_total} *{count}* total — keep this for your records.',
+  'orders.export.filename': 'safwantiger-orders-{id}.txt',
+  'orders.export.header':
+    '====================================\n' +
+    'SAFWANTIGER SHOP — MY ORDERS EXPORT\n' +
+    '====================================\n' +
+    'Telegram ID : {id}\n' +
+    'Username    : @{username}\n' +
+    'Generated   : {generated}\n' +
+    'Total Orders: {count}\n' +
+    '====================================',
   'orders.status.active': '🛡 Active',
   'orders.status.refunded': '↩️ Refunded',
   'orders.status.cancelled': '⛔ Cancelled',
