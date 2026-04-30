@@ -12,6 +12,7 @@ import {
   getReferralEarnings,
   getUserStats,
   listDeposits,
+  listOrders,
   listOrdersPaginated,
   listWalletLedger,
   recordGiftCodeRedemption,
@@ -282,7 +283,7 @@ export function registerProfile(bot: Composer<AppCtx>): void {
   // ---- My Orders (list) ----
   // Paginated 2-column grid: each row is [Product Name] [Active status]
   // and tapping anywhere opens that order's detail screen.
-  async function showOrdersPage(ctx: AppCtx, page: number): Promise<void> {
+  async function showOrdersPage(ctx: AppCtx, page: number): Promise<number> {
     const { rows, total } = await listOrdersPaginated(
       ctx.user.telegram_id,
       page,
@@ -293,7 +294,7 @@ export function registerProfile(bot: Composer<AppCtx>): void {
         parse_mode: 'HTML',
         reply_markup: backToSettingsKeyboard(ctx.lang),
       });
-      return;
+      return 0;
     }
     const totalPages = Math.max(1, Math.ceil(total / ORDERS_PER_PAGE));
     const text = [ctx.t('orders.title'), '', ctx.t('orders.body')].join('\n');
@@ -301,12 +302,95 @@ export function registerProfile(bot: Composer<AppCtx>): void {
       parse_mode: 'HTML',
       reply_markup: ordersListKeyboard(ctx.lang, rows, page, totalPages),
     });
+    return total;
+  }
+
+  /**
+   * Fire-and-forget: send the user a `.txt` document containing every
+   * order they've ever placed (formatted block-by-block). Triggered
+   * the moment a user opens the My Orders screen so they always get
+   * an offline-readable copy of their full order history.
+   *
+   * Returns the number of orders included in the export (0 if the
+   * user has no orders or the upload failed) so the caller can
+   * record it on the session and skip re-uploading on subsequent
+   * "Back to Orders" navigations.
+   */
+  async function sendOrdersExport(ctx: AppCtx): Promise<number> {
+    const orders = await listOrders(ctx.user.telegram_id, 1000);
+    if (orders.length === 0) return 0;
+
+    const generated = formatAbsoluteUtc(new Date().toISOString());
+    const headerText = ctx.t('orders.export.header', {
+      id: ctx.user.telegram_id,
+      username: ctx.user.username ?? '—',
+      generated,
+      count: orders.length,
+    });
+
+    const blocks: string[] = [headerText, ''];
+    orders.forEach((order, i) => {
+      const pubId = publicOrderId(order);
+      const status =
+        order.status === 'paid'
+          ? 'Active (paid)'
+          : order.status === 'refunded'
+            ? 'Refunded'
+            : 'Cancelled';
+      const total = Number(order.total).toFixed(order.total % 1 === 0 ? 0 : 2);
+      const unit = Number(order.unit_price).toFixed(
+        order.unit_price % 1 === 0 ? 0 : 2,
+      );
+      const when = formatAbsoluteUtc(order.created_at);
+      blocks.push(
+        `Order #${i + 1}`,
+        `  Order ID    : ${pubId}`,
+        `  Product     : ${order.product_name}`,
+        `  Quantity    : ${order.qty}`,
+        `  Unit Price  : ${unit} USDT`,
+        `  Total       : ${total} USDT`,
+        `  Status      : ${status}`,
+        `  Placed at   : ${when}`,
+        `  Delivery    : ${order.delivery ? order.delivery.replace(/\r?\n/g, ' ') : '—'}`,
+        '------------------------------------',
+      );
+    });
+    const fileText = blocks.join('\n') + '\n';
+
+    const filename = ctx.t('orders.export.filename', { id: ctx.user.telegram_id });
+    const caption = renderMdHtml(
+      ctx.t('orders.export.caption', { count: orders.length }),
+    );
+    try {
+      await ctx.replyWithDocument(
+        new InputFile(Buffer.from(fileText, 'utf8'), filename),
+        { caption, parse_mode: 'HTML' },
+      );
+      return orders.length;
+    } catch (err) {
+      console.error('failed to send orders export', err);
+      return 0;
+    }
   }
 
   bot.callbackQuery('profile:orders', async (ctx) => {
     await ctx.answerCallbackQuery();
     ctx.session.userFlow = { type: 'orders_lookup', step: 'value', data: {} };
-    await showOrdersPage(ctx, 0);
+    const total = await showOrdersPage(ctx, 0);
+    // Auto-attach a .txt export of every order so the user always
+    // has an offline-readable receipt of their full order history.
+    // Skip when the export we sent earlier in this session is still
+    // up-to-date (same order count) — "Back to Orders" from an
+    // order detail screen also routes through `profile:orders` and
+    // we don't want to re-upload an identical file on every tap.
+    if (total > 0 && ctx.session.ordersExportCount !== total) {
+      // Fire-and-forget: don't block the list render on Telegram's
+      // file upload round-trip.
+      void (async () => {
+        const sent = await sendOrdersExport(ctx);
+        if (sent > 0) ctx.session.ordersExportCount = sent;
+      })();
+    }
   });
 
   bot.callbackQuery(/^orders:p:(\d+)$/, async (ctx) => {

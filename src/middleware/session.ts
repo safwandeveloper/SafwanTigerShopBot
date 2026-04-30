@@ -133,6 +133,13 @@ export type SessionData = {
    * bot versions that used a bottom keyboard).
    */
   kbCleared?: boolean;
+  /**
+   * Order count we last attached the auto-generated "all orders"
+   * .txt export for. Lets navigating "Back to Orders" from an order
+   * detail screen skip the re-upload, while a freshly placed order
+   * (count increased) triggers a fresh export.
+   */
+  ordersExportCount?: number;
 };
 
 export type SessionCtx = Context & SessionFlavor<SessionData>;

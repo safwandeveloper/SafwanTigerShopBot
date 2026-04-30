@@ -100,6 +100,27 @@ export const vi: Record<string, string> = {
   'profile.orders.empty': 'Bạn chưa có đơn hàng nào.',
   'profile.orders.title': '🧾 *Đơn hàng của tôi*',
   'profile.orders.line': '#{id} • {name} ×{qty} • {total} • {date}',
+  // ---------- My Orders screen (new keys) ----------
+  'orders.title': '{orders_title} *Đơn hàng của tôi*',
+  'orders.body': 'Chạm vào bất kỳ đơn hàng nào để xem chi tiết, hoặc gửi mã đơn công khai từ biên lai của bạn.',
+  'orders.empty':
+    '{orders_title} *Đơn hàng của tôi*\n\n' +
+    '🌙 Chưa có đơn hàng nào.\n' +
+    '✨ Chạm vào *🛍 Cửa hàng* bên dưới để đặt đơn đầu tiên!',
+  'orders.page': 'Trang {page}/{pages}',
+  'orders.export.caption':
+    '{orders_title} *Tất cả đơn hàng của bạn, trong một tệp.* 📎\n' +
+    '{orders_total} Tổng *{count}* — hãy lưu lại để tham khảo.',
+  'orders.export.filename': 'safwantiger-orders-{id}.txt',
+  'orders.export.header':
+    '====================================\n' +
+    'SAFWANTIGER SHOP — XUẤT ĐƠN HÀNG\n' +
+    '====================================\n' +
+    'Telegram ID : {id}\n' +
+    'Tên người dùng: @{username}\n' +
+    'Đã tạo lúc  : {generated}\n' +
+    'Tổng đơn    : {count}\n' +
+    '====================================',
   'profile.notify.stock_on': 'Thông báo tồn kho: ✅ BẬT',
   'profile.notify.stock_off': 'Thông báo tồn kho: ⛔ TẮT',
   'profile.notify.ann_on': 'Thông báo tin tức: ✅ BẬT',
