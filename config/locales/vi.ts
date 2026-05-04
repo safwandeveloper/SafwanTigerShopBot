@@ -96,7 +96,7 @@ export const vi: Record<string, string> = {
   'shop.empty_categories': 'Chưa có danh mục. Vui lòng quay lại sau.',
   'shop.empty_products': 'Chưa có sản phẩm trong danh mục này.',
   'shop.product.line.name': '{emoji} *{name}*',
-  'shop.product.line.price': '{prod_price_base} *Giá gốc:* {price} USDT',
+  'shop.product.line.price': '{prod_price_base} *Giá:* {price} USDT',
   'shop.product.line.stock': '{prod_stock} *Còn lại:* {stock}',
   'shop.product.line.warranty': '{prod_warranty} *Bảo hành:* {warranty}',
   'shop.product.line.qty': '{prod_qty_selected} *Số lượng đã chọn:* {qty}',

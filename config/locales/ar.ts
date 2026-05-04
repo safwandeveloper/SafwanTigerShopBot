@@ -96,7 +96,7 @@ export const ar: Record<string, string> = {
   'shop.empty_categories': 'لا توجد فئات بعد. يرجى التحقق لاحقًا.',
   'shop.empty_products': 'لا توجد منتجات في هذه الفئة بعد.',
   'shop.product.line.name': '{emoji} *{name}*',
-  'shop.product.line.price': '{prod_price_base} *السعر الأساسي:* {price} USDT',
+  'shop.product.line.price': '{prod_price_base} *السعر:* {price} USDT',
   'shop.product.line.stock': '{prod_stock} *المتوفر:* {stock}',
   'shop.product.line.warranty': '{prod_warranty} *الضمان:* {warranty}',
   'shop.product.line.qty': '{prod_qty_selected} *الكمية المختارة:* {qty}',

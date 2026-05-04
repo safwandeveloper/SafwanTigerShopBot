@@ -1,5 +1,5 @@
 import type { Composer } from 'grammy';
-import { InlineKeyboard, InputFile } from 'grammy';
+import { InlineKeyboard } from 'grammy';
 import { PRODUCTS_PER_PAGE, QTY_MAX, QTY_MIN } from '../../config/index.js';
 import {
   createOrder,
@@ -89,15 +89,15 @@ function productPageText(
 ) {
   const { gross, discount, total } = priceBreakdown(p.price, qty, promo);
   const eligible = !!promo && discount > 0;
+  // Description deliberately omitted from the buy / keypad page —
+  // it now lives only on the View Note screen so the buying screen
+  // stays compact (premium-emoji facts → qty → total → wallet).
   const lines: string[] = [
     ctx.t('shop.product.line.name', { name: p.name, emoji: p.emoji ?? '' }),
-  ];
-  if (p.description) lines.push(p.description);
-  lines.push(
     ctx.t('shop.product.line.price', { price: p.price }),
     ctx.t('shop.product.line.stock', { stock: p.stock }),
     ctx.t('shop.product.line.warranty', { warranty: p.warranty ?? '—' }),
-  );
+  ];
   // Teaser line under Warranty.
   //   - Always shows when there is no active promo yet but an
   //     upcoming threshold exists (the original "Buy 10+ −$5 Off"
@@ -470,13 +470,9 @@ export function registerShop(bot: Composer<AppCtx>): void {
   });
 
   // ---- View Note ----
-  // Replaces the popup-only behaviour with a full-screen detail view.
-  // Body shows everything the user might need to know about the
-  // product (name, price, stock, warranty, description, full note).
-  // Buttons:
-  //   - 📥 Save Note as TXT — sends the same body as a `.txt` file
-  //     so the user has a downloadable copy.
-  //   - Back → returns to the product page.
+  // Full-screen detail view for the product (name, price, stock,
+  // warranty, description, full note). Single Back button — the
+  // legacy "Save Note as TXT" download was removed per UX request.
   bot.callbackQuery(/^note:(\d+)$/, async (ctx) => {
     const id = Number(ctx.match[1]);
     const raw = await getProduct(id);
@@ -495,50 +491,11 @@ export function registerShop(bot: Composer<AppCtx>): void {
       note: p.note && p.note.length > 0 ? p.note : ctx.t('shop.note.empty'),
     });
     const kb = new InlineKeyboard();
-    inlineBtn(kb, ctx.lang, 'view_note_file', `note:txt:${p.id}`);
-    kb.row();
     inlineBtn(kb, ctx.lang, 'back', `prod:${p.id}`);
     await ctx.editMessageText(renderMdHtml(body), {
       parse_mode: 'HTML',
       reply_markup: kb,
     });
-  });
-
-  // Send the full product note as a downloadable `.txt` attachment.
-  // Uses Telegram's native document viewer so the user can save it,
-  // forward it to friends, etc. without any third-party hosting.
-  bot.callbackQuery(/^note:txt:(\d+)$/, async (ctx) => {
-    const id = Number(ctx.match[1]);
-    const raw = await getProduct(id);
-    if (!raw) {
-      await ctx.answerCallbackQuery({ text: ctx.t('err.unknown_action') });
-      return;
-    }
-    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw);
-    await ctx.answerCallbackQuery();
-    const lines = [
-      `Product: ${p.name}`,
-      `Price: ${p.price} USDT`,
-      `Stock: ${p.stock}`,
-      `Warranty: ${p.warranty ?? '—'}`,
-      '',
-      'Description:',
-      p.description ?? '—',
-      '',
-      'Note:',
-      p.note ?? '—',
-      '',
-      `— SafwanTiger Shop · ${new Date().toUTCString()}`,
-    ].join('\n');
-    const safeName = p.name.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 40) || 'product';
-    const filename = `${safeName}_note.txt`;
-    await ctx.replyWithDocument(
-      new InputFile(Buffer.from(lines, 'utf8'), filename),
-      {
-        caption: `📄 ${p.name} — note`,
-        parse_mode: 'HTML',
-      },
-    );
   });
 
   // *Buy Now* on the product page no longer charges immediately —

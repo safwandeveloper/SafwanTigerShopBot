@@ -137,7 +137,7 @@ export const en: Record<string, string> = {
   // `<tg-emoji>` tag with the configured custom_emoji_id (animated
   // for premium subs, plain unicode for everyone else).
   'shop.product.line.name': '{emoji} *{name}*',
-  'shop.product.line.price': '{prod_price_base} *Price Base:* {price} USDT',
+  'shop.product.line.price': '{prod_price_base} *Price:* {price} USDT',
   'shop.product.line.stock': '{prod_stock} *Available Stock:* {stock}',
   'shop.product.line.warranty': '{prod_warranty} *Warranty:* {warranty}',
   'shop.product.line.qty': '{prod_qty_selected} *Selected Qty:* {qty}',
