@@ -99,6 +99,7 @@ import {
   setCategoryDefaultColor,
 } from '../../services/settings.js';
 import { renderMdHtml } from '../../services/premium.js';
+import { env } from '../../env.js';
 import { t as translate } from '../../i18n/index.js';
 import * as adminLog from '../../services/adminLog.js';
 import { describeMailerStatus, sendWelcomeEmail } from '../../services/mailer.js';
@@ -943,8 +944,20 @@ adminBot.callbackQuery(/^adm:prod:items:add:(\d+):(\d+)$/, async (ctx) => {
     step: 'items',
     data: { product_id, page },
   };
+  // Two input modes are accepted:
+  //   1) Plain text message — one item per line.
+  //   2) `.txt` file upload — same one-item-per-line format,
+  //      handy when you have hundreds/thousands of stock entries
+  //      that won't fit in a single Telegram message.
+  // The document branch is wired in `adminBot.on('message:document', …)`
+  // below; the text branch is in the `edit_product_items` block of
+  // the main text handler.
   await ctx.reply(
-    '📦 Send the deliverables as your next message — *one per line*.\n\nExample:\n```\nemail1@example.com|password123\nemail2@example.com|password456\nhttps://account-link/...\n```',
+    '📦 Send the deliverables — *one per line*.\n\n' +
+      'You can either:\n' +
+      '• Paste them as a regular message, or\n' +
+      '• Upload a `.txt` file with one item per line (best for bulk).\n\n' +
+      'Example:\n```\nemail1@example.com|password123\nemail2@example.com|password456\nhttps://account-link/...\n```',
     { parse_mode: 'Markdown' },
   );
 });
@@ -3706,6 +3719,11 @@ adminBot.on('message:text', async (ctx, next) => {
           [
             '📦 *Send the deliverables (items pool)* — one payload per line.',
             'These are the actual things buyers receive (acc emails+passwords, links, codes, etc).',
+            '',
+            'You can either:',
+            '• Paste them as a regular message, or',
+            '• Upload a `.txt` file with one item per line (best for bulk).',
+            '',
             'Example:',
             '```',
             'email1@example.com|password123',
@@ -4930,6 +4948,56 @@ adminBot.on('message:text', async (ctx, next) => {
 // `edit_product_*_file` flow is armed. Anything else passes through
 // to the next handler so other features (announcements, etc.) keep
 // working unchanged.
+//
+// `.txt` uploads for the items pool (`edit_product_items` flow and
+// the new-product `add_product` step `items`) are also handled
+// here so admins can paste hundreds/thousands of stock entries
+// from a file instead of cramming them into a single Telegram
+// message.
+const ITEMS_TXT_MAX_BYTES = 5 * 1024 * 1024; // 5 MB safety cap
+
+async function downloadTelegramFileAsText(
+  ctx: AppCtx,
+  file_id: string,
+): Promise<string> {
+  const file = await ctx.api.getFile(file_id);
+  if (!file.file_path) {
+    throw new Error('telegram returned no file_path for upload');
+  }
+  const url = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${file.file_path}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`telegram file download failed: ${res.status} ${res.statusText}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.byteLength > ITEMS_TXT_MAX_BYTES) {
+    throw new Error(
+      `file is too large (${buf.byteLength} bytes, max ${ITEMS_TXT_MAX_BYTES})`,
+    );
+  }
+  return buf.toString('utf8');
+}
+
+function parseItemsFromText(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+function isTextDocument(doc: { mime_type?: string | null; file_name?: string | null }): boolean {
+  const mime = (doc.mime_type ?? '').toLowerCase();
+  const name = (doc.file_name ?? '').toLowerCase();
+  return (
+    mime.startsWith('text/') ||
+    mime === 'application/octet-stream' ||
+    name.endsWith('.txt') ||
+    name.endsWith('.csv') ||
+    name.endsWith('.list') ||
+    name.endsWith('.log')
+  );
+}
+
 adminBot.on('message:document', async (ctx, next) => {
   const flow = ctx.session.adminFlow;
   if (!flow) return next();
@@ -4949,6 +5017,69 @@ adminBot.on('message:document', async (ctx, next) => {
     await setBotTutorialField('file_type', 'document', ctx.from.id);
     ctx.session.adminFlow = undefined;
     await ctx.reply('✅ Bot Tutorial document saved.');
+    return;
+  }
+  // ---- Items pool: bulk upload via `.txt` ----
+  if (flow.type === 'edit_product_items') {
+    if (!isTextDocument(doc)) {
+      await ctx.reply(
+        '❌ Please upload a `.txt` file (one item per line). ' +
+          'Other file types are not supported for the items pool.',
+        { parse_mode: 'Markdown' },
+      );
+      return;
+    }
+    try {
+      const text = await downloadTelegramFileAsText(ctx, doc.file_id);
+      const payloads = parseItemsFromText(text);
+      if (payloads.length === 0) {
+        await ctx.reply('❌ The uploaded file had no non-empty lines.');
+        return;
+      }
+      await addProductItems(flow.data.product_id, payloads);
+      ctx.session.adminFlow = undefined;
+      await ctx.reply(
+        `✅ Added *${payloads.length}* items from \`${doc.file_name ?? 'upload.txt'}\` to the pool.`,
+        { parse_mode: 'Markdown' },
+      );
+      await showProductEditor(ctx, flow.data.product_id, flow.data.page);
+    } catch (err) {
+      logger.error({ err, product_id: flow.data.product_id }, 'edit_product_items: txt upload failed');
+      await ctx.reply(
+        `⚠️ Couldn't import that file: ${escapeHtml(
+          (err as Error)?.message ?? String(err),
+        )}\n\nYou can retry by uploading another <code>.txt</code> file or pasting the items as text.`,
+        { parse_mode: 'HTML' },
+      );
+    }
+    return;
+  }
+  if (flow.type === 'add_product' && flow.step === 'items') {
+    if (!isTextDocument(doc)) {
+      await ctx.reply(
+        '❌ Please upload a `.txt` file (one item per line), or paste the items as a regular message. ' +
+          'Other file types are not supported for the items pool.',
+        { parse_mode: 'Markdown' },
+      );
+      return;
+    }
+    try {
+      const text = await downloadTelegramFileAsText(ctx, doc.file_id);
+      const payloads = parseItemsFromText(text);
+      if (payloads.length === 0) {
+        await ctx.reply('❌ The uploaded file had no non-empty lines.');
+        return;
+      }
+      await finalizeProduct(ctx, flow.data, payloads);
+    } catch (err) {
+      logger.error({ err }, 'add_product items: txt upload failed');
+      await ctx.reply(
+        `⚠️ Couldn't import that file: ${escapeHtml(
+          (err as Error)?.message ?? String(err),
+        )}\n\nYou can retry by uploading another <code>.txt</code> file or pasting the items as text.`,
+        { parse_mode: 'HTML' },
+      );
+    }
     return;
   }
   if (flow.type === 'edit_payment_icon') {
