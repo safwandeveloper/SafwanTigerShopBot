@@ -232,11 +232,21 @@ export async function verifyAndCreditDeposit(args: {
       };
     }
 
+    // Binance Pay's `/sapi/v1/pay/transactions` returns `amount` with
+    // a *signed* perspective: positive when the API-key owner is the
+    // RECEIVER on this order, negative when the API-key owner is the
+    // SENDER. Both viewpoints describe the same on-chain transfer of
+    // `|amount|` USDT into the configured merchant Pay ID — and we
+    // already enforced `tx.receiverInfo.binanceId === method.address`
+    // above, so whichever side the operator's API key belongs to, the
+    // funds did land at the merchant. Normalise to the unsigned
+    // amount so the verifier works regardless of which Binance
+    // account the keys come from.
     const rawAmount = Number(tx.amount);
-    if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
-      return { ok: false, reason: `binance returned non-positive amount: ${tx.amount}` };
+    if (!Number.isFinite(rawAmount) || rawAmount === 0) {
+      return { ok: false, reason: `binance returned non-numeric/zero amount: ${tx.amount}` };
     }
-    const amount = truncate3(rawAmount);
+    const amount = truncate3(Math.abs(rawAmount));
 
     // Direct-pay amount guard. When the deposit carries an order
     // intent, the user is paying for a *specific* product —
