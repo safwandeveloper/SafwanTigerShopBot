@@ -3918,7 +3918,7 @@ async function showCustomPriceUserPick(ctx: AppCtx): Promise<void> {
       reply_markup: kb,
     });
   } else {
-    await ctx.reply(body, {
+    await ctx.reply(body, {A
       parse_mode: 'Markdown',
       reply_markup: kb,
     });
