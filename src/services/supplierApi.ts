@@ -174,6 +174,39 @@ export function supabaseResellerSupplierConfig(apiKey: string): SupplierSourceCo
   };
 }
 
+export function rskResellerSupplierConfig(apiKey: string): SupplierSourceConfig {
+  return {
+    name: 'RSK Reseller API',
+    base_url: 'https://eygkdpfjrjwwbiackfpr.supabase.co/functions/v1/reseller-api',
+    api_key: apiKey.trim(),
+    auth_mode: 'bearer',
+    products_path: '?action=products',
+    balance_path: '?action=balance',
+    order_path: '?action=order',
+    order_method: 'POST',
+    products_json_path: 'products',
+    balance_json_path: 'reseller.balance',
+    product_id_json_path: 'id',
+    product_name_json_path: 'name',
+    product_price_json_path: 'wholesale_price',
+    product_stock_json_path: 'stock',
+    order_items_json_path: 'order.items',
+    order_status_json_path: 'ok',
+    order_request_template: {
+      product_id: '{{supplier_product_id}}',
+      quantity: '{{qty}}',
+      external_order_id: '{{request_id}}',
+    },
+    markup_percent: 25,
+    fixed_markup: 0,
+    low_balance_threshold: 5,
+    auto_import_new_products: false,
+    auto_import_active: false,
+    import_category_name: 'RSK Reseller Products',
+    notes: 'One-click RSK Reseller API supplier connector.',
+  };
+}
+
 function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v)
     ? (v as Record<string, unknown>)

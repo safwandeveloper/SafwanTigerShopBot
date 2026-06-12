@@ -171,6 +171,7 @@ import {
   importSupplierProduct,
   parseSupplierLinkConfig,
   parseSupplierSourceConfig,
+  rskResellerSupplierConfig,
   supabaseResellerSupplierConfig,
   supplierSellPrice,
   syncSupplierProductLink,
@@ -1154,6 +1155,9 @@ function supplierListKeyboard(
   kb.text('Add Canboso', 'adm:api:supplier:add:canboso');
   apiPremiumButton(kb, 'api_key', 'primary');
   kb.row();
+  kb.text('Add RSK Reseller', 'adm:api:supplier:add:rsk');
+  apiPremiumButton(kb, 'api_key', 'primary');
+  kb.row();
   kb.text('Advanced JSON', 'adm:api:supplier:add');
   apiPremiumButton(kb, 'orders_note', 'primary');
   kb.text('Map Product', 'adm:api:supplier:map');
@@ -1584,6 +1588,36 @@ adminBot.callbackQuery('adm:api:supplier:add:reseller', async (ctx) => {
       '',
       'Send the reseller API key only. This preset already knows:',
       '`https://mxcuakzztajvkgtsocln.supabase.co/functions/v1/reseller-api`',
+      '',
+      'Auth: `Authorization: Bearer YOUR_API_KEY`',
+      'Products: `?action=products`',
+      'Balance: `?action=balance`',
+      'Order: `?action=order`',
+      '',
+      'Example:',
+      '`rsk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`',
+      '',
+      'After saving, open *Browse Products* and import products by button.',
+      '',
+      'Send `/cancel` to abort.',
+    ].join('\n'),
+    {
+      parse_mode: 'Markdown',
+      reply_markup: backRow(new InlineKeyboard()),
+      link_preview_options: { is_disabled: true },
+    },
+  );
+});
+
+adminBot.callbackQuery('adm:api:supplier:add:rsk', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = { type: 'supplier_rsk_add', step: 'key', data: {} };
+  await ctx.editMessageText(
+    [
+      '*Add RSK Reseller API Supplier*',
+      '',
+      'Send the RSK reseller API key only. This preset already knows:',
+      '`https://eygkdpfjrjwwbiackfpr.supabase.co/functions/v1/reseller-api`',
       '',
       'Auth: `Authorization: Bearer YOUR_API_KEY`',
       'Products: `?action=products`',
@@ -7553,6 +7587,33 @@ adminBot.on('message:text', async (ctx, next) => {
       return;
     }
 
+    if (flow.type === 'supplier_rsk_add') {
+      const key = ctx.message.text.trim();
+      if (key.length < 24) {
+        await ctx.reply('❌ Send the full RSK reseller API key, or `/cancel`.', {
+          parse_mode: 'Markdown',
+        });
+        return;
+      }
+      const source = await createSupplierApiSource(rskResellerSupplierConfig(key));
+      ctx.session.adminFlow = undefined;
+      let testLine = 'Saved. Tap Test Connection if you want to retry the live check.';
+      try {
+        const test = await testSupplierConnection(source);
+        testLine = test.ok
+          ? `Live test OK: ${test.balance === null ? 'balance unknown' : `balance ${apiMoney(test.balance)}`} · ${test.productsSeen} products`
+          : `Saved, but live test needs attention: ${test.error ?? 'unknown error'}`;
+      } catch (err) {
+        testLine = `Saved, but live test failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      await ctx.reply(
+        `✅ RSK Reseller supplier saved: *${escapeMd(source.name)}* (#${source.id})\n\n${escapeMd(testLine)}\n\nTap *Browse Products* to import by button.`,
+        { parse_mode: 'Markdown' },
+      );
+      await showSupplierDetail(ctx, source.id);
+      return;
+    }
+
     if (flow.type === 'supplier_api_add') {
       const cfg = parseSupplierSourceConfig(ctx.message.text.trim());
       const source = await createSupplierApiSource(cfg);
@@ -9354,6 +9415,7 @@ adminBot.on('message:text', async (ctx, next) => {
       flow.type === 'supplier_api_add' ||
       flow.type === 'supplier_canboso_add' ||
       flow.type === 'supplier_reseller_add' ||
+      flow.type === 'supplier_rsk_add' ||
       flow.type === 'supplier_product_link_add'
     ) {
       if (isSupplierMigrationError(err)) {
