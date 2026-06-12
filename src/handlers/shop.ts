@@ -15,6 +15,7 @@ import {
   getOrder,
   getReferralBalance,
   InsufficientReferralBalanceError,
+  isReferralFraudSuspected,
   listActiveProducts,
   claimProductItems,
   spendReferralBalance,
@@ -1275,6 +1276,14 @@ export function registerShop(bot: Composer<AppCtx>): void {
       });
       return;
     }
+    // Block fraud-suspected users from buying with referrals
+    if (ctx.user.referral_fraud_suspected) {
+      await ctx.answerCallbackQuery({
+        text: ctx.t('shop.referral.fraud_blocked'),
+        show_alert: true,
+      });
+      return;
+    }
     const qty = ctx.session.qty[productId] ?? QTY_MIN;
     const referral = await getReferralPaymentState(ctx, p, qty);
     if (!referral) {
@@ -1318,6 +1327,14 @@ export function registerShop(bot: Composer<AppCtx>): void {
     if (!p.referral_required_count || p.referral_required_count <= 0) {
       await ctx.answerCallbackQuery({
         text: ctx.t('shop.referral.disabled'),
+        show_alert: true,
+      });
+      return;
+    }
+    // Block fraud-suspected users from buying with referrals
+    if (ctx.user.referral_fraud_suspected) {
+      await ctx.answerCallbackQuery({
+        text: ctx.t('shop.referral.fraud_blocked'),
         show_alert: true,
       });
       return;

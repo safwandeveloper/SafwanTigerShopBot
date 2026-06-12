@@ -130,7 +130,7 @@ Keep sharing your link and stack rewards.`;
   if (totalRefs > 0 && totalRefs % 10 === 0) {
     void publicFeed.notifyReferralAchievement(ctx.api, {
       userId: referrerId,
-      amount: 0.5,
+      amount: 0.1,
     });
   }
 }

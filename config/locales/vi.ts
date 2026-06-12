@@ -187,6 +187,8 @@ export const vi: Record<string, string> = {
     '❌ Số dư ví không đủ. Cần *{need}* nhưng chỉ có *{have}*. Vui lòng nạp tiền trước.',
   'shop.buy.no_stock': '❌ Xin lỗi, sản phẩm đã hết hàng.',
   'shop.referral.disabled': '❌ Referral Pay chưa được bật cho sản phẩm này.',
+  'shop.referral.fraud_blocked':
+    '⛔ Referral Pay bị chặn.\n\nTài khoản của bạn bị đánh dấu vì hoạt động giới thiệu đáng ngờ. Vui lòng liên hệ hỗ trợ để được xem xét.',
   'shop.referral.already_redeemed': '✅ Referral Pay đã được dùng cho một đơn cũ.',
   'shop.referral.insufficient':
     '❌ Cần {required} lượt giới thiệu để đổi. Bạn có {total} (còn {remaining}).',
@@ -240,7 +242,7 @@ export const vi: Record<string, string> = {
   // Màn hình Giới thiệu & Kiếm.
   'profile.refer.title': '{refer_title} *Giới thiệu & Kiếm*',
   'profile.refer.body':
-    '{refer_prize_l} *Giới thiệu 10 người và thắng $0.50* {refer_prize_r}\n\n' +
+    '{refer_prize_l} *Giới thiệu 10 người và thắng $0.10* {refer_prize_r}\n\n' +
     '{refer_clicks} *Clicks:* {clicks}\n' +
     '{refer_pending} *Pending:* {pending}\n' +
     '{refer_active} *Active:* {active}\n' +
@@ -255,9 +257,11 @@ export const vi: Record<string, string> = {
   'profile.refer.convert_success':
     '💱 Đã đổi *{refs} refs* thành *{amount} USDT*.\n\n💳 Số dư ví: *{balance}*',
   'profile.refer.convert_low':
-    '⚠️ Không đủ refs để đổi.\n\nBạn cần *20 refs hoạt động* để đổi thành *1 USDT*.\nSố dư Referral Pay hiện tại: *{available} refs*',
+    '⚠️ Không đủ refs để đổi.\n\nBạn cần *50 refs hoạt động* để đổi thành *$0.50 USDT*.\nSố dư Referral Pay hiện tại: *{available} refs*',
   'profile.refer.convert_error':
     '⚠️ Không thể đổi refs lúc này. Vui lòng thử lại.',
+  'profile.refer.convert_fraud_blocked':
+    '⛔ Chuyển đổi bị chặn.\n\nTài khoản của bạn bị đánh dấu vì hoạt động giới thiệu đáng ngờ. Vui lòng liên hệ hỗ trợ để được xem xét.',
   'btn.live_refers': '🔵 See Your Live Refers',
   'btn.currency': '💱 Currency',
   'btn.stats.24h': '24h',

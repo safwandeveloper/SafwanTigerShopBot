@@ -54,6 +54,8 @@ import {
   getReferralBalance,
   listReferralAdminRows,
   resetReferralUsage,
+  setReferralFraudSuspected,
+  isReferralFraudSuspected,
   getProduct,
   setDepositAmount,
   setDepositStatus,
@@ -5651,6 +5653,8 @@ async function showReferralAdminList(ctx: AppCtx, page: number): Promise<void> {
 async function showReferralAdminUser(ctx: AppCtx, user: DBUser): Promise<void> {
   const balance = await getReferralBalance(user.telegram_id);
   const label = referralUserLabel(user);
+  const isFraudSuspected = user.referral_fraud_suspected ?? false;
+  const fraudStatus = isFraudSuspected ? '<b>YES</b> 🚫 SPAM FLAG' : 'No';
   const lines = [
     '🎁 <b>Referral User</b>',
     '',
@@ -5661,6 +5665,8 @@ async function showReferralAdminUser(ctx: AppCtx, user: DBUser): Promise<void> {
     `Total Active Refs: <b>${balance.total}</b>`,
     `Used / Converted: <b>${balance.spent}</b>`,
     '',
+    `Fraud Suspected: ${fraudStatus}`,
+    '',
     'Use + / - for admin corrections. Reset removes this user\'s referral usage/adjustments, not the real invited-user rows.',
   ];
   const kb = new InlineKeyboard()
@@ -5670,7 +5676,14 @@ async function showReferralAdminUser(ctx: AppCtx, user: DBUser): Promise<void> {
     .text('✍️ Custom +/-', `adm:refs:custom:${user.telegram_id}`)
     .row()
     .text('♻️ Delete User Used Refs', `adm:refs:reset:${user.telegram_id}:ask`)
-    .row()
+    .row();
+  // Fraud flag toggle button
+  if (isFraudSuspected) {
+    kb.text('🛡️ Clear Fraud Flag', `adm:refs:fraud:clear:${user.telegram_id}`);
+  } else {
+    kb.text('🚫 Flag as Fraud', `adm:refs:fraud:set:${user.telegram_id}`);
+  }
+  kb.row()
     .text('⬅️ Back to Referrals', 'adm:refs:0')
     .text('🏠 Main', 'adm:root');
   if (ctx.callbackQuery) {
@@ -5803,6 +5816,55 @@ adminBot.callbackQuery('adm:refs:resetall:do', async (ctx) => {
     show_alert: true,
   });
   await showReferralAdminList(ctx, 0);
+});
+
+// --- Referral Fraud Flag ---
+adminBot.callbackQuery(/^adm:refs:fraud:set:(\d+)$/, async (ctx) => {
+  const telegramId = Number(ctx.match[1]);
+  try {
+    await setReferralFraudSuspected(telegramId, true);
+    const user = await findUserById(telegramId);
+    if (user) {
+      user.referral_fraud_suspected = true;
+    }
+    await ctx.answerCallbackQuery({
+      text: `User ${telegramId} flagged as fraud suspected.`,
+      show_alert: true,
+    });
+    if (user) {
+      await showReferralAdminUser(ctx, user);
+    }
+  } catch (err) {
+    logger.error({ err, telegramId }, 'set fraud flag failed');
+    await ctx.answerCallbackQuery({
+      text: 'Could not set fraud flag. Make sure migration 0040 is applied.',
+      show_alert: true,
+    });
+  }
+});
+
+adminBot.callbackQuery(/^adm:refs:fraud:clear:(\d+)$/, async (ctx) => {
+  const telegramId = Number(ctx.match[1]);
+  try {
+    await setReferralFraudSuspected(telegramId, false);
+    const user = await findUserById(telegramId);
+    if (user) {
+      user.referral_fraud_suspected = false;
+    }
+    await ctx.answerCallbackQuery({
+      text: `Fraud flag cleared for user ${telegramId}.`,
+      show_alert: true,
+    });
+    if (user) {
+      await showReferralAdminUser(ctx, user);
+    }
+  } catch (err) {
+    logger.error({ err, telegramId }, 'clear fraud flag failed');
+    await ctx.answerCallbackQuery({
+      text: 'Could not clear fraud flag.',
+      show_alert: true,
+    });
+  }
 });
 
 // ============================================================
