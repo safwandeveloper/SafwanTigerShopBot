@@ -26,6 +26,8 @@ export type DBUser = {
   is_banned: boolean;
   banned_at: string | null;
   banned_reason: string | null;
+  /** When true, the user is flagged as suspected of referral fraud and cannot convert/use referrals. */
+  referral_fraud_suspected: boolean;
   /**
    * When true, the bot suppresses the 12-hour "please add your
    * email" nag *and* every Send-PDF-to-mail action. Drives the

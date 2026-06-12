@@ -184,6 +184,8 @@ export const ar: Record<string, string> = {
   'shop.buy.insufficient': '❌ رصيد غير كافٍ. تحتاج *{need}* ولديك *{have}* فقط. يرجى الشحن أولاً.',
   'shop.buy.no_stock': '❌ عذرًا، هذا المنتج غير متوفر.',
   'shop.referral.disabled': '❌ دفع الإحالات غير مفعّل لهذا المنتج.',
+  'shop.referral.fraud_blocked':
+    '⛔ دفع الإحالات محظور.\n\nتم تصنيف حسابك بسبب نشاط إحالة مشبوه. يرجى التواصل مع الدعم للمراجعة.',
   'shop.referral.already_redeemed': '✅ تم استخدام دفع الإحالات على طلب قديم.',
   'shop.referral.insufficient':
     '❌ تحتاج {required} إحالة للاستبدال. لديك {total} (باقي {remaining}).',
@@ -237,7 +239,7 @@ export const ar: Record<string, string> = {
   // شاشة الإحالة والتربح.
   'profile.refer.title': '{refer_title} *إحالة وتربح*',
   'profile.refer.body':
-    '{refer_prize_l} *ادعُ 10 مستخدمين واربح $0.50* {refer_prize_r}\n\n' +
+    '{refer_prize_l} *ادعُ 10 مستخدمين واربح $0.10* {refer_prize_r}\n\n' +
     '{refer_clicks} *النقرات:* {clicks}\n' +
     '{refer_pending} *المعلق:* {pending}\n' +
     '{refer_active} *النشط:* {active}\n' +
@@ -252,9 +254,11 @@ export const ar: Record<string, string> = {
   'profile.refer.convert_success':
     '💱 تم تحويل *{refs} إحالة* إلى *{amount} USDT*.\n\n💳 رصيد المحفظة: *{balance}*',
   'profile.refer.convert_low':
-    '⚠️ لا يوجد رصيد إحالات كافٍ للتحويل.\n\nتحتاج *20 إحالة نشطة* للتحويل إلى *1 USDT*.\nرصيد Referral Pay الحالي: *{available} إحالة*',
+    '⚠️ لا يوجد رصيد إحالات كافٍ للتحويل.\n\nتحتاج *50 إحالة نشطة* للتحويل إلى *$0.50 USDT*.\nرصيد Referral Pay الحالي: *{available} إحالة*',
   'profile.refer.convert_error':
     '⚠️ تعذر تحويل الإحالات الآن. حاول مرة أخرى.',
+  'profile.refer.convert_fraud_blocked':
+    '⛔ التحويل محظور.\n\nتم تصنيف حسابك بسبب نشاط إحالة مشبوه. يرجى التواصل مع الدعم للمراجعة.',
   'btn.live_refers': '🔵 See Your Live Refers',
   'btn.currency': '💱 Currency',
   'btn.stats.24h': '24h',

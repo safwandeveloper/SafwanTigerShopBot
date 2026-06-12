@@ -89,7 +89,7 @@ export async function notifyActiveReferral(api: Api, _args: {
   const milestone =
     remaining === 0
       ? '{refer_prize_l} <b>Reward milestone unlocked!</b>'
-      : `{refer_left} <b>${remaining} more to earn $0.50</b>`;
+      : `{refer_left} <b>${remaining} more to earn $0.10</b>`;
   const html = renderHtmlTemplate(
     [
       '<blockquote>',

@@ -300,6 +300,39 @@ export async function toggleNotification(
   return next;
 }
 
+/**
+ * Check if a user is flagged as suspected of referral fraud.
+ */
+export async function isReferralFraudSuspected(telegram_id: number): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('referral_fraud_suspected')
+    .eq('telegram_id', telegram_id)
+    .single();
+  if (error) {
+    logger.error({ err: error, telegram_id }, 'isReferralFraudSuspected failed');
+    return false;
+  }
+  return Boolean((data as Record<string, unknown> | null)?.referral_fraud_suspected);
+}
+
+/**
+ * Set the referral fraud suspicion flag for a user.
+ */
+export async function setReferralFraudSuspected(
+  telegram_id: number,
+  suspected: boolean,
+): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ referral_fraud_suspected: suspected })
+    .eq('telegram_id', telegram_id);
+  if (error) {
+    logger.error({ err: error, telegram_id, suspected }, 'setReferralFraudSuspected failed');
+    throw error;
+  }
+}
+
 export async function countReferrals(telegram_id: number): Promise<number> {
   const { count, error } = await supabase
     .from('referrals')
