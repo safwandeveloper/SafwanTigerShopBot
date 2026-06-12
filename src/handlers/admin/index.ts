@@ -1150,12 +1150,12 @@ function supplierListKeyboard(
   pages: number,
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
-  kb.text('Add Reseller API', 'adm:api:supplier:add:reseller');
-  apiPremiumButton(kb, 'api_key', 'primary');
-  kb.text('Add Canboso', 'adm:api:supplier:add:canboso');
+  kb.text('➕ RSK Reseller', 'adm:api:supplier:add:rsk');
   apiPremiumButton(kb, 'api_key', 'primary');
   kb.row();
-  kb.text('Add RSK Reseller', 'adm:api:supplier:add:rsk');
+  kb.text('➕ Supabase Reseller', 'adm:api:supplier:add:reseller');
+  apiPremiumButton(kb, 'api_key', 'primary');
+  kb.text('➕ Canboso', 'adm:api:supplier:add:canboso');
   apiPremiumButton(kb, 'api_key', 'primary');
   kb.row();
   kb.text('Advanced JSON', 'adm:api:supplier:add');
