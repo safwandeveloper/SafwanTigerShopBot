@@ -2648,7 +2648,8 @@ export async function listUsersForAnnouncement(): Promise<{ telegram_id: number 
   const { data } = await supabase
     .from('users')
     .select('telegram_id')
-    .eq('announcements', true);
+    .eq('announcements', true)
+    .limit(10000);
   return (data ?? []) as { telegram_id: number }[];
 }
 
