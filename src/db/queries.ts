@@ -2645,12 +2645,32 @@ export async function deleteSetting(key: string): Promise<void> {
 // ---------- Announcements ----------
 
 export async function listUsersForAnnouncement(): Promise<{ telegram_id: number }[]> {
-  const { data } = await supabase
-    .from('users')
-    .select('telegram_id')
-    .eq('announcements', true)
-    .limit(10000);
-  return (data ?? []) as { telegram_id: number }[];
+  const allUsers: { telegram_id: number }[] = [];
+  let page = 0;
+  const pageSize = 1000;
+  
+  while (true) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('telegram_id')
+      .eq('announcements', true)
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+    
+    if (error) {
+      logger.error({ error, page }, 'listUsersForAnnouncement page fetch failed');
+      break;
+    }
+    
+    const users = (data ?? []) as { telegram_id: number }[];
+    if (users.length === 0) break;
+    
+    allUsers.push(...users);
+    
+    if (users.length < pageSize) break;
+    page++;
+  }
+  
+  return allUsers;
 }
 
 // ---------- Admin: stats / management ----------
