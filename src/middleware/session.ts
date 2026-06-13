@@ -185,6 +185,7 @@ export type AdminFlow =
   | { type: 'supplier_api_add'; step: 'json'; data: Record<string, never> }
   | { type: 'supplier_canboso_add'; step: 'key'; data: Record<string, never> }
   | { type: 'supplier_reseller_add'; step: 'key'; data: Record<string, never> }
+  | { type: 'supplier_rsk_add'; step: 'key'; data: Record<string, never> }
   | { type: 'supplier_product_link_add'; step: 'json'; data: { supplier_id?: number } }
   | { type: 'preorder_manual_send'; step: 'items'; data: { order_id: number } }
   | { type: 'announce'; step: 'text'; data: Record<string, never> }
