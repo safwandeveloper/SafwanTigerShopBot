@@ -117,6 +117,7 @@ export async function fulfilOrderForDeposit(args: {
   const t = (key: string, vars?: Record<string, string | number>) =>
     translate(lang, key, vars);
   const preorder = !product.unlimited_stock && product.stock < intent.qty;
+  const productEmoji = product.emoji?.trim() || '🛒';
 
   const order = await createOrder({
     user_id: deposit.user_id,
@@ -217,6 +218,7 @@ export async function fulfilOrderForDeposit(args: {
         qty: intent.qty,
         total: intent.total.toFixed(2),
         items: firstChunkBlock,
+        product_emoji: productEmoji,
       }),
     ),
     headerHasKeyboard ? { reply_markup: deliveredKb } : undefined,

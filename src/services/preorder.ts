@@ -143,6 +143,7 @@ export async function fulfillPendingPreordersForProduct(
       inlineBtn(deliveredKb, lang, 'send_note_txt', `order:txt:${order.id}`);
 
       const headerHasKeyboard = deliveredChunks.length <= 1;
+      const productEmoji = product.emoji?.trim() || '🛒';
       await safeSendHtml(
         api,
         order.user_id,
@@ -153,6 +154,7 @@ export async function fulfillPendingPreordersForProduct(
             qty: order.qty,
             total: Number(order.total).toFixed(2),
             items: firstChunkBlock,
+            product_emoji: productEmoji,
           }),
         ),
         headerHasKeyboard ? { reply_markup: deliveredKb } : undefined,

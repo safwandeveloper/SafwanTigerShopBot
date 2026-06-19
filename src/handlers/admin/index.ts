@@ -7453,6 +7453,7 @@ adminBot.on('message:text', async (ctx, next) => {
         translate(lang, key, vars);
       const publicId = publicOrderId(order);
       const deliveredText = items.join('\n');
+      const productEmoji = product?.emoji?.trim() || '🛒';
       await setOrderDeliveredItems(order.id, deliveredText);
 
       const chunks = buildOrderDeliveredChunks(items);
@@ -7472,6 +7473,7 @@ adminBot.on('message:text', async (ctx, next) => {
             qty: order.qty,
             total: Number(order.total).toFixed(2),
             items: firstChunkBlock,
+            product_emoji: productEmoji,
           }),
         ),
         headerHasKeyboard
