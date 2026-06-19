@@ -4999,12 +4999,16 @@ function announceBroadcastKeyboard(buy?: AnnounceBuy): InlineKeyboard | undefine
 adminBot.callbackQuery(/^ann:buy:(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const productId = Number(ctx.match[1]);
-  // Build product deep link
+  // Show the product page directly using inline keyboard
   const username = ctx.me.username;
-  const deepLink = `https://t.me/${username}/app?startapp=prod_${productId}`;
+  const productDeepLink = `https://t.me/${username}/start=prod_${productId}`;
+  
+  // Reply with product details and inline button
+  const kb = new InlineKeyboard().url('🛒 View & Buy Now', productDeepLink);
   await ctx.reply(
-    `🛒 Tap below to buy:\n\n${deepLink}`,
-    { parse_mode: 'HTML' }
+    `🛒 <b>Product Found!</b>\n\n` +
+    `Tap the button below to open the product page and complete your purchase.`,
+    { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } }
   );
 });
 
@@ -7453,6 +7457,7 @@ adminBot.on('message:text', async (ctx, next) => {
         translate(lang, key, vars);
       const publicId = publicOrderId(order);
       const deliveredText = items.join('\n');
+      const productEmoji = product?.emoji?.trim() || '🛒';
       await setOrderDeliveredItems(order.id, deliveredText);
 
       const chunks = buildOrderDeliveredChunks(items);
@@ -7472,6 +7477,7 @@ adminBot.on('message:text', async (ctx, next) => {
             qty: order.qty,
             total: Number(order.total).toFixed(2),
             items: firstChunkBlock,
+            product_emoji: productEmoji,
           }),
         ),
         headerHasKeyboard

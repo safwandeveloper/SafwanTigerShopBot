@@ -474,6 +474,8 @@ async function finalizeOrderDelivery(args: {
   inlineBtn(deliveredKb, ctx.lang, 'using_method', `tut:${p.id}`);
   deliveredKb.row();
   inlineBtn(deliveredKb, ctx.lang, 'send_note_txt', `order:txt:${order.id}`);
+  // Build product_emoji string for template (premium emoji if available)
+  const productEmoji = p.emoji?.trim() || '🛒';
   const headerHasKeyboard = deliveredChunks.length <= 1;
   await ctx.reply(
     renderMdHtml(
@@ -483,6 +485,7 @@ async function finalizeOrderDelivery(args: {
         qty,
         total: total.toFixed(2),
         items: firstChunkBlock,
+        product_emoji: productEmoji,
       }),
     ),
     headerHasKeyboard ? { parse_mode: 'HTML', reply_markup: deliveredKb } : { parse_mode: 'HTML' },

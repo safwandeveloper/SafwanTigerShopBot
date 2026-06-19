@@ -72,6 +72,20 @@ export function registerPublicGroup(bot: Bot<AppCtx>): void {
 
       if (matches.length === 0) return next();
 
+      // Build a richer product card for each match
+      const productCards = matches.map(({ product }, index) => {
+        const icon = productIconHtml(product);
+        const name = escapeAttr(product.name);
+        const price = Number(product.price).toFixed(2);
+        const stock = product.unlimited_stock ? '♾️' : `📦 ${product.stock}`;
+        const cardIndex = index + 1;
+        return [
+          `${icon}<b>${cardIndex}. ${name}</b>`,
+          `   💰 <b>${price} USDT</b> | ${stock}`,
+          `   🔗 <a href="${publicFeedBotUrl(`prod_${product.id}`)}">View & Buy</a>`,
+        ].join('\n');
+      });
+
       const kb = new InlineKeyboard();
       for (const { product } of matches) {
         kb.url(
@@ -82,16 +96,13 @@ export function registerPublicGroup(bot: Bot<AppCtx>): void {
         kb.style('primary').row();
       }
 
-      const lines = matches.map(({ product }, index) => {
-        const icon = productIconHtml(product);
-        const name = `${escapeAttr(product.name)}${icon ? ` ${icon}` : ''}`;
-        const end = index === matches.length - 1 ? '!' : ',';
-        return `<b>${name} available now${end}</b>`;
-      });
       const html = renderHtmlTemplate(
         [
-          ...lines,
-          `{feed_tap_buy} <b>Tap below to buy:</b>`,
+          '🛒 <b>Available Products</b>',
+          '',
+          ...productCards,
+          '',
+          '👇 <b>Tap below to buy:</b>',
         ].join('\n'),
       );
 
