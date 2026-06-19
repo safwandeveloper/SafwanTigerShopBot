@@ -4999,13 +4999,12 @@ function announceBroadcastKeyboard(buy?: AnnounceBuy): InlineKeyboard | undefine
 adminBot.callbackQuery(/^ann:buy:(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const productId = Number(ctx.match[1]);
-  // Build product deep link
-  const username = ctx.me.username;
-  const deepLink = `https://t.me/${username}/app?startapp=prod_${productId}`;
-  await ctx.reply(
-    `🛒 Tap below to buy:\n\n${deepLink}`,
-    { parse_mode: 'HTML' }
-  );
+  const username = ctx.me.username ?? env.BOT_USERNAME;
+  // Build deep link to open product page via startapp
+  const deepLink = `https://t.me/${username.replace('@', '')}/app?startapp=prod_${productId}`;
+  // Replace the text button with a URL button that opens the product page
+  const kb = new InlineKeyboard().url(ctx.t('btn.buy_now'), deepLink);
+  await ctx.editMessageReplyMarkup({ reply_markup: kb });
 });
 
 function announceConfirmKeyboard(recipients: number, buy?: AnnounceBuy): InlineKeyboard {
