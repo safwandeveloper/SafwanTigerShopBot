@@ -4987,12 +4987,26 @@ type AnnounceBuy = {
 function announceBroadcastKeyboard(buy?: AnnounceBuy): InlineKeyboard | undefined {
   if (!buy) return undefined;
   const kb = new InlineKeyboard();
-  kb.url(buy.label, publicFeed.publicFeedBotUrl(`prod_${buy.product_id}`));
+  // Use text button instead of url button to remove the arrow icon
+  kb.text(buy.label, `ann:buy:${buy.product_id}`);
   if (buy.icon_custom_emoji_id) kb.icon(buy.icon_custom_emoji_id);
   const style = colorModeToStyle(buy.color);
   if (style !== undefined) kb.style(style);
   return kb;
 }
+
+// Handle "Buy" button clicks from broadcast announcements
+adminBot.callbackQuery(/^ann:buy:(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const productId = Number(ctx.match[1]);
+  // Build product deep link
+  const username = ctx.me.username;
+  const deepLink = `https://t.me/${username}/app?startapp=prod_${productId}`;
+  await ctx.reply(
+    `🛒 Tap below to buy:\n\n${deepLink}`,
+    { parse_mode: 'HTML' }
+  );
+});
 
 function announceConfirmKeyboard(recipients: number, buy?: AnnounceBuy): InlineKeyboard {
   const kb = new InlineKeyboard()
