@@ -4997,14 +4997,12 @@ function announceBroadcastKeyboard(buy?: AnnounceBuy): InlineKeyboard | undefine
 
 // Handle "Buy" button clicks from broadcast announcements
 adminBot.callbackQuery(/^ann:buy:(\d+)$/, async (ctx) => {
-  await ctx.answerCallbackQuery();
   const productId = Number(ctx.match[1]);
   const username = ctx.me.username ?? env.BOT_USERNAME;
-  // Use ?start= format which triggers the bot's /start handler to show the product page
+  // Open product page directly via deep link
   const deepLink = `https://t.me/${username.replace('@', '')}?start=prod_${productId}`;
-  // Replace the text button with a URL button that opens the product page
-  const kb = new InlineKeyboard().url(ctx.t('btn.buy_now'), deepLink);
-  await ctx.editMessageReplyMarkup({ reply_markup: kb });
+  // Answer callback and redirect to product page
+  await ctx.answerCallbackQuery({ url: deepLink });
 });
 
 function announceConfirmKeyboard(recipients: number, buy?: AnnounceBuy): InlineKeyboard {
