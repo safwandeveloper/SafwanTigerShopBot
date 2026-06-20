@@ -283,6 +283,29 @@ async function sendVendorMessage(args: {
       'delivery: vendor DM failed (the vendor likely needs to /start the bot)',
     );
   }
+
+  // Also notify the admin directly
+  const { env: botEnv } = await import('../env.js');
+  const adminMsg = [
+    '🔔 *New Delivery Form Submission!*',
+    '',
+    `*Order:* ${buildOrderTag(args.orderPublicId)}`,
+    `*Product:* ${args.product.name}`,
+    `*Qty:* ${args.qty}`,
+    `*Buyer:* ${args.buyer.username ? '@' + args.buyer.username : args.buyer.first_name ?? args.buyer.telegram_id} (${args.buyer.telegram_id})`,
+    '',
+    '*Submitted Details:*',
+    renderPayloadBlock(args.fields, args.submission.payload),
+    '',
+    `_Review and process this order._`,
+  ].join('\n');
+  try {
+    await args.api.sendMessage(botEnv.ADMIN_USER_ID, renderMdHtml(adminMsg), {
+      parse_mode: 'HTML',
+    });
+  } catch (err) {
+    logger.warn({ err, adminId: botEnv.ADMIN_USER_ID }, 'delivery: admin notification failed');
+  }
 }
 
 /**

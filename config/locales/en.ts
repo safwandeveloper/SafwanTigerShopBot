@@ -423,14 +423,22 @@ export const en: Record<string, string> = {
   'shop.delivery.box.invalid':
     '{qty_invalid} _That doesn\'t look right. Please send your *{label}* again._',
   'shop.delivery.success.default': [
-    '{delivery_check} *Your Details Has been Submitted Successfully* {email_saved_check}',
+    '🎉 *Details Submitted Successfully!* {email_saved_check}',
     '',
-    '_Thank you — our team is reviewing your submission and will approve it shortly. If you don\'t hear back soon, tap *Admin Help* below._',
+    '_Your information has been received and is being processed._',
+    '',
+    '⏳ *You will be notified here when your order is ready!*',
+    '',
+    '_If you don\'t hear back soon, tap *Admin Help* below._',
   ].join('\n'),
   'shop.delivery.success.resubmitted': [
-    '{delivery_resubmit} *Your Details Has been Re submitted as Corrected* {email_saved_check}',
+    '🎉 *Details Updated Successfully!* {email_saved_check}',
     '',
-    '_Thank you — your corrected info has been forwarded to our vendor. They will use this NEW submission instead of the previous one._',
+    '_Your corrected info has been forwarded to our vendor._',
+    '',
+    '⏳ *You will be notified here when your order is ready!*',
+    '',
+    '_They will use this NEW submission instead of the previous one._',
   ].join('\n'),
   // Auto-text pre-filled into the admin DM when the buyer taps the
   // Admin Help button on the success card. Telegram URL-encodes this
