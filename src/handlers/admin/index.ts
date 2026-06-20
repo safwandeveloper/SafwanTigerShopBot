@@ -5000,8 +5000,8 @@ adminBot.callbackQuery(/^ann:buy:(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const productId = Number(ctx.match[1]);
   const username = ctx.me.username ?? env.BOT_USERNAME;
-  // Build deep link to open product page via startapp
-  const deepLink = `https://t.me/${username.replace('@', '')}/app?startapp=prod_${productId}`;
+  // Use ?start= format which triggers the bot's /start handler with the product deep link
+  const deepLink = `https://t.me/${username.replace('@', '')}?start=prod_${productId}`;
   // Replace the text button with a URL button that opens the product page
   const kb = new InlineKeyboard().url(ctx.t('btn.buy_now'), deepLink);
   await ctx.editMessageReplyMarkup({ reply_markup: kb });
