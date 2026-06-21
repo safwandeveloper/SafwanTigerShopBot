@@ -18,7 +18,7 @@ type FeedButton = {
 };
 
 const CART_FALLBACK = '\u{1F6D2}';
-const TIGER_STOCK_CHAT = '@TigerStockChat';
+const TIGER_STOCK_CHAT = 'https://t.me/+dKzuSAsf0Fw1Zjc8';
 
 export function publicFeedBotUrl(payload: string): string {
   const username = env.BOT_USERNAME.replace(/^@+/, '').trim();
@@ -139,31 +139,18 @@ export async function notifyPurchase(api: Api, args: {
   paidVia: string;
 }): Promise<void> {
   const product = await getProduct(args.productId).catch(() => null);
-  const glyph = product?.emoji?.trim() ?? '';
+  const glyph = product?.emoji?.trim() ?? CART_FALLBACK;
   const productIcon =
     product?.emoji_id
-      ? `<tg-emoji emoji-id="${escapeAttr(product.emoji_id)}">${escapeAttr(glyph || CART_FALLBACK)}</tg-emoji> `
-      : '{orders_product} ';
+      ? `<tg-emoji emoji-id="${escapeAttr(product.emoji_id)}">${escapeAttr(glyph)}</tg-emoji>`
+      : escapeAttr(glyph);
   const name = escapeAttr(args.productName);
   const html = renderHtmlTemplate(
     [
-      '<blockquote>',
-      '{feed_title} <b>New Purchase!</b>',
-      '',
-      `${productIcon}<b>Service:</b> <b>${name}</b>`,
-      `{refer_user} <b>By:</b> <b>${maskId(args.buyerId)}</b>`,
-      `{orders_product} <b>Plan:</b> <b>${name} [${escapeAttr(args.paidVia)}]</b>`,
-      `{orders_id} <b>Order No.:</b> <b>${escapeAttr(args.orderPublicId)}</b>`,
-      `{orders_qty} <b>QTY:</b> <b>${args.qty}</b>`,
-      `{orders_total} <b>Total Purchase:</b> <b>${money(args.total)} USDT</b>`,
-      '</blockquote>',
+      `<b>${maskId(args.buyerId)}</b> Someone just bought <b>${args.qty}×</b> ${productIcon} <b>${name}</b>`,
     ].join('\n'),
   );
-  await sendRenderedHtml(api, html, {
-    text: 'View Product',
-    iconKey: 'feed_buy_button',
-    url: publicFeedBotUrl(`prod_${args.productId}`),
-  });
+  await sendRenderedHtml(api, html);
 }
 
 export async function notifyTopup(api: Api, args: {
