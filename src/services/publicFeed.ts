@@ -18,16 +18,21 @@ type FeedButton = {
 };
 
 const CART_FALLBACK = '\u{1F6D2}';
-const TIGER_STOCK_CHAT = 'https://t.me/+dKzuSAsf0Fw1Zjc8';
+
+/**
+ * Public feed channel - reads from PUBLIC_FEED_CHAT_ID env var.
+ * Supports: @channelname, -1001234567890, or invite link.
+ */
+export function publicFeedChatId(): string {
+  const chatId = env.PUBLIC_FEED_CHAT_ID;
+  if (!chatId || chatId === '0') return '';
+  return String(chatId);
+}
 
 export function publicFeedBotUrl(payload: string): string {
   const username = env.BOT_USERNAME.replace(/^@+/, '').trim();
   const start = encodeURIComponent(payload);
   return username ? `https://t.me/${username}?start=${start}` : `https://t.me/?start=${start}`;
-}
-
-export function publicFeedChatId(): string {
-  return TIGER_STOCK_CHAT;
 }
 
 function maskId(id: number): string {
@@ -56,7 +61,11 @@ function feedKeyboard(button?: FeedButton): InlineKeyboard | undefined {
 
 async function sendRenderedHtml(api: Api, html: string, button?: FeedButton): Promise<void> {
   const chat = publicFeedChatId();
-  if (!chat) return;
+  if (!chat) {
+    logger.debug('publicFeed: no chat ID configured, skipping');
+    return;
+  }
+  logger.info({ chat }, 'publicFeed: sending message');
   const reply_markup = feedKeyboard(button);
   try {
     await api.sendMessage(chat, html, {

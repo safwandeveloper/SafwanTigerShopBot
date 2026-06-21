@@ -33,7 +33,7 @@ const DEFAULT_LOG_CHAT = '@safwantigershopsales';
 const DEFAULT_ORDER_LOG_CHAT = '@SafwanTigerShopBotInfo';
 
 /** Public shop feed / watcher group. Empty means reuse the working order-log chat. */
-const DEFAULT_PUBLIC_FEED_CHAT = '';
+const DEFAULT_PUBLIC_FEED_CHAT = '-1003809477935';
 
 /**
  * Shared transformer for the `LOG_CHAT_ID` family of env vars. Each
