@@ -350,7 +350,15 @@ function replaceTemplate(value: unknown, vars: Record<string, string | number>):
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = replaceTemplate(val, vars);
+      // Keep numeric fields as numbers
+      const isNumberField = key === 'quantity' || key === 'qty' || key === 'amount';
+      const valStr = typeof val === 'string' ? val.trim() : '';
+      const isNumericPlaceholder = /^\{\{\s*(qty|quantity|amount)\s*\}\}$/i.test(valStr);
+      if (isNumberField && isNumericPlaceholder) {
+        out[key] = vars.quantity ?? vars.qty ?? vars.amount;
+      } else {
+        out[key] = replaceTemplate(val, vars);
+      }
     }
     return out;
   }
