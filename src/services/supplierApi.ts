@@ -190,7 +190,7 @@ export function rskResellerSupplierConfig(apiKey: string): SupplierSourceConfig 
     product_name_json_path: 'name',
     product_price_json_path: 'price',
     product_stock_json_path: 'stock',
-    order_items_json_path: 'order.items',
+    order_items_json_path: 'items',
     order_status_json_path: 'ok',
     order_request_template: {
       product_id: '{{supplier_product_id}}',
@@ -223,8 +223,8 @@ export function vexResellerSupplierConfig(apiKey: string): SupplierSourceConfig 
     product_name_json_path: 'name',
     product_price_json_path: 'price',
     product_stock_json_path: 'stock',
-    order_items_json_path: 'order.items',
-    order_status_json_path: 'order.status',
+    order_items_json_path: 'items',
+    order_status_json_path: 'ok',
     order_request_template: {
       product_id: '{{supplier_product_id}}',
       quantity: '{{qty}}',
