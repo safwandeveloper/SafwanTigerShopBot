@@ -342,15 +342,27 @@ export function isSupplierLowBalanceMessage(message: string): boolean {
 
 function replaceTemplate(value: unknown, vars: Record<string, string | number>): unknown {
   if (typeof value === 'string') {
-    return value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, key: string) =>
-      String(vars[key] ?? ''),
-    );
+    const result = value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, key: string) => {
+      const replacement = vars[key];
+      return replacement !== undefined ? String(replacement) : '';
+    });
+    return result;
   }
   if (Array.isArray(value)) return value.map((item) => replaceTemplate(item, vars));
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = replaceTemplate(val, vars);
+      // Check if this is a number field and template value is a numeric placeholder
+      const isNumberField = key === 'quantity' || key === 'qty' || key === 'amount';
+      const valStr = typeof val === 'string' ? val.trim() : '';
+      const isNumericPlaceholder = /^\{\{\s*(qty|quantity|amount)\s*\}\}$/i.test(valStr);
+      if (isNumberField && isNumericPlaceholder && vars.quantity !== undefined) {
+        out[key] = vars.quantity; // Keep as number
+      } else if (isNumberField && isNumericPlaceholder && vars.qty !== undefined) {
+        out[key] = vars.qty; // Keep as number
+      } else {
+        out[key] = replaceTemplate(val, vars);
+      }
     }
     return out;
   }
