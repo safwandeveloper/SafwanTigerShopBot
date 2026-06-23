@@ -60,6 +60,7 @@ export function registerPublicGroup(bot: Bot<AppCtx>): void {
     try {
       const { rows } = await listActiveProducts(0, 500);
       const matches = rows
+        .filter((product) => product.unlimited_stock || product.stock > 0)
         .map((product) => {
           const hay = normalized(`${product.name} ${product.emoji ?? ''}`);
           const score = terms.reduce(
@@ -84,16 +85,13 @@ export function registerPublicGroup(bot: Bot<AppCtx>): void {
         kb.style('primary').row();
       }
 
-      const lines = matches.map(({ product }, index) => {
+      const productsText = matches.map(({ product }, index) => {
         const icon = productIconHtml(product);
         const name = `${icon} ${escapeAttr(product.name)}`;
         const end = index === matches.length - 1 ? '!' : ',';
         return `<b>${name} available now${end}</b>`;
-      });
-      const html = [
-        ...lines,
-        `<tg-emoji emoji-id="${TAP_TO_BUY_ICON_ID}">\u{1F6CD}\u{FE0F}</tg-emoji> <b>Tap below to buy:</b>`,
-      ].join('\n');
+      }).join(' ');
+      const html = `${productsText} <tg-emoji emoji-id="${TAP_TO_BUY_ICON_ID}">\u{1F6CD}\u{FE0F}</tg-emoji> <b>Tap below to buy:</b>`;
 
       try {
         await ctx.reply(html, {
