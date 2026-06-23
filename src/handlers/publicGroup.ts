@@ -4,14 +4,14 @@ import type { AppCtx } from '../middleware/user.js';
 import { listActiveProducts } from '../db/queries.js';
 import {
   publicFeedBotUrl,
-  publicFeedChatId,
   publicSalesFeedChatId,
 } from '../services/publicFeed.js';
-import { escapeAttr, renderHtmlTemplate } from '../services/premium.js';
+import { escapeAttr, stripCustomEmojiTags } from '../services/premium.js';
 import { logger } from '../logger.js';
 
 const BUY_BUTTON_ICON_ID = '5440841102871517055';
-const CART_FALLBACK = '\u{1F6D2}';
+const TAP_TO_BUY_ICON_ID = '6181460307001481584';
+const PRODUCT_FALLBACK = '\u{1F4E6}';
 
 function normalized(text: string): string {
   return text
@@ -24,22 +24,21 @@ function normalized(text: string): string {
 function isConfiguredFeedChat(ctx: AppCtx): boolean {
   const chat = ctx.chat;
   if (!chat) return false;
-  const configuredChats = [publicFeedChatId(), publicSalesFeedChatId()].filter(Boolean);
+  const configured = publicSalesFeedChatId();
+  if (!configured) return false;
   const username = 'username' in chat ? chat.username?.toLowerCase() : undefined;
-  return configuredChats.some((configured) => {
-    if (typeof configured === 'number') return chat.id === configured;
-    const wanted = String(configured).replace(/^@/, '').toLowerCase();
-    return username === wanted;
-  });
+  if (typeof configured === 'number') return chat.id === configured;
+  const wanted = String(configured).replace(/^@/, '').toLowerCase();
+  return username === wanted;
 }
 
 function productIconHtml(product: { emoji?: string | null; emoji_id?: string | null }): string {
   const glyph = product.emoji?.trim() ?? '';
   if (product.emoji_id) {
-    const fallback = glyph || CART_FALLBACK;
+    const fallback = glyph || PRODUCT_FALLBACK;
     return `<tg-emoji emoji-id="${escapeAttr(product.emoji_id)}">${escapeAttr(fallback)}</tg-emoji>`;
   }
-  if (!glyph || glyph === CART_FALLBACK) return '';
+  if (!glyph || glyph === '\u{1F6D2}') return PRODUCT_FALLBACK;
   return escapeAttr(glyph);
 }
 
@@ -87,22 +86,29 @@ export function registerPublicGroup(bot: Bot<AppCtx>): void {
 
       const lines = matches.map(({ product }, index) => {
         const icon = productIconHtml(product);
-        const name = `${escapeAttr(product.name)}${icon ? ` ${icon}` : ''}`;
+        const name = `${icon} ${escapeAttr(product.name)}`;
         const end = index === matches.length - 1 ? '!' : ',';
         return `<b>${name} available now${end}</b>`;
       });
-      const html = renderHtmlTemplate(
-        [
-          ...lines,
-          `{feed_tap_buy} <b>Tap below to buy:</b>`,
-        ].join('\n'),
-      );
+      const html = [
+        ...lines,
+        `<tg-emoji emoji-id="${TAP_TO_BUY_ICON_ID}">\u{1F6CD}\u{FE0F}</tg-emoji> <b>Tap below to buy:</b>`,
+      ].join('\n');
 
-      await ctx.reply(html, {
-        parse_mode: 'HTML',
-        reply_markup: kb,
-        link_preview_options: { is_disabled: true },
-      });
+      try {
+        await ctx.reply(html, {
+          parse_mode: 'HTML',
+          reply_markup: kb,
+          link_preview_options: { is_disabled: true },
+        });
+      } catch (err) {
+        logger.warn({ err, chatId: ctx.chat.id }, 'premium product search reply failed');
+        await ctx.reply(stripCustomEmojiTags(html), {
+          parse_mode: 'HTML',
+          reply_markup: kb,
+          link_preview_options: { is_disabled: true },
+        });
+      }
       return;
     } catch (err) {
       logger.warn({ err, chatId: ctx.chat.id }, 'public group product search failed');
