@@ -18,6 +18,7 @@ type FeedButton = {
 };
 
 const CART_FALLBACK = '\u{1F6D2}';
+const PRODUCT_FALLBACK = '\u{1F4E6}';
 const TIGER_STOCK_CHAT = '@TigerStockChat';
 let resolvedTigerStockChatId: number | undefined;
 
@@ -31,6 +32,10 @@ export function publicFeedChatId(): string {
   return TIGER_STOCK_CHAT;
 }
 
+export function publicSalesFeedChatId(): number | string | undefined {
+  return env.PUBLIC_SALES_CHAT_ID;
+}
+
 async function resolveTigerStockChat(api: Api): Promise<string | number> {
   if (resolvedTigerStockChatId !== undefined) return resolvedTigerStockChatId;
   try {
@@ -40,6 +45,19 @@ async function resolveTigerStockChat(api: Api): Promise<string | number> {
   } catch (err) {
     logger.warn({ err, chat: TIGER_STOCK_CHAT }, 'publicFeed getChat failed; using username');
     return TIGER_STOCK_CHAT;
+  }
+}
+
+async function resolvePublicSalesChat(api: Api): Promise<string | number | undefined> {
+  const configured = publicSalesFeedChatId();
+  if (!configured) return undefined;
+  if (typeof configured === 'number') return configured;
+  try {
+    const chat = await api.getChat(configured);
+    return chat.id;
+  } catch (err) {
+    logger.warn({ err, chat: configured }, 'public sales feed getChat failed; using configured value');
+    return configured;
   }
 }
 
@@ -73,6 +91,16 @@ function plainFeedKeyboard(button?: FeedButton): InlineKeyboard | undefined {
 
 async function sendRenderedHtml(api: Api, html: string, button?: FeedButton): Promise<void> {
   const chat = await resolveTigerStockChat(api);
+  await sendRenderedHtmlTo(api, chat, 'TigerStockChat', html, button);
+}
+
+async function sendRenderedHtmlTo(
+  api: Api,
+  chat: string | number,
+  label: string,
+  html: string,
+  button?: FeedButton,
+): Promise<void> {
   const premiumKeyboard = feedKeyboard(button);
   const plainKeyboard = plainFeedKeyboard(button);
   const plainHtml = stripCustomEmojiTags(html);
@@ -111,9 +139,9 @@ async function sendRenderedHtml(api: Api, html: string, button?: FeedButton): Pr
     logger.error({ err: finalErr, chat }, 'publicFeed delivery failed completely');
     try {
       await api.sendMessage(env.ADMIN_USER_ID, [
-        '<b>TigerStockChat feed failed</b>',
+        `<b>${escapeAttr(label)} feed failed</b>`,
         '',
-        `Destination: <code>${TIGER_STOCK_CHAT}</code>`,
+        `Destination: <code>${escapeAttr(String(chat))}</code>`,
         'Please confirm the bot is a member/admin and can post messages in that group.',
       ].join('\n'), {
         parse_mode: 'HTML',
@@ -123,6 +151,21 @@ async function sendRenderedHtml(api: Api, html: string, button?: FeedButton): Pr
       // Never let a feed notification failure break the user action.
     }
   }
+}
+
+async function sendSalesHtml(api: Api, html: string, button?: FeedButton): Promise<void> {
+  const chat = await resolvePublicSalesChat(api);
+  if (!chat) return;
+  await sendRenderedHtmlTo(api, chat, 'Public sales group', html, button);
+}
+
+function productIconHtml(product: { emoji?: string | null; emoji_id?: string | null } | null): string {
+  const glyph = product?.emoji?.trim() ?? '';
+  if (product?.emoji_id) {
+    return `<tg-emoji emoji-id="${escapeAttr(product.emoji_id)}">${escapeAttr(glyph || PRODUCT_FALLBACK)}</tg-emoji>`;
+  }
+  if (glyph && glyph !== CART_FALLBACK) return escapeAttr(glyph);
+  return PRODUCT_FALLBACK;
 }
 
 export async function notifyActiveReferral(api: Api, _args: {
@@ -211,6 +254,24 @@ export async function notifyPurchase(api: Api, args: {
     iconKey: 'feed_buy_button',
     url: publicFeedBotUrl(`prod_${args.productId}`),
   });
+  await notifySalesPurchase(api, {
+    productId: args.productId,
+    productName: args.productName,
+    qty: args.qty,
+  });
+}
+
+export async function notifySalesPurchase(api: Api, args: {
+  productId: number;
+  productName: string;
+  qty: number;
+}): Promise<void> {
+  const product = await getProduct(args.productId).catch(() => null);
+  const productIcon = productIconHtml(product);
+  const html = renderHtmlTemplate(
+    `{broadcast_shop_now} Someone just bought <b>${args.qty}x</b> ${productIcon} <b>${escapeAttr(args.productName)}!</b>`,
+  );
+  await sendSalesHtml(api, html);
 }
 
 export async function notifyTopup(api: Api, args: {
@@ -267,6 +328,28 @@ export async function notifyAnnouncement(api: Api, args: {
       ? renderHtmlTemplate(args.text)
       : renderMdHtml(args.text);
   await sendRenderedHtml(
+    api,
+    html,
+    args.button
+      ? {
+          text: args.button.text.slice(0, 64),
+          iconKey: args.button.iconKey ?? 'broadcast_shop_now',
+          url: publicFeedBotUrl(`prod_${args.button.productId}`),
+        }
+      : undefined,
+  );
+}
+
+export async function notifySalesAnnouncement(api: Api, args: {
+  text: string;
+  format: 'md' | 'html';
+  button?: { text: string; productId: number; iconKey?: string };
+}): Promise<void> {
+  const html =
+    args.format === 'html'
+      ? renderHtmlTemplate(args.text)
+      : renderMdHtml(args.text);
+  await sendSalesHtml(
     api,
     html,
     args.button

@@ -54,8 +54,6 @@ import {
   getReferralBalance,
   listReferralAdminRows,
   resetReferralUsage,
-  setReferralFraudSuspected,
-  isReferralFraudSuspected,
   getProduct,
   setDepositAmount,
   setDepositStatus,
@@ -171,8 +169,6 @@ import {
   importSupplierProduct,
   parseSupplierLinkConfig,
   parseSupplierSourceConfig,
-  rskResellerSupplierConfig,
-  vexResellerSupplierConfig,
   supabaseResellerSupplierConfig,
   supplierSellPrice,
   syncSupplierProductLink,
@@ -1151,14 +1147,9 @@ function supplierListKeyboard(
   pages: number,
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
-  kb.text('➕ RSK Reseller', 'adm:api:supplier:add:rsk');
+  kb.text('Add Reseller API', 'adm:api:supplier:add:reseller');
   apiPremiumButton(kb, 'api_key', 'primary');
-  kb.text('➕ VEX Reseller', 'adm:api:supplier:add:vex');
-  apiPremiumButton(kb, 'api_key', 'primary');
-  kb.row();
-  kb.text('➕ Supabase Reseller', 'adm:api:supplier:add:reseller');
-  apiPremiumButton(kb, 'api_key', 'primary');
-  kb.text('➕ Canboso', 'adm:api:supplier:add:canboso');
+  kb.text('Add Canboso', 'adm:api:supplier:add:canboso');
   apiPremiumButton(kb, 'api_key', 'primary');
   kb.row();
   kb.text('Advanced JSON', 'adm:api:supplier:add');
@@ -1599,66 +1590,6 @@ adminBot.callbackQuery('adm:api:supplier:add:reseller', async (ctx) => {
       '',
       'Example:',
       '`rsk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`',
-      '',
-      'After saving, open *Browse Products* and import products by button.',
-      '',
-      'Send `/cancel` to abort.',
-    ].join('\n'),
-    {
-      parse_mode: 'Markdown',
-      reply_markup: backRow(new InlineKeyboard()),
-      link_preview_options: { is_disabled: true },
-    },
-  );
-});
-
-adminBot.callbackQuery('adm:api:supplier:add:rsk', async (ctx) => {
-  await ctx.answerCallbackQuery();
-  ctx.session.adminFlow = { type: 'supplier_rsk_add', step: 'key', data: {} };
-  await ctx.editMessageText(
-    [
-      '*Add RSK Reseller API Supplier*',
-      '',
-      'Send the RSK reseller API key only. This preset already knows:',
-      '`https://eygkdpfjrjwwbiackfpr.supabase.co/functions/v1/reseller-api`',
-      '',
-      'Auth: `Authorization: Bearer YOUR_API_KEY`',
-      'Products: `?action=products`',
-      'Balance: `?action=balance`',
-      'Order: `?action=order`',
-      '',
-      'Example:',
-      '`rsk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`',
-      '',
-      'After saving, open *Browse Products* and import products by button.',
-      '',
-      'Send `/cancel` to abort.',
-    ].join('\n'),
-    {
-      parse_mode: 'Markdown',
-      reply_markup: backRow(new InlineKeyboard()),
-      link_preview_options: { is_disabled: true },
-    },
-  );
-});
-
-adminBot.callbackQuery('adm:api:supplier:add:vex', async (ctx) => {
-  await ctx.answerCallbackQuery();
-  ctx.session.adminFlow = { type: 'supplier_vex_add', step: 'key', data: {} };
-  await ctx.editMessageText(
-    [
-      '*Add VEX Reseller API Supplier*',
-      '',
-      'Send the VEX reseller API key only. This preset already knows:',
-      '`https://lshnsppqjcznfmdqwgfc.supabase.co/functions/v1/reseller-api`',
-      '',
-      'Auth: `Authorization: Bearer YOUR_API_KEY`',
-      'Products: `?action=products`',
-      'Balance: `?action=balance`',
-      'Order: `?action=order`',
-      '',
-      'Example:',
-      '`vex_sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`',
       '',
       'After saving, open *Browse Products* and import products by button.',
       '',
@@ -5020,28 +4951,25 @@ type AnnounceBuy = {
 function announceBroadcastKeyboard(buy?: AnnounceBuy): InlineKeyboard | undefined {
   if (!buy) return undefined;
   const kb = new InlineKeyboard();
-  // Use text button instead of url button to remove the arrow icon
-  kb.text(buy.label, `ann:buy:${buy.product_id}`);
+  kb.url(buy.label, publicFeed.publicFeedBotUrl(`prod_${buy.product_id}`));
   if (buy.icon_custom_emoji_id) kb.icon(buy.icon_custom_emoji_id);
   const style = colorModeToStyle(buy.color);
   if (style !== undefined) kb.style(style);
   return kb;
 }
 
-// Handle "Buy" button clicks from broadcast announcements
-adminBot.callbackQuery(/^ann:buy:(\d+)$/, async (ctx) => {
-  const productId = Number(ctx.match[1]);
-  const username = ctx.me.username ?? env.BOT_USERNAME;
-  // Open product page directly via deep link
-  const deepLink = `https://t.me/${username.replace('@', '')}?start=prod_${productId}`;
-  // Answer callback and redirect to product page
-  await ctx.answerCallbackQuery({ url: deepLink });
-});
-
-function announceConfirmKeyboard(recipients: number, buy?: AnnounceBuy): InlineKeyboard {
+function announceConfirmKeyboard(
+  recipients: number,
+  buy?: AnnounceBuy,
+  shareSales = false,
+): InlineKeyboard {
   const kb = new InlineKeyboard()
     .text(`📣 Send to ${recipients}`, 'adm:ann:send')
     .row();
+  kb.text(
+    shareSales ? '🌐 Sales Group: ON' : '🌐 Sales Group: OFF',
+    'adm:ann:sales:toggle',
+  ).row();
   if (buy) {
     kb.text('🛒 Edit Buy Button', 'adm:ann:buy:edit')
       .text('🗑 Remove Button', 'adm:ann:buy:remove')
@@ -5064,10 +4992,16 @@ async function showAnnounceConfirm(ctx: AppCtx): Promise<void> {
   // Always normalize to step:'confirm' on entry — callers may have
   // landed here from any of the buy_* sub-steps.
   const buy = (flow.data as { buy?: AnnounceBuy }).buy;
+  const shareSales = Boolean(flow.data.share_sales);
   ctx.session.adminFlow = {
     type: 'announce',
     step: 'confirm',
-    data: { text: flow.data.text, format: flow.data.format, buy },
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy,
+      share_sales: shareSales,
+    },
   };
   const recipients = await listUsersForAnnouncement();
   const previewHtml =
@@ -5092,9 +5026,12 @@ async function showAnnounceConfirm(ctx: AppCtx): Promise<void> {
       reply_markup: announceBroadcastKeyboard(buy),
     });
   }
-  await ctx.reply(`📣 <b>Confirm broadcast</b>${buyLine}`, {
+  const salesLine = shareSales
+    ? '\n\n🌐 <b>Sales group mirror:</b> ON'
+    : '\n\n🌐 <b>Sales group mirror:</b> OFF';
+  await ctx.reply(`📣 <b>Confirm broadcast</b>${buyLine}${salesLine}`, {
     parse_mode: 'HTML',
-    reply_markup: announceConfirmKeyboard(recipients.length, buy),
+    reply_markup: announceConfirmKeyboard(recipients.length, buy, shareSales),
   });
 }
 
@@ -5245,7 +5182,12 @@ adminBot.callbackQuery(/^adm:ann:buy:set:(\d+)$/, async (ctx) => {
   ctx.session.adminFlow = {
     type: 'announce',
     step: 'confirm',
-    data: { text: flow.data.text, format: flow.data.format, buy },
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy,
+      share_sales: flow.data.share_sales,
+    },
   };
   await showAnnounceBuyEdit(ctx);
 });
@@ -5291,7 +5233,11 @@ adminBot.callbackQuery('adm:ann:buy:remove', async (ctx) => {
   ctx.session.adminFlow = {
     type: 'announce',
     step: 'confirm',
-    data: { text: flow.data.text, format: flow.data.format },
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      share_sales: flow.data.share_sales,
+    },
   };
   await showAnnounceConfirm(ctx);
 });
@@ -5311,7 +5257,12 @@ adminBot.callbackQuery('adm:ann:buy:label', async (ctx) => {
   ctx.session.adminFlow = {
     type: 'announce',
     step: 'buy_label',
-    data: { text: flow.data.text, format: flow.data.format, buy },
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy,
+      share_sales: flow.data.share_sales,
+    },
   };
   await ctx.editMessageText(
     `📝 *Edit Buy button label*\n\nCurrent: \`${buy.label}\`\n\n` +
@@ -5365,7 +5316,12 @@ adminBot.callbackQuery(/^adm:ann:buy:color:(.+)$/, async (ctx) => {
   ctx.session.adminFlow = {
     type: 'announce',
     step: 'confirm',
-    data: { text: flow.data.text, format: flow.data.format, buy: { ...buy, color } },
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy: { ...buy, color },
+      share_sales: flow.data.share_sales,
+    },
   };
   await showAnnounceBuyEdit(ctx);
 });
@@ -5385,7 +5341,12 @@ adminBot.callbackQuery('adm:ann:buy:icon', async (ctx) => {
   ctx.session.adminFlow = {
     type: 'announce',
     step: 'buy_icon',
-    data: { text: flow.data.text, format: flow.data.format, buy },
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy,
+      share_sales: flow.data.share_sales,
+    },
   };
   await ctx.editMessageText(
     '✨ *Set Buy button icon*\n\n' +
@@ -5402,6 +5363,29 @@ adminBot.callbackQuery('adm:ann:buy:icon', async (ctx) => {
   );
 });
 
+adminBot.callbackQuery('adm:ann:sales:toggle', async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  const shareSales = !Boolean(flow.data.share_sales);
+  ctx.session.adminFlow = {
+    type: 'announce',
+    step: 'confirm',
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy: flow.data.buy,
+      share_sales: shareSales,
+    },
+  };
+  await ctx.answerCallbackQuery({
+    text: `Sales group mirror ${shareSales ? 'enabled' : 'disabled'}.`,
+  });
+  await showAnnounceConfirm(ctx);
+});
+
 adminBot.callbackQuery('adm:ann:send', async (ctx) => {
   const flow = ctx.session.adminFlow;
   if (flow?.type !== 'announce' || flow.step !== 'confirm') {
@@ -5412,6 +5396,7 @@ adminBot.callbackQuery('adm:ann:send', async (ctx) => {
   const body = flow.data.text;
   const format = flow.data.format ?? 'md';
   const buy = flow.data.buy;
+  const shareSales = Boolean(flow.data.share_sales);
   const recipients = await listUsersForAnnouncement();
   const api = ctx.api;
   const statusChatId = ctx.chat?.id;
@@ -5441,6 +5426,21 @@ adminBot.callbackQuery('adm:ann:send', async (ctx) => {
           }
         : {}),
     });
+    if (shareSales) {
+      await publicFeed.notifySalesAnnouncement(api, {
+        text: body,
+        format,
+        ...(buy
+          ? {
+              button: {
+                text: buy.label,
+                productId: buy.product_id,
+                iconKey: 'broadcast_shop_now',
+              },
+            }
+          : {}),
+      });
+    }
     for (const r of recipients) {
       try {
         // Build a fresh keyboard per recipient — the underlying
@@ -5731,8 +5731,6 @@ async function showReferralAdminList(ctx: AppCtx, page: number): Promise<void> {
 async function showReferralAdminUser(ctx: AppCtx, user: DBUser): Promise<void> {
   const balance = await getReferralBalance(user.telegram_id);
   const label = referralUserLabel(user);
-  const isFraudSuspected = user.referral_fraud_suspected ?? false;
-  const fraudStatus = isFraudSuspected ? '<b>YES</b> 🚫 SPAM FLAG' : 'No';
   const lines = [
     '🎁 <b>Referral User</b>',
     '',
@@ -5743,8 +5741,6 @@ async function showReferralAdminUser(ctx: AppCtx, user: DBUser): Promise<void> {
     `Total Active Refs: <b>${balance.total}</b>`,
     `Used / Converted: <b>${balance.spent}</b>`,
     '',
-    `Fraud Suspected: ${fraudStatus}`,
-    '',
     'Use + / - for admin corrections. Reset removes this user\'s referral usage/adjustments, not the real invited-user rows.',
   ];
   const kb = new InlineKeyboard()
@@ -5754,14 +5750,7 @@ async function showReferralAdminUser(ctx: AppCtx, user: DBUser): Promise<void> {
     .text('✍️ Custom +/-', `adm:refs:custom:${user.telegram_id}`)
     .row()
     .text('♻️ Delete User Used Refs', `adm:refs:reset:${user.telegram_id}:ask`)
-    .row();
-  // Fraud flag toggle button
-  if (isFraudSuspected) {
-    kb.text('🛡️ Clear Fraud Flag', `adm:refs:fraud:clear:${user.telegram_id}`);
-  } else {
-    kb.text('🚫 Flag as Fraud', `adm:refs:fraud:set:${user.telegram_id}`);
-  }
-  kb.row()
+    .row()
     .text('⬅️ Back to Referrals', 'adm:refs:0')
     .text('🏠 Main', 'adm:root');
   if (ctx.callbackQuery) {
@@ -5894,55 +5883,6 @@ adminBot.callbackQuery('adm:refs:resetall:do', async (ctx) => {
     show_alert: true,
   });
   await showReferralAdminList(ctx, 0);
-});
-
-// --- Referral Fraud Flag ---
-adminBot.callbackQuery(/^adm:refs:fraud:set:(\d+)$/, async (ctx) => {
-  const telegramId = Number(ctx.match[1]);
-  try {
-    await setReferralFraudSuspected(telegramId, true);
-    const user = await findUserById(telegramId);
-    if (user) {
-      user.referral_fraud_suspected = true;
-    }
-    await ctx.answerCallbackQuery({
-      text: `User ${telegramId} flagged as fraud suspected.`,
-      show_alert: true,
-    });
-    if (user) {
-      await showReferralAdminUser(ctx, user);
-    }
-  } catch (err) {
-    logger.error({ err, telegramId }, 'set fraud flag failed');
-    await ctx.answerCallbackQuery({
-      text: 'Could not set fraud flag. Make sure migration 0040 is applied.',
-      show_alert: true,
-    });
-  }
-});
-
-adminBot.callbackQuery(/^adm:refs:fraud:clear:(\d+)$/, async (ctx) => {
-  const telegramId = Number(ctx.match[1]);
-  try {
-    await setReferralFraudSuspected(telegramId, false);
-    const user = await findUserById(telegramId);
-    if (user) {
-      user.referral_fraud_suspected = false;
-    }
-    await ctx.answerCallbackQuery({
-      text: `Fraud flag cleared for user ${telegramId}.`,
-      show_alert: true,
-    });
-    if (user) {
-      await showReferralAdminUser(ctx, user);
-    }
-  } catch (err) {
-    logger.error({ err, telegramId }, 'clear fraud flag failed');
-    await ctx.answerCallbackQuery({
-      text: 'Could not clear fraud flag.',
-      show_alert: true,
-    });
-  }
 });
 
 // ============================================================
@@ -7631,60 +7571,6 @@ adminBot.on('message:text', async (ctx, next) => {
       return;
     }
 
-    if (flow.type === 'supplier_rsk_add') {
-      const key = ctx.message.text.trim();
-      if (key.length < 24) {
-        await ctx.reply('❌ Send the full RSK reseller API key, or `/cancel`.', {
-          parse_mode: 'Markdown',
-        });
-        return;
-      }
-      const source = await createSupplierApiSource(rskResellerSupplierConfig(key));
-      ctx.session.adminFlow = undefined;
-      let testLine = 'Saved. Tap Test Connection if you want to retry the live check.';
-      try {
-        const test = await testSupplierConnection(source);
-        testLine = test.ok
-          ? `Live test OK: ${test.balance === null ? 'balance unknown' : `balance ${apiMoney(test.balance)}`} · ${test.productsSeen} products`
-          : `Saved, but live test needs attention: ${test.error ?? 'unknown error'}`;
-      } catch (err) {
-        testLine = `Saved, but live test failed: ${err instanceof Error ? err.message : String(err)}`;
-      }
-      await ctx.reply(
-        `✅ RSK Reseller supplier saved: *${escapeMd(source.name)}* (#${source.id})\n\n${escapeMd(testLine)}\n\nTap *Browse Products* to import by button.`,
-        { parse_mode: 'Markdown' },
-      );
-      await showSupplierDetail(ctx, source.id);
-      return;
-    }
-
-    if (flow.type === 'supplier_vex_add') {
-      const key = ctx.message.text.trim();
-      if (key.length < 24) {
-        await ctx.reply('❌ Send the full VEX reseller API key, or `/cancel`.', {
-          parse_mode: 'Markdown',
-        });
-        return;
-      }
-      const source = await createSupplierApiSource(vexResellerSupplierConfig(key));
-      ctx.session.adminFlow = undefined;
-      let testLine = 'Saved. Tap Test Connection if you want to retry the live check.';
-      try {
-        const test = await testSupplierConnection(source);
-        testLine = test.ok
-          ? `Live test OK: ${test.balance === null ? 'balance unknown' : `balance ${apiMoney(test.balance)}`} · ${test.productsSeen} products`
-          : `Saved, but live test needs attention: ${test.error ?? 'unknown error'}`;
-      } catch (err) {
-        testLine = `Saved, but live test failed: ${err instanceof Error ? err.message : String(err)}`;
-      }
-      await ctx.reply(
-        `✅ VEX Reseller supplier saved: *${escapeMd(source.name)}* (#${source.id})\n\n${escapeMd(testLine)}\n\nTap *Browse Products* to import by button.`,
-        { parse_mode: 'Markdown' },
-      );
-      await showSupplierDetail(ctx, source.id);
-      return;
-    }
-
     if (flow.type === 'supplier_api_add') {
       const cfg = parseSupplierSourceConfig(ctx.message.text.trim());
       const source = await createSupplierApiSource(cfg);
@@ -8840,6 +8726,7 @@ adminBot.on('message:text', async (ctx, next) => {
             text: flow.data.text,
             format: flow.data.format,
             buy: { ...flow.data.buy, label: trimmed },
+            share_sales: flow.data.share_sales,
           },
         };
         await ctx.reply(`✅ Label updated → \`${trimmed}\``, { parse_mode: 'Markdown' });
@@ -8863,6 +8750,7 @@ adminBot.on('message:text', async (ctx, next) => {
                 icon_unicode: undefined,
                 icon_custom_emoji_id: undefined,
               },
+              share_sales: flow.data.share_sales,
             },
           };
           await ctx.reply('🗑 Icon cleared.');
@@ -8899,6 +8787,7 @@ adminBot.on('message:text', async (ctx, next) => {
               icon_unicode: unicode,
               icon_custom_emoji_id: customId,
             },
+            share_sales: flow.data.share_sales,
           },
         };
         await ctx.reply(
@@ -9486,8 +9375,6 @@ adminBot.on('message:text', async (ctx, next) => {
       flow.type === 'supplier_api_add' ||
       flow.type === 'supplier_canboso_add' ||
       flow.type === 'supplier_reseller_add' ||
-      flow.type === 'supplier_rsk_add' ||
-      flow.type === 'supplier_vex_add' ||
       flow.type === 'supplier_product_link_add'
     ) {
       if (isSupplierMigrationError(err)) {

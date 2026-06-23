@@ -33,7 +33,7 @@ const DEFAULT_LOG_CHAT = '@safwantigershopsales';
 const DEFAULT_ORDER_LOG_CHAT = '@SafwanTigerShopBotInfo';
 
 /** Public shop feed / watcher group. Empty means reuse the working order-log chat. */
-const DEFAULT_PUBLIC_FEED_CHAT = '-1003809477935';
+const DEFAULT_PUBLIC_FEED_CHAT = '';
 
 /**
  * Shared transformer for the `LOG_CHAT_ID` family of env vars. Each
@@ -166,6 +166,14 @@ const schema = z.object({
     .trim()
     .optional()
     .transform(logChannelTransformer(DEFAULT_PUBLIC_FEED_CHAT)),
+
+  // Public sales/chat group for lightweight buyer activity and optional
+  // broadcast mirrors. Use a public @username or a private -100... chat id.
+  PUBLIC_SALES_CHAT_ID: z
+    .string()
+    .trim()
+    .optional()
+    .transform(logChannelTransformer('')),
 
   // ----------------------------------------------------------------
   //  TonCenter (TON USDT jetton verification)

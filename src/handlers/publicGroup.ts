@@ -5,6 +5,7 @@ import { listActiveProducts } from '../db/queries.js';
 import {
   publicFeedBotUrl,
   publicFeedChatId,
+  publicSalesFeedChatId,
 } from '../services/publicFeed.js';
 import { escapeAttr, renderHtmlTemplate } from '../services/premium.js';
 import { logger } from '../logger.js';
@@ -21,13 +22,15 @@ function normalized(text: string): string {
 }
 
 function isConfiguredFeedChat(ctx: AppCtx): boolean {
-  const configured = publicFeedChatId();
   const chat = ctx.chat;
-  if (!configured || !chat) return false;
-  if (typeof configured === 'number') return chat.id === configured;
-  const wanted = configured.replace(/^@/, '').toLowerCase();
+  if (!chat) return false;
+  const configuredChats = [publicFeedChatId(), publicSalesFeedChatId()].filter(Boolean);
   const username = 'username' in chat ? chat.username?.toLowerCase() : undefined;
-  return username === wanted;
+  return configuredChats.some((configured) => {
+    if (typeof configured === 'number') return chat.id === configured;
+    const wanted = String(configured).replace(/^@/, '').toLowerCase();
+    return username === wanted;
+  });
 }
 
 function productIconHtml(product: { emoji?: string | null; emoji_id?: string | null }): string {
