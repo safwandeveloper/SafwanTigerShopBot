@@ -276,6 +276,11 @@ export function isSupplierLowBalanceMessage(message: string): boolean {
 
 function replaceTemplate(value: unknown, vars: Record<string, string | number>): unknown {
   if (typeof value === 'string') {
+    // Preserve the original variable type when the whole field is one
+    // placeholder. Supplier schemas commonly require quantity/order_id
+    // as JSON numbers, not numeric strings.
+    const exact = value.match(/^\{\{\s*([a-zA-Z0-9_]+)\s*\}\}$/);
+    if (exact) return vars[exact[1]!] ?? '';
     return value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, key: string) =>
       String(vars[key] ?? ''),
     );
