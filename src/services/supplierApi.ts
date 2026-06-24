@@ -143,8 +143,8 @@ export function canbosoSupplierConfig(apiKey: string): SupplierSourceConfig {
 
 export function supabaseResellerSupplierConfig(apiKey: string): SupplierSourceConfig {
   return {
-    name: 'Supabase Reseller API',
-    base_url: 'https://mxcuakzztajvkgtsocln.supabase.co/functions/v1/reseller-api',
+    name: 'Safwan Reseller API',
+    base_url: 'https://eygkdpfjrjwwbiackfpr.supabase.co/functions/v1/reseller-api',
     api_key: apiKey.trim(),
     auth_mode: 'bearer',
     products_path: '?action=products',
@@ -169,74 +169,8 @@ export function supabaseResellerSupplierConfig(apiKey: string): SupplierSourceCo
     low_balance_threshold: 5,
     auto_import_new_products: false,
     auto_import_active: false,
-    import_category_name: 'Supabase Reseller Products',
+    import_category_name: 'Safwan Reseller Products',
     notes: 'One-click Bearer-token supplier connector for Supabase reseller-api?action endpoints.',
-  };
-}
-
-export function rskResellerSupplierConfig(apiKey: string): SupplierSourceConfig {
-  return {
-    name: 'RSK Reseller API',
-    base_url: 'https://eygkdpfjrjwwbiackfpr.supabase.co/functions/v1/reseller-api',
-    api_key: apiKey.trim(),
-    auth_mode: 'bearer',
-    products_path: '?action=products',
-    balance_path: '?action=balance',
-    order_path: '?action=order',
-    order_method: 'POST',
-    products_json_path: 'products',
-    balance_json_path: 'balance',
-    product_id_json_path: 'id',
-    product_name_json_path: 'name',
-    product_price_json_path: 'price',
-    product_stock_json_path: 'stock',
-    order_items_json_path: 'items',
-    order_status_json_path: 'ok',
-    order_request_template: {
-      product_id: '{{supplier_product_id}}',
-      quantity: '{{qty}}',
-      external_order_id: '{{request_id}}',
-    },
-    markup_percent: 25,
-    fixed_markup: 0,
-    low_balance_threshold: 5,
-    auto_import_new_products: false,
-    auto_import_active: false,
-    import_category_name: 'RSK Reseller Products',
-    notes: 'One-click RSK Reseller API supplier connector.',
-  };
-}
-
-export function vexResellerSupplierConfig(apiKey: string): SupplierSourceConfig {
-  return {
-    name: 'VEX Reseller API',
-    base_url: 'https://lshnsppqjcznfmdqwgfc.supabase.co/functions/v1/reseller-api',
-    api_key: apiKey.trim(),
-    auth_mode: 'bearer',
-    products_path: '?action=products',
-    balance_path: '?action=balance',
-    order_path: '?action=order',
-    order_method: 'POST',
-    products_json_path: 'products',
-    balance_json_path: 'balance',
-    product_id_json_path: 'id',
-    product_name_json_path: 'name',
-    product_price_json_path: 'price',
-    product_stock_json_path: 'stock',
-    order_items_json_path: 'items',
-    order_status_json_path: 'ok',
-    order_request_template: {
-      product_id: '{{supplier_product_id}}',
-      quantity: '{{qty}}',
-      external_order_id: '{{request_id}}',
-    },
-    markup_percent: 25,
-    fixed_markup: 0,
-    low_balance_threshold: 5,
-    auto_import_new_products: false,
-    auto_import_active: false,
-    import_category_name: 'VEX Reseller Products',
-    notes: 'One-click VEX Reseller API supplier connector.',
   };
 }
 
@@ -350,15 +284,7 @@ function replaceTemplate(value: unknown, vars: Record<string, string | number>):
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-      // Keep numeric fields as numbers
-      const isNumberField = key === 'quantity' || key === 'qty' || key === 'amount';
-      const valStr = typeof val === 'string' ? val.trim() : '';
-      const isNumericPlaceholder = /^\{\{\s*(qty|quantity|amount)\s*\}\}$/i.test(valStr);
-      if (isNumberField && isNumericPlaceholder) {
-        out[key] = vars.quantity ?? vars.qty ?? vars.amount;
-      } else {
-        out[key] = replaceTemplate(val, vars);
-      }
+      out[key] = replaceTemplate(val, vars);
     }
     return out;
   }

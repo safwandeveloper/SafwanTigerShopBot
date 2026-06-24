@@ -1581,7 +1581,7 @@ adminBot.callbackQuery('adm:api:supplier:add:reseller', async (ctx) => {
       '*Add Reseller API Supplier*',
       '',
       'Send the reseller API key only. This preset already knows:',
-      '`https://mxcuakzztajvkgtsocln.supabase.co/functions/v1/reseller-api`',
+      '`https://eygkdpfjrjwwbiackfpr.supabase.co/functions/v1/reseller-api`',
       '',
       'Auth: `Authorization: Bearer YOUR_API_KEY`',
       'Products: `?action=products`',
