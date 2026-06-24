@@ -153,7 +153,11 @@ import { describeMailerStatus, sendWelcomeEmail } from '../../services/mailer.js
 import { fulfillPendingPreordersForProduct } from '../../services/preorder.js';
 import { buildOrderDeliveredChunks } from '../../services/orderRender.js';
 import { publicOrderId } from '../../services/orderId.js';
-import { maybeStartDeliveryFormFromApi } from '../../services/postPurchaseDelivery.js';
+import {
+  getPendingDeliverySubmissions,
+  markDeliveryCompleteAndNotify,
+  maybeStartDeliveryFormFromApi,
+} from '../../services/postPurchaseDelivery.js';
 import {
   apiBaseUrl,
   disableApiKey,
@@ -260,6 +264,8 @@ function rootMenu(): InlineKeyboard {
     .text('📣 Broadcast', 'adm:ann')
     .row()
     .text('🎁 Referrals', 'adm:refs:0')
+    .row()
+    .text('📋 Delivery Forms', 'adm:dlv:0')
     .text('🧾 Orders', 'adm:ord:0')
     .row()
     .text('🎨 Customize', 'adm:cust')
@@ -2802,10 +2808,12 @@ async function showProductEditor(
       .text('🗂 Fields', `adm:prod:del:fields:${p.id}:${page}`)
       .row();
     kb.text('✅ Success Message', `adm:prod:del:succ:${p.id}:${page}`)
-      .text('🤝 Vendor Chat ID', `adm:prod:del:vendor:${p.id}:${page}`)
+      .text('🎉 Completion Msg', `adm:prod:del:complete:${p.id}:${page}`)
       .row();
-    kb.text('🏷 Vendor Label', `adm:prod:del:vlabel:${p.id}:${page}`)
-      .text('🧹 Clear Delivery', `adm:prod:del:clr:${p.id}:${page}`)
+    kb.text('🤝 Vendor Chat ID', `adm:prod:del:vendor:${p.id}:${page}`)
+      .text('🏷 Vendor Label', `adm:prod:del:vlabel:${p.id}:${page}`)
+      .row();
+    kb.text('🧹 Clear Delivery', `adm:prod:del:clr:${p.id}:${page}`)
       .row();
   }
   kb.text('🧾 View Buyers', `adm:ord:p:${p.id}:0`).row();
@@ -3154,6 +3162,30 @@ adminBot.callbackQuery(/^adm:prod:del:succ:(\d+):(\d+)$/, async (ctx) => {
       'Shown after the buyer submits their details (e.g. _"Your details has been submitted successfully — our team will approve it shortly."_). Premium emojis preserved.',
       '',
       'Send `clear` to reset to the default success text, or `/cancel` to abort.',
+    ].join('\n'),
+    { parse_mode: 'Markdown' },
+  );
+});
+
+adminBot.callbackQuery(/^adm:prod:del:complete:(\d+):(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const product_id = Number(ctx.match[1]);
+  const page = Number(ctx.match[2]);
+  ctx.session.adminFlow = {
+    type: 'edit_product_delivery_completion',
+    step: 'text',
+    data: { product_id, page },
+  };
+  await ctx.reply(
+    [
+      '🎉 *Send the completion message now.*',
+      '',
+      'This message will be sent to the buyer after you click "✅ Notify Buyer Done".',
+      'Example: _"🎉 Your order is complete! Your account has been set up. Go check your email!"_',
+      '',
+      'Supports premium emojis. Use `{{product}}` for product name.',
+      '',
+      'Send `clear` to reset to the default message, or `/cancel` to abort.',
     ].join('\n'),
     { parse_mode: 'Markdown' },
   );
@@ -7416,7 +7448,7 @@ adminBot.on('message:text', async (ctx, next) => {
         return;
       }
 
-      const product = await getProduct(order.product_id);
+      const product = order.product_id ? await getProduct(order.product_id) : null;
       const buyer = await findUserById(order.user_id);
       const lang = buyer?.language ?? env.DEFAULT_LANG;
       const tr = (key: string, vars?: Record<string, string | number>) =>
@@ -7939,6 +7971,16 @@ adminBot.on('message:text', async (ctx, next) => {
       });
       ctx.session.adminFlow = undefined;
       await ctx.reply(cleared ? '✅ Success card reset to default.' : '✅ Success card saved.');
+      await showProductEditor(ctx, flow.data.product_id, flow.data.page);
+      return;
+    }
+    if (flow.type === 'edit_product_delivery_completion') {
+      const cleared = text.trim().toLowerCase() === 'clear';
+      await updateProduct(flow.data.product_id, {
+        delivery_completion_message: cleared ? null : text,
+      });
+      ctx.session.adminFlow = undefined;
+      await ctx.reply(cleared ? '✅ Completion message reset to default.' : '✅ Completion message saved.');
       await showProductEditor(ctx, flow.data.product_id, flow.data.page);
       return;
     }
@@ -10225,6 +10267,173 @@ adminBot.command('showbottutorial', async (ctx) => {
     { parse_mode: 'Markdown' },
   );
 });
+
+// ============================================================
+// Delivery Form Submissions Admin Panel
+// ============================================================
+
+const DELIVERY_PER_PAGE = 10;
+
+adminBot.callbackQuery(/^adm:dlv:(?:(\d+))?$/, async (ctx) => {
+  const page = parseInt(ctx.match[1] ?? '0', 10);
+  const pending = await getPendingDeliverySubmissions();
+
+  if (pending.length === 0) {
+    await ctx.editMessageText(
+      '📋 *Delivery Form Submissions*\n\nNo pending submissions. All caught up! 🎉',
+      { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().row().text('⬅️ Back', 'adm:root') },
+    );
+    return;
+  }
+
+  const start = page * DELIVERY_PER_PAGE;
+  const pageItems = pending.slice(start, start + DELIVERY_PER_PAGE);
+  const kb = new InlineKeyboard();
+
+  for (const item of pageItems) {
+    const buyer = item.buyer;
+    const buyerName = buyer.username ? `@${buyer.username}` : (buyer.first_name || `ID: ${buyer.telegram_id}`);
+    kb.text(
+      `📝 #${item.order.public_id} — ${buyerName}`,
+      `adm:dlv:v:${item.order.id}`,
+    );
+    kb.row();
+  }
+
+  // Pagination
+  if (page > 0) kb.text('◀️ Prev', `adm:dlv:${page - 1}`);
+  if (start + DELIVERY_PER_PAGE < pending.length) kb.text('Next ▶️', `adm:dlv:${page + 1}`);
+  kb.row().text('⬅️ Back', 'adm:root');
+
+  await ctx.editMessageText(
+    `📋 *Pending Delivery Submissions* (${pending.length} total)\n\nPage ${page + 1} of ${Math.ceil(pending.length / DELIVERY_PER_PAGE)}`,
+    { parse_mode: 'Markdown', reply_markup: kb },
+  );
+});
+
+adminBot.callbackQuery(/^adm:dlv:v:(\d+)$/, async (ctx) => {
+  const orderId = parseInt(ctx.match[1]!, 10);
+  const { getOrder, getUserByTelegramId: getUser, getProduct, getDeliverySubmission } = await import('../../db/queries.js');
+
+  const [order, submission] = await Promise.all([
+    getOrder(orderId),
+    getDeliverySubmission(orderId),
+  ]);
+
+  if (!order || !submission) {
+    await ctx.answerCallbackQuery({ text: 'Order not found', show_alert: true });
+    return;
+  }
+
+  const product = order.product_id ? order.product_id ? await getProduct(order.product_id) : null : null;
+  const user = await getUser(order.user_id);
+
+  const buyerName = user?.username ? `@${user.username}` : (user?.first_name || `ID: ${user?.telegram_id || order.user_id}`);
+  const completed = submission.admin_completed_at ? '✅ Completed' : '⏳ Pending';
+  const orderPublicId = publicOrderId(order);
+
+  // Build fields display
+  const fieldsLines = Object.entries(submission.payload)
+    .map(([key, value]) => `• <b>${key}:</b> <code>${value}</code>`)
+    .join('\n') || '_No fields submitted_';
+
+  const text = [
+    `📋 *Delivery Submission Details*\n`,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `🆔 <b>Order:</b> #${orderPublicId}`,
+    `📦 <b>Product:</b> ${product?.name || 'Unknown'}`,
+    `👤 <b>Buyer:</b> ${buyerName}`,
+    `🔢 <b>Qty:</b> ${order.qty}`,
+    `💰 <b>Total:</b> ${order.total} USDT`,
+    `📅 <b>Submitted:</b> ${new Date(submission.submitted_at).toLocaleString()}`,
+    `📌 <b>Status:</b> ${completed}`,
+    ``,
+    `<b>Submitted Details:</b>`,
+    fieldsLines,
+    ``,
+    submission.admin_completed_at
+      ? `_Already marked as completed on ${new Date(submission.admin_completed_at).toLocaleString()}_`
+      : `_Process this order, then click "✅ Notify Buyer" below_`,
+  ].join('\n');
+
+  const kb = new InlineKeyboard();
+  if (!submission.admin_completed_at) {
+    kb.text('✅ Notify Buyer Done', `adm:dlv:done:${orderId}`);
+    kb.row();
+  }
+  kb.text('💬 Contact Buyer', `adm:usr:v:${order.user_id}`);
+  kb.row().text('⬅️ Back to List', `adm:dlv:0`);
+
+  await ctx.editMessageText(text, {
+    parse_mode: 'HTML',
+    reply_markup: kb,
+  });
+});
+
+adminBot.callbackQuery(/^adm:dlv:done:(\d+)$/, async (ctx) => {
+  const orderId = parseInt(ctx.match[1]!, 10);
+  const adminId = ctx.from.id;
+
+  const ok = await markDeliveryCompleteAndNotify({
+    api: ctx.api,
+    orderId,
+    adminId,
+  });
+
+  if (ok) {
+    await ctx.answerCallbackQuery({ text: '✅ Buyer notified!', show_alert: true });
+  } else {
+    await ctx.answerCallbackQuery({ text: '❌ Failed to notify buyer', show_alert: true });
+  }
+
+  // Refresh the view
+  const { getOrder, getUserByTelegramId: getUser, getProduct, getDeliverySubmission } = await import('../../db/queries.js');
+
+  const [order, submission] = await Promise.all([
+    getOrder(orderId),
+    getDeliverySubmission(orderId),
+  ]);
+
+  if (!order || !submission) return;
+
+  const product = order.product_id ? await getProduct(order.product_id) : null;
+  const user = await getUser(order.user_id);
+  const buyerName = user?.username ? `@${user.username}` : (user?.first_name || `ID: ${user?.telegram_id || order.user_id}`);
+
+  const fieldsLines = Object.entries(submission.payload)
+    .map(([key, value]) => `• <b>${key}:</b> <code>${value}</code>`)
+    .join('\n') || '_No fields submitted_';
+
+  const text = [
+    `📋 *Delivery Submission Details*\n`,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `🆔 <b>Order:</b> #${publicOrderId(order)}`,
+    `📦 <b>Product:</b> ${product?.name || 'Unknown'}`,
+    `👤 <b>Buyer:</b> ${buyerName}`,
+    `🔢 <b>Qty:</b> ${order.qty}`,
+    `💰 <b>Total:</b> ${order.total} USDT`,
+    `📅 <b>Submitted:</b> ${new Date(submission.submitted_at).toLocaleString()}`,
+    `📌 <b>Status:</b> ✅ Completed`,
+    ``,
+    `<b>Submitted Details:</b>`,
+    fieldsLines,
+    ``,
+    `_Marked as completed on ${new Date(submission.admin_completed_at!).toLocaleString()}_`,
+  ].join('\n');
+
+  const kb = new InlineKeyboard();
+  kb.text('💬 Contact Buyer', `adm:usr:v:${order.user_id}`);
+  kb.row().text('⬅️ Back to List', `adm:dlv:0`);
+
+  await ctx.editMessageText(text, {
+    parse_mode: 'HTML',
+    reply_markup: kb,
+  });
+});
+
+// ============================================================
+// End Delivery Form Submissions
+// ============================================================
 
 adminBot.command('clearcache', async (ctx) => {
   cache.clearAll();

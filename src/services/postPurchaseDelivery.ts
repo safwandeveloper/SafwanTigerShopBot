@@ -25,12 +25,15 @@ import type { Api, InlineKeyboard as InlineKeyboardType } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 import { logger } from '../logger.js';
 import { env } from '../env.js';
+import { supabase } from '../db/supabase.js';
 import { t as translate } from '../i18n/index.js';
 import { renderMdHtml } from './premium.js';
 import { getAdminContactUrlWithPrefill } from './settings.js';
 import {
   getDeliverySubmission,
+  getOrder,
   getProduct,
+  getUserByTelegramId,
   upsertDeliverySubmission,
 } from '../db/queries.js';
 import { applyButtonChrome, btn } from '../keyboards/helpers.js';
@@ -306,6 +309,124 @@ async function sendVendorMessage(args: {
   } catch (err) {
     logger.warn({ err, adminId: botEnv.ADMIN_USER_ID }, 'delivery: admin notification failed');
   }
+}
+
+/**
+ * Mark a delivery submission as completed by admin and notify the buyer.
+ * Returns true if notification was sent successfully.
+ */
+export async function markDeliveryCompleteAndNotify(args: {
+  api: Api;
+  orderId: number;
+  adminId: number;
+}): Promise<boolean> {
+  const { api, orderId, adminId } = args;
+
+  // Get the submission
+  const submission = await getDeliverySubmission(orderId);
+  if (!submission) {
+    logger.warn({ orderId }, 'markDeliveryComplete: submission not found');
+    return false;
+  }
+
+  // Check if already completed
+  if (submission.admin_completed_at) {
+    logger.warn({ orderId }, 'markDeliveryComplete: already completed');
+    return false;
+  }
+
+  // Get order details
+  const order = await getOrder(orderId);
+  if (!order) {
+    logger.warn({ orderId }, 'markDeliveryComplete: order not found');
+    return false;
+  }
+
+  // Get product
+  if (!order.product_id) {
+    logger.warn({ orderId }, 'markDeliveryComplete: order has no product_id');
+    return false;
+  }
+  const product = await getProduct(order.product_id);
+  if (!product) {
+    logger.warn({ orderId, productId: order.product_id }, 'markDeliveryComplete: product not found');
+    return false;
+  }
+
+  // Get buyer info
+  const user = await getUserByTelegramId(order.user_id);
+  if (!user) {
+    logger.warn({ orderId, userId: order.user_id }, 'markDeliveryComplete: user not found');
+    return false;
+  }
+
+  // Update submission as completed
+  const { error: updateError } = await supabase
+    .from('order_delivery_submissions')
+    .update({
+      admin_completed_at: new Date().toISOString(),
+      admin_completed_by: adminId,
+    })
+    .eq('order_id', orderId);
+
+  if (updateError) {
+    logger.error({ err: updateError, orderId }, 'markDeliveryComplete: update failed');
+    return false;
+  }
+
+  // Build completion message
+  const completionMessage = product.delivery_completion_message?.trim()
+    || `🎉 *Your order is complete!*\n\n✅ ${product.name}\n\nThank you for your purchase!`;
+
+  // Send to buyer
+  try {
+    await api.sendMessage(user.telegram_id, renderMdHtml(completionMessage), {
+      parse_mode: 'HTML',
+    });
+    return true;
+  } catch (err) {
+    logger.warn({ err, buyerId: user.telegram_id }, 'markDeliveryComplete: buyer notification failed');
+    return false;
+  }
+}
+
+/**
+ * Get all pending (not completed) delivery submissions for admin panel.
+ */
+export async function getPendingDeliverySubmissions(): Promise<Array<{
+  submission: DBOrderDeliverySubmission;
+  order: { id: number; public_id: string; };
+  product: { id: number; name: string; };
+  buyer: { telegram_id: number; first_name: string | null; username: string | null };
+}>> {
+  const { data, error } = await supabase
+    .from('order_delivery_submissions')
+    .select('*, order:orders(id, public_id), product:products(id, name), user:users(telegram_id, first_name, username)')
+    .is('admin_completed_at', null)
+    .order('submitted_at', { ascending: false });
+
+  if (error) {
+    logger.error({ err: error }, 'getPendingDeliverySubmissions failed');
+    return [];
+  }
+
+  return (data ?? []).map(row => ({
+    submission: {
+      id: Number((row as { id: number | string }).id),
+      order_id: Number((row as { order_id: number | string }).order_id),
+      user_id: Number((row as { user_id: number | string }).user_id),
+      product_id: Number((row as { product_id: number | string }).product_id),
+      payload: (row as { payload: Record<string, string> }).payload ?? {},
+      revision: Number((row as { revision: number | string }).revision),
+      submitted_at: String((row as { submitted_at: string }).submitted_at),
+      updated_at: String((row as { updated_at: string }).updated_at),
+      admin_completed_at: (row as { admin_completed_at: string | null }).admin_completed_at,
+      admin_completed_by: (row as { admin_completed_by: number | null }).admin_completed_by,
+    },
+    order: (row as { order: { id: number; public_id: string } }).order,
+    product: (row as { product: { id: number; name: string } }).product,
+    buyer: (row as { user: { telegram_id: number; first_name: string | null; username: string | null } }).user,
+  }));
 }
 
 /**
