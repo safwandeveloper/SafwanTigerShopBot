@@ -585,35 +585,66 @@ function sanitizeDeliveryValue(value: unknown): string {
 }
 
 function normalizeItems(source: DBSupplierApiSource, json: Record<string, unknown>): string[] {
-  const raw =
-    deepGet(json, source.order_items_json_path) ??
-    deepGet(json, 'items') ??
-    deepGet(json, 'data.items') ??
-    deepGet(json, 'order.items') ??
-    deepGet(json, 'order.delivery') ??
-    deepGet(json, 'delivery') ??
-    deepGet(json, 'data.delivery') ??
-    deepGet(json, 'code') ??
-    deepGet(json, 'account');
+  // Try multiple common paths for order items
+  const paths = [
+    source.order_items_json_path,
+    'items',
+    'data.items',
+    'order.items',
+    'order.delivery',
+    'delivery',
+    'data.delivery',
+    'result.items',
+    'result.delivery',
+    'data.data',
+    'data',
+    'codes',
+    'accounts',
+    'credentials',
+    'code',
+    'account',
+  ];
+  
+  let raw: unknown = undefined;
+  for (const path of paths) {
+    raw = deepGet(json, path);
+    if (raw !== undefined && raw !== null) break;
+  }
   
   // If raw is a string, split by newlines to get multiple items
   if (typeof raw === 'string') {
     const lines = raw.split(/\r?\n/).filter(line => line.trim().length > 0);
     if (lines.length > 1) {
-      // Multi-line string = multiple items
       return lines
         .map(line => sanitizeDeliveryString(line))
         .filter(s => s.length > 0);
     }
-    // Single line = single item
     const clean = sanitizeDeliveryString(raw);
     return clean ? [clean] : [];
   }
   
-  const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  return arr
-    .map(sanitizeDeliveryValue)
-    .filter((s) => s.length > 0);
+  // If raw is an array, process each item
+  if (Array.isArray(raw)) {
+    return raw
+      .map(item => {
+        // If item is a string, sanitize it
+        if (typeof item === 'string') {
+          const lines = item.split(/\r?\n/);
+          return lines.map(line => sanitizeDeliveryString(line)).filter(s => s.length > 0);
+        }
+        // If item is an object, try to extract the value
+        return [sanitizeDeliveryValue(item)].filter(s => s.length > 0);
+      })
+      .flat()
+      .filter(s => s.length > 0);
+  }
+  
+  // If raw is an object, sanitize it
+  if (raw && typeof raw === 'object') {
+    return [sanitizeDeliveryValue(raw)].filter(s => s.length > 0);
+  }
+  
+  return [];
 }
 
 export async function placeSupplierOrder(args: {
@@ -666,9 +697,11 @@ export async function placeSupplierOrder(args: {
       localOrderId: args.localOrderId,
       requestedQty: args.qty,
       receivedItems: items.length,
-      itemsPreview: items.slice(0, 3),
+      itemsPreview: items.slice(0, 5),
       status,
-      ok: !failed
+      ok: !failed,
+      rawJsonKeys: Object.keys(json),
+      rawJsonString: JSON.stringify(json).slice(0, 1000)
     }, 'placeSupplierOrder result');
     
     await recordSupplierOrderLog({
