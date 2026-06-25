@@ -768,6 +768,7 @@ export async function updateProduct(
     delivery_success_message: string | null;
     delivery_vendor_chat_id: number | null;
     delivery_vendor_label: string | null;
+    delivery_completion_message: string | null;
     // Pinning + OOS auto-reorder (migration 0025).
     is_pinned: boolean;
     stashed_sort_order: number | null;
@@ -1041,6 +1042,8 @@ export async function getDeliverySubmission(
     revision: Number((data as { revision: number | string }).revision),
     submitted_at: String((data as { submitted_at: string }).submitted_at),
     updated_at: String((data as { updated_at: string }).updated_at),
+    admin_completed_at: (data as { admin_completed_at: string | null }).admin_completed_at,
+    admin_completed_by: (data as { admin_completed_by: number | null }).admin_completed_by,
   };
 }
 
@@ -1083,6 +1086,8 @@ export async function upsertDeliverySubmission(args: {
       revision: Number((data as { revision: number | string }).revision),
       submitted_at: String((data as { submitted_at: string }).submitted_at),
       updated_at: String((data as { updated_at: string }).updated_at),
+      admin_completed_at: (data as { admin_completed_at: string | null }).admin_completed_at,
+      admin_completed_by: (data as { admin_completed_by: number | null }).admin_completed_by,
     };
   }
   const nextRevision = existing.revision + 1;
@@ -1109,6 +1114,8 @@ export async function upsertDeliverySubmission(args: {
     revision: Number((data as { revision: number | string }).revision),
     submitted_at: String((data as { submitted_at: string }).submitted_at),
     updated_at: String((data as { updated_at: string }).updated_at),
+    admin_completed_at: (data as { admin_completed_at: string | null }).admin_completed_at,
+    admin_completed_by: (data as { admin_completed_by: number | null }).admin_completed_by,
   };
 }
 

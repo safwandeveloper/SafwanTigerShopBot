@@ -86,6 +86,8 @@ export type DBProduct = {
   delivery_fields: DeliveryFieldSpec[];
   /** Admin-set success message shown after the buyer submits the form. */
   delivery_success_message: string | null;
+  /** Admin-set completion message sent to buyer after admin processes the order. */
+  delivery_completion_message: string | null;
   /**
    * Telegram chat id (user / group) of the vendor for THIS product.
    * Submissions are auto-DM'd to this id with an order tag + the
@@ -142,6 +144,10 @@ export type DBOrderDeliverySubmission = {
   revision: number;
   submitted_at: string;
   updated_at: string;
+  /** When admin marked this order as complete. */
+  admin_completed_at: string | null;
+  /** Admin user id who completed it. */
+  admin_completed_by: number | null;
 };
 
 /** A single item in the per-product delivery pool. */

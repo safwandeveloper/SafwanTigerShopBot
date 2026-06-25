@@ -148,6 +148,11 @@ export type AdminFlow =
       step: 'text';
       data: { product_id: number; page: number };
     }
+  | {
+      type: 'edit_product_delivery_completion';
+      step: 'text';
+      data: { product_id: number; page: number };
+    }
   // -------- Bot Tutorial editor (Settings → Bot Tutorial → Edit) --------
   | { type: 'edit_bot_tutorial_text'; step: 'text'; data: Record<string, never> }
   | { type: 'edit_bot_tutorial_file'; step: 'file'; data: Record<string, never> }
