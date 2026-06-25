@@ -589,14 +589,27 @@ function normalizeItems(source: DBSupplierApiSource, json: Record<string, unknow
     deepGet(json, source.order_items_json_path) ??
     deepGet(json, 'items') ??
     deepGet(json, 'data.items') ??
+    deepGet(json, 'order.items') ??
+    deepGet(json, 'order.delivery') ??
     deepGet(json, 'delivery') ??
     deepGet(json, 'data.delivery') ??
     deepGet(json, 'code') ??
     deepGet(json, 'account');
+  
+  // If raw is a string, split by newlines to get multiple items
   if (typeof raw === 'string') {
+    const lines = raw.split(/\r?\n/).filter(line => line.trim().length > 0);
+    if (lines.length > 1) {
+      // Multi-line string = multiple items
+      return lines
+        .map(line => sanitizeDeliveryString(line))
+        .filter(s => s.length > 0);
+    }
+    // Single line = single item
     const clean = sanitizeDeliveryString(raw);
     return clean ? [clean] : [];
   }
+  
   const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
   return arr
     .map(sanitizeDeliveryValue)
@@ -646,6 +659,18 @@ export async function placeSupplierOrder(args: {
       (status ? /^(false|0)$|fail|error|reject|cancel/i.test(status) : false);
     const items = normalizeItems(args.source, json);
     const error = failed ? supplierResponseError(json, status) : null;
+    
+    // Log order result for debugging
+    logger.info({ 
+      supplierName: args.source.name,
+      localOrderId: args.localOrderId,
+      requestedQty: args.qty,
+      receivedItems: items.length,
+      itemsPreview: items.slice(0, 3),
+      status,
+      ok: !failed
+    }, 'placeSupplierOrder result');
+    
     await recordSupplierOrderLog({
       supplier_id: args.source.id,
       local_order_id: args.localOrderId,
