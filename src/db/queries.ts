@@ -1336,6 +1336,44 @@ export async function claimProductItems(
   return rows.map((r) => String(r.payload));
 }
 
+export async function rollbackOrderItems(order_id: number): Promise<string[]> {
+  // Get the consumed items for this order
+  const { data: rows, error } = await supabase
+    .from('product_items')
+    .select('id, payload, product_id')
+    .eq('consumed_order_id', order_id);
+  if (error) {
+    logger.error({ err: error, order_id }, 'rollbackOrderItems select failed');
+    return [];
+  }
+  if (!rows || rows.length === 0) return [];
+  
+  // Reset consumed status
+  const ids = rows.map((r) => r.id);
+  const { error: upd } = await supabase
+    .from('product_items')
+    .update({ consumed_at: null, consumed_order_id: null })
+    .in('id', ids);
+  if (upd) {
+    logger.error({ err: upd, ids }, 'rollbackOrderItems update failed');
+    return [];
+  }
+  
+  // Restore product stock
+  const productIds = [...new Set(rows.map((r) => r.product_id))];
+  for (const product_id of productIds) {
+    const qty = rows.filter((r) => r.product_id === product_id).length;
+    // Get current stock and add back
+    const { data: prod } = await supabase.from('products').select('stock').eq('id', product_id).single();
+    if (prod) {
+      await supabase.from('products').update({ stock: Number(prod.stock ?? 0) + qty }).eq('id', product_id);
+    }
+  }
+  
+  logger.info({ order_id, recoveredCount: rows.length, productIds }, 'rollbackOrderItems: recovered links');
+  return rows.map((r) => String(r.payload));
+}
+
 export async function decrementProductStock(id: number, qty: number): Promise<void> {
   // Guard against the case where migration 0015 has NOT been applied
   // (no `unlimited_stock` column). We attempt the columned select

@@ -9978,6 +9978,37 @@ adminBot.command('setcolor', async (ctx) => {
   await ctx.reply(`✅ Color for \`${key}\` set to *${mode}*.`, { parse_mode: 'Markdown' });
 });
 
+adminBot.command('rollbackorder', async (ctx) => {
+  const [, orderIdRaw] = (ctx.message?.text ?? '').split(/\s+/);
+  if (!orderIdRaw) {
+    await ctx.reply('Usage: /rollbackorder <order_id>\n\nThis recovers links from an order back to inventory.\nUse when user got refund but links were already sent.');
+    return;
+  }
+  const orderId = parseInt(orderIdRaw, 10);
+  if (isNaN(orderId) || orderId <= 0) {
+    await ctx.reply('Invalid order_id. Use a number like: /rollbackorder 123');
+    return;
+  }
+  
+  const { rollbackOrderItems, getOrder } = await import('../../db/queries.js');
+  
+  const order = await getOrder(orderId);
+  if (!order) {
+    await ctx.reply('Order not found.');
+    return;
+  }
+  
+  const links = await rollbackOrderItems(orderId);
+  if (links.length === 0) {
+    await ctx.reply(`No links to recover from order #${orderId}.`);
+    return;
+  }
+  
+  await ctx.reply(`✅ *Links Recovered!*\n\nOrder #${orderId}\nRecovered: *${links.length}* links\n\nLinks:\n${links.slice(0, 10).join('\n')}${links.length > 10 ? '\n... and more' : ''}`, {
+    parse_mode: 'Markdown',
+  });
+});
+
 adminBot.command('setemoji', async (ctx) => {
   const [, key, unicode, customId] = (ctx.message?.text ?? '').split(/\s+/);
   if (!key || !unicode) {
