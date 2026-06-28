@@ -113,6 +113,11 @@ import {
   setEmoji,
   setText,
   refreshSettings,
+  setChannelUrl,
+  clearChannelUrl,
+  getChannelUrl,
+  getForceJoinEnabled,
+  setForceJoinEnabled,
   getEmoji,
   getButtonColor,
   getButtonIcon,
@@ -319,10 +324,15 @@ adminBot.callbackQuery('adm:close', async (ctx) => {
 // runtime: email PDF URL, admin contact link, plus the reload settings
 // shortcut. We deliberately keep this lean for now — each item edits
 // a single key in the `settings` table.
-adminBot.callbackQuery('adm:bot', async (ctx) => {
-  await ctx.answerCallbackQuery();
-  ctx.session.adminFlow = undefined;
+async function showBotSettings(ctx: AppCtx): Promise<void> {
+  const forceJoin = getForceJoinEnabled();
+  const channelUrl = getChannelUrl();
   const kb = new InlineKeyboard()
+    .text(forceJoin ? '🔒 Force Join: ON' : '🔓 Force Join: OFF', 'adm:bot:forcejoin:toggle')
+    .row()
+    .text('📣 Set Join Channel', 'adm:bot:forcejoin:channel')
+    .text('🗑 Clear Join Channel', 'adm:bot:forcejoin:clear')
+    .row()
     .text('📄 Set Email PDF URL', 'adm:bot:emailpdf')
     .row()
     .text('💬 Set Admin Contact URL', 'adm:bot:contact')
@@ -331,10 +341,64 @@ adminBot.callbackQuery('adm:bot', async (ctx) => {
     .row()
     .text('🔁 Reload Settings', 'adm:reload');
   backRow(kb);
-  await ctx.editMessageText('⚙️ *Bot Settings*\n\nGeneral configuration knobs.', {
+  const forceJoinLine = forceJoin ? '*ON*' : '*OFF*';
+  const channelLine = channelUrl ? `\`${channelUrl}\`` : '_not set_';
+  await ctx.editMessageText(
+    [
+      '⚙️ *Bot Settings*',
+      '',
+      `*Force Join:* ${forceJoinLine}`,
+      `*Join Channel:* ${channelLine}`,
+      '',
+      '_When Force Join is ON, users must join the configured channel before the main menu unlocks._',
+    ].join('\n'),
+    {
     parse_mode: 'Markdown',
     reply_markup: kb,
-  });
+    },
+  );
+}
+
+adminBot.callbackQuery('adm:bot', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = undefined;
+  await showBotSettings(ctx);
+});
+
+adminBot.callbackQuery('adm:bot:forcejoin:toggle', async (ctx) => {
+  const next = !getForceJoinEnabled();
+  await setForceJoinEnabled(next, ctx.from!.id);
+  await ctx.answerCallbackQuery({ text: `Force Join ${next ? 'enabled' : 'disabled'}.` });
+  ctx.session.adminFlow = undefined;
+  await showBotSettings(ctx);
+});
+
+adminBot.callbackQuery('adm:bot:forcejoin:channel', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = { type: 'set_force_join_channel', step: 'value', data: {} };
+  const kb = new InlineKeyboard().text('⬅️ Back', 'adm:bot');
+  await ctx.editMessageText(
+    [
+      '📣 *Set Join Channel*',
+      '',
+      'Send public channel username or link:',
+      '`@yourchannel`',
+      '`https://t.me/yourchannel`',
+      '',
+      'Important: add this bot as admin in that channel, otherwise Telegram cannot verify members.',
+      '',
+      'Send /cancel to abort.',
+    ].join('\n'),
+    { parse_mode: 'Markdown', reply_markup: kb },
+  );
+});
+
+adminBot.callbackQuery('adm:bot:forcejoin:clear', async (ctx) => {
+  await clearChannelUrl(ctx.from!.id);
+  await setForceJoinEnabled(false, ctx.from!.id);
+  ctx.session.adminFlow = undefined;
+  await ctx.answerCallbackQuery({ text: 'Force Join channel cleared and disabled.' });
+  await showBotSettings(ctx);
 });
 
 // Bot Tutorial editor — surfaces the same fields as the legacy
@@ -8847,6 +8911,41 @@ adminBot.on('message:text', async (ctx, next) => {
         await showAnnounceBuyEdit(ctx);
         return;
       }
+      return;
+    }
+
+    if (flow.type === 'set_force_join_channel') {
+      const value = text.trim();
+      const valid =
+        /^@[A-Za-z0-9_]{5,}$/i.test(value) ||
+        /^https?:\/\/t\.me\/[A-Za-z0-9_]{5,}(?:\/.*)?$/i.test(value) ||
+        /^-100\d+$/.test(value);
+      if (!valid) {
+        await ctx.reply(
+          [
+            '❌ Send a public channel username or link:',
+            '`@yourchannel`',
+            '`https://t.me/yourchannel`',
+            '',
+            'For private channels, send numeric chat id like `-1001234567890` and make sure bot is admin.',
+          ].join('\n'),
+          { parse_mode: 'Markdown' },
+        );
+        return;
+      }
+      await setChannelUrl(value, ctx.from!.id);
+      await setForceJoinEnabled(true, ctx.from!.id);
+      ctx.session.adminFlow = undefined;
+      await ctx.reply(
+        [
+          '✅ Force Join channel saved and enabled.',
+          '',
+          `Channel: \`${value}\``,
+          '',
+          'Make sure the bot is admin in that channel so membership checks work.',
+        ].join('\n'),
+        { parse_mode: 'Markdown', reply_markup: rootMenu() },
+      );
       return;
     }
 

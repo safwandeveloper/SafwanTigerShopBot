@@ -16,6 +16,8 @@ import { clearAiSession } from './support.js';
 import { inlineBtn } from '../keyboards/helpers.js';
 import { showProfile, showReferScreen } from './profile.js';
 import { showTopupMenu } from './topup.js';
+import { getChannelUrl, getForceJoinEnabled } from '../services/settings.js';
+import { logger } from '../logger.js';
 
 /**
  * Silently dismiss any leftover persistent reply keyboard from older
@@ -74,6 +76,68 @@ export async function showMainMenu(
   }
 
   await ctx.reply(html, { parse_mode: 'HTML', reply_markup });
+}
+
+function forceJoinChatId(channelUrl: string): string | number | null {
+  const raw = channelUrl.trim();
+  if (/^-100\d+$/.test(raw)) return Number(raw);
+  if (/^@[A-Za-z0-9_]{5,}$/i.test(raw)) return raw;
+  const m = raw.match(/^https?:\/\/t\.me\/([A-Za-z0-9_]{5,})(?:\/.*)?$/i);
+  if (m) return `@${m[1]}`;
+  return null;
+}
+
+function forceJoinUrl(channelUrl: string): string {
+  const raw = channelUrl.trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('@')) return `https://t.me/${raw.slice(1)}`;
+  return raw;
+}
+
+async function hasJoinedForceChannel(ctx: AppCtx): Promise<boolean> {
+  if (!getForceJoinEnabled()) return true;
+  const channelUrl = getChannelUrl();
+  if (!channelUrl) return true;
+  const chatId = forceJoinChatId(channelUrl);
+  if (!chatId) {
+    logger.warn({ channelUrl }, 'force-join: invalid channel URL; allowing access');
+    return true;
+  }
+  try {
+    const member = await ctx.api.getChatMember(chatId, ctx.from!.id);
+    return ['creator', 'administrator', 'member'].includes(member.status);
+  } catch (err) {
+    logger.warn({ err, channelUrl }, 'force-join: membership check failed; allowing access');
+    return true;
+  }
+}
+
+async function showForceJoinPrompt(ctx: AppCtx): Promise<void> {
+  const channelUrl = getChannelUrl();
+  if (!channelUrl) {
+    await showMainMenu(ctx, { fresh: true });
+    return;
+  }
+  const kb = new InlineKeyboard()
+    .url('📣 Join Channel', forceJoinUrl(channelUrl))
+    .row()
+    .text('✅ Done', 'forcejoin:done');
+  await ctx.reply(
+    renderMdHtml(
+      [
+        '🔔 *Please join our Channel to continue using this bot.*',
+        '',
+        'After joining, tap *"Done ✅"* below.',
+      ].join('\n'),
+    ),
+    { parse_mode: 'HTML', reply_markup: kb },
+  );
+}
+
+async function maybeGateForceJoin(ctx: AppCtx): Promise<boolean> {
+  if (await hasJoinedForceChannel(ctx)) return false;
+  await showForceJoinPrompt(ctx);
+  return true;
 }
 
 /**
@@ -215,6 +279,7 @@ export function registerStart(bot: Composer<AppCtx>): void {
         referredBy: ctx.user.referred_by ?? null,
       });
     }
+    if (await maybeGateForceJoin(ctx)) return;
     if (await handleReferDeepLink(ctx)) return;
     if (await handleSettingsDeepLink(ctx)) return;
     if (await handleTopupDeepLink(ctx)) return;
@@ -226,6 +291,7 @@ export function registerStart(bot: Composer<AppCtx>): void {
   bot.command('menu', async (ctx) => {
     await clearOldReplyKeyboard(ctx);
     clearAiSession(ctx.from?.id);
+    if (await maybeGateForceJoin(ctx)) return;
     await showMainMenu(ctx, { fresh: true });
   });
 
@@ -236,6 +302,19 @@ export function registerStart(bot: Composer<AppCtx>): void {
     // a stale prompt (e.g. set_email) can't capture later messages.
     ctx.session.userFlow = undefined;
     clearAiSession(ctx.from?.id);
+    if (await maybeGateForceJoin(ctx)) return;
+    await showMainMenu(ctx);
+  });
+
+  bot.callbackQuery('forcejoin:done', async (ctx) => {
+    if (!(await hasJoinedForceChannel(ctx))) {
+      await ctx.answerCallbackQuery({
+        text: 'Please join the channel first, then tap Done.',
+        show_alert: true,
+      });
+      return;
+    }
+    await ctx.answerCallbackQuery({ text: 'Access unlocked.' });
     await showMainMenu(ctx);
   });
 

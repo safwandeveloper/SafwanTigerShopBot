@@ -234,6 +234,16 @@ export async function clearChannelUrl(updated_by?: number): Promise<void> {
   cache.set('channel.url', '');
 }
 
+export function getForceJoinEnabled(): boolean {
+  const v = cache.get('force_join.enabled');
+  return v === true || v === 'true';
+}
+
+export async function setForceJoinEnabled(enabled: boolean, updated_by?: number): Promise<void> {
+  await setSetting('force_join.enabled', enabled, updated_by);
+  cache.set('force_join.enabled', enabled);
+}
+
 /**
  * Public URL of the email-explanation PDF. When set, the Why Email
  * "Know More" button becomes a URL button that opens the PDF in

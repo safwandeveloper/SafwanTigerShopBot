@@ -257,6 +257,7 @@ export type AdminFlow =
       };
     }
   | { type: 'find_user'; step: 'query'; data: Record<string, never> }
+  | { type: 'set_force_join_channel'; step: 'value'; data: Record<string, never> }
   | { type: 'adjust_balance'; step: 'amount'; data: { telegram_id: number } }
   | { type: 'referral_find_user'; step: 'query'; data: Record<string, never> }
   | { type: 'referral_adjust'; step: 'delta'; data: { telegram_id: number } }
