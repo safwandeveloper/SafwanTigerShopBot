@@ -2,7 +2,7 @@ import { Bot } from 'grammy';
 import { env } from './env.js';
 import { logger } from './logger.js';
 import { sessionMiddleware, type SessionCtx } from './middleware/session.js';
-import { userMiddleware, type AppCtx } from './middleware/user.js';
+import { userMiddleware, handleForceJoinCallback, type AppCtx } from './middleware/user.js';
 import { banMiddleware } from './middleware/ban.js';
 import { registerStart } from './handlers/start.js';
 import { registerShop } from './handlers/shop.js';
@@ -23,6 +23,14 @@ export async function buildBot(): Promise<Bot<AppCtx>> {
   bot.use(sessionMiddleware as unknown as (ctx: SessionCtx, next: () => Promise<void>) => Promise<void>);
   bot.use(userMiddleware);
   bot.use(banMiddleware);
+
+  // Handle force-join callback (before other handlers)
+  bot.on('callback_query', async (ctx) => {
+    const handled = await handleForceJoinCallback(ctx as AppCtx);
+    if (!handled) {
+      await ctx.answerCallbackQuery().catch(() => {});
+    }
+  });
 
   registerStart(bot);
   registerShop(bot);

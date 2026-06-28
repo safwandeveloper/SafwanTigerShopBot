@@ -176,6 +176,20 @@ const schema = z.object({
     .transform(logChannelTransformer('')),
 
   // ----------------------------------------------------------------
+  //  Required Join Channels (force users to join before using bot)
+  // ----------------------------------------------------------------
+  // Comma-separated list of channel usernames or IDs that users must join.
+  // Example: "@mychannel,-1001234567890,@anotherchannel"
+  REQUIRED_JOIN_CHANNELS: z
+    .string()
+    .trim()
+    .optional()
+    .transform((val) => {
+      if (!val || val.trim() === '') return [];
+      return val.split(',').map((s) => s.trim()).filter(Boolean);
+    }),
+
+  // ----------------------------------------------------------------
   //  TonCenter (TON USDT jetton verification)
   // ----------------------------------------------------------------
   // Optional API key for https://toncenter.com . Without it the
