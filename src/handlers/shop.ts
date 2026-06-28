@@ -282,40 +282,19 @@ type ReferralPaymentState = {
 };
 
 async function getReferralPaymentState(
-  ctx: AppCtx,
-  product: NonNullable<Awaited<ReturnType<typeof getProduct>>>,
-  qty: number,
-): Promise<ReferralPaymentState | null> {
-  if (!product.referral_required_count || product.referral_required_count <= 0) return null;
-  const requiredPerUnit = product.referral_required_count;
-  const requiredTotal = requiredPerUnit * qty;
-  try {
-    const balance = await getReferralBalance(ctx.user.telegram_id);
-    const remaining = Math.max(0, requiredTotal - balance.available);
-    return {
-      requiredPerUnit,
-      requiredTotal,
-      totalReferrals: balance.total,
-      spentReferrals: balance.spent,
-      availableReferrals: balance.available,
-      remaining,
-      eligible: remaining <= 0,
-    };
-  } catch (err) {
-    logger.warn(
-      { err, product_id: product.id, user: ctx.user.telegram_id },
-      'getReferralPaymentState failed',
-    );
-    return {
-      requiredPerUnit,
-      requiredTotal,
-      totalReferrals: 0,
-      spentReferrals: 0,
-      availableReferrals: 0,
-      remaining: requiredTotal,
-      eligible: false,
-    };
-  }
+  _ctx: AppCtx,
+  _product: NonNullable<Awaited<ReturnType<typeof getProduct>>>,
+  _qty: number,
+): Promise<ReferralPaymentState> {
+  return {
+    requiredPerUnit: 0,
+    requiredTotal: 0,
+    totalReferrals: 0,
+    spentReferrals: 0,
+    availableReferrals: 0,
+    remaining: 0,
+    eligible: false,
+  };
 }
 
 async function showLowReferralBalance(
@@ -817,7 +796,7 @@ export function registerShop(bot: Composer<AppCtx>): void {
       await ctx.answerCallbackQuery({ text: ctx.t('err.unknown_action') });
       return;
     }
-    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw);
+    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw!);
     const ceiling = qtyLimitForProduct(p);
     const current = ctx.session.qty[id] ?? QTY_MIN;
     const candidate = direction === 'inc' ? current + 1 : current - 1;
@@ -866,7 +845,7 @@ export function registerShop(bot: Composer<AppCtx>): void {
       await ctx.answerCallbackQuery({ text: ctx.t('err.unknown_action') });
       return;
     }
-    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw);
+    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw!);
     if (!ctx.session.qtyInput) ctx.session.qtyInput = {};
     const prev = ctx.session.qtyInput[id] ?? '';
     let buf = prev;
@@ -966,7 +945,7 @@ export function registerShop(bot: Composer<AppCtx>): void {
       ctx.session.userFlow = undefined;
       return;
     }
-    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw);
+    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw!);
     // Strip non-digits so a stray space / punctuation doesn't
     // invalidate an otherwise-valid number ("11 " → "11").
     const digits = text.replace(/[^0-9]/g, '');
@@ -1104,7 +1083,7 @@ export function registerShop(bot: Composer<AppCtx>): void {
       await ctx.answerCallbackQuery({ text: ctx.t('err.unknown_action') });
       return;
     }
-    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw);
+    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw!);
     await ctx.answerCallbackQuery();
     const kb = new InlineKeyboard();
     inlineBtn(kb, ctx.lang, 'back', `prod:${p.id}`);
@@ -1289,13 +1268,18 @@ export function registerShop(bot: Composer<AppCtx>): void {
   // user choose between paying with their wallet balance and topping
   // up first. The actual charge happens on `pay:wallet:<id>`.
   bot.callbackQuery(/^pay:referral:(\d+)$/, async (ctx) => {
+    await ctx.answerCallbackQuery({
+      text: 'Referral Pay is disabled.',
+      show_alert: true,
+    });
+    return;
     const productId = Number(ctx.match[1]);
     const raw = await getProduct(productId);
     if (!raw) {
       await ctx.answerCallbackQuery({ text: ctx.t('err.unknown_action') });
       return;
     }
-    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw);
+    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw!);
     if (!p.referral_required_count || p.referral_required_count <= 0) {
       await ctx.answerCallbackQuery({
         text: ctx.t('shop.referral.disabled'),
@@ -1336,13 +1320,18 @@ export function registerShop(bot: Composer<AppCtx>): void {
   });
 
   bot.callbackQuery(/^pay:referral:do:(\d+)$/, async (ctx) => {
+    await ctx.answerCallbackQuery({
+      text: 'Referral Pay is disabled.',
+      show_alert: true,
+    });
+    return;
     const productId = Number(ctx.match[1]);
     const raw = await getProduct(productId);
     if (!raw) {
       await ctx.answerCallbackQuery({ text: ctx.t('err.unknown_action') });
       return;
     }
-    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw);
+    const p = await applyUserPriceToProduct(ctx.user.telegram_id, raw!);
     if (!p.referral_required_count || p.referral_required_count <= 0) {
       await ctx.answerCallbackQuery({
         text: ctx.t('shop.referral.disabled'),
@@ -1451,19 +1440,12 @@ export function registerShop(bot: Composer<AppCtx>): void {
       // animated `<tg-emoji>` if a `custom_emoji_id` is configured.
       emoji: p.emoji === '🛒' ? '' : (p.emoji ?? ''),
       promo_line: renderPromoLine(ctx, promo, discount),
-      referral_line: referral
-        ? `${ctx.t('shop.pay.referral_line', {
-            required: referral.requiredTotal,
-            available: referral.availableReferrals,
-          })}`
-        : '',
+      referral_line: '',
     });
     await ctx.answerCallbackQuery();
     await ctx.editMessageText(renderMdHtml(text), {
       parse_mode: 'HTML',
-      reply_markup: paymentMethodKeyboard(ctx.lang, p, {
-        showReferralPay: !!referral,
-      }),
+      reply_markup: paymentMethodKeyboard(ctx.lang, p, { showReferralPay: false }),
     });
   });
 

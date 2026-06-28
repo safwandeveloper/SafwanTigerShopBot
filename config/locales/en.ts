@@ -1,4 +1,4 @@
-﻿/* English (default) — edit text here. */
+/* English (default) — edit text here. */
 export const en: Record<string, string> = {
   // ---------- Welcome / menu ----------
   'welcome': 'Welcome to SafwanTiger Shop',
@@ -749,17 +749,11 @@ export const en: Record<string, string> = {
   // Refer & Earn screen.
   'profile.refer.title': '{refer_title} *Refer & Earn*',
   'profile.refer.body':
-    '{refer_prize_l} *Refer 10 users and win $0.50* {refer_prize_r}\n\n' +
     '{refer_clicks} *Clicks:* {clicks}\n' +
     '{refer_pending} *Pending:* {pending}\n' +
     '{refer_active} *Active:* {active}\n' +
-    '{refer_left} *Left:* {left}\n' +
     '{refer_total} *Referred (Total):* {refTotal}\n' +
-    '{refer_coin} *Total Earned:* {earnedTotal} USDT\n' +
-    '{refer_withdrawn} *Withdrawn:* {withdrawn} USDT\n\n' +
-    '{prod_referral} *Referral Pay Balance:* {refAvailable} refs\n' +
-    '{refer_spent} *Used for Purchases:* {refSpent} refs\n\n' +
-    '> Transfer earnings to wallet anytime. For cash withdrawal, contact support ($1.00 min).\n\n' +
+    '\n' +
     '*Your Referral Link:*\n`{link}`',
   'profile.refer.convert_success':
     '💱 Converted *{refs} refs* into *{amount} USDT*.\n\n💳 Wallet Balance: *{balance} USDT*',

@@ -4,16 +4,13 @@ import { type Lang } from '../../config/index.js';
 import { POPULAR_REGIONS, formatLocalTime, getRegion } from '../../config/regions.js';
 import {
   adjustBalance,
-  convertReferralBalance,
   countReferralsSince,
   countGiftCodeRedemptions,
   countGiftCodeRedemptionsByUser,
   findUserByEmail,
   getGiftCode,
-  InsufficientReferralBalanceError,
   getOrder,
   getReferralBalance,
-  getReferralEarnings,
   getUserStats,
   listAllProducts,
   listActivePromos,
@@ -548,29 +545,26 @@ export async function showReferScreen(
   const code = ctx.user.ref_code ?? `R${ctx.user.telegram_id.toString(36).toUpperCase()}`;
   const link = `https://t.me/${env.BOT_USERNAME}?start=${code}`;
   const DAY = 24 * 60 * 60 * 1000;
-  const [refBalance, ref24h, ref7d, earnings] = await Promise.all([
+  const [refBalance, ref24h, ref7d] = await Promise.all([
     getReferralBalance(ctx.user.telegram_id),
     countReferralsSince(ctx.user.telegram_id, DAY),
     countReferralsSince(ctx.user.telegram_id, 7 * DAY),
-    getReferralEarnings(ctx.user.telegram_id),
   ]);
-  const left = Math.max(0, 10 - refBalance.available);
-  const fmt = (n: number): string => n.toFixed(n % 1 === 0 ? 0 : 2);
   const body = ctx.t('profile.refer.body', {
     link,
     ref24h,
     ref7d,
-    left,
+    left: 0,
     refTotal: refBalance.total,
-    refSpent: refBalance.spent,
-    refAvailable: refBalance.available,
+    refSpent: 0,
+    refAvailable: refBalance.total,
     clicks: 0,
     pending: 0,
-    active: refBalance.available,
-    earnedTotal: fmt(earnings.total),
-    available: fmt(earnings.available),
-    transferred: fmt(earnings.transferred),
-    withdrawn: fmt(earnings.withdrawn),
+    active: refBalance.total,
+    earnedTotal: '0',
+    available: '0',
+    transferred: '0',
+    withdrawn: '0',
   });
   const referText = `${ctx.t('profile.refer.title')}\n\n${body}`;
   const html = renderMdHtml(referText);
@@ -963,41 +957,10 @@ export function registerProfile(bot: Composer<AppCtx>): void {
   });
 
   bot.callbackQuery('profile:refer:convert', async (ctx) => {
-    const REF_COST = 20;
-    const USDT_AMOUNT = 1;
-    try {
-      const result = await convertReferralBalance({
-        user_id: ctx.user.telegram_id,
-        referral_cost: REF_COST,
-        amount: USDT_AMOUNT,
-      });
-      ctx.user.balance = result.newBalance;
-      await ctx.answerCallbackQuery({
-        text: ctx.t('profile.refer.convert_success', {
-          refs: REF_COST,
-          amount: USDT_AMOUNT.toFixed(2),
-          balance: result.newBalance.toFixed(2),
-        }),
-        show_alert: true,
-      });
-      await showReferScreen(ctx);
-    } catch (err) {
-      if (err instanceof InsufficientReferralBalanceError) {
-        const balance = await getReferralBalance(ctx.user.telegram_id).catch(() => null);
-        await ctx.answerCallbackQuery({
-          text: ctx.t('profile.refer.convert_low', {
-            available: balance?.available ?? 0,
-          }),
-          show_alert: true,
-        });
-        return;
-      }
-      logger.error({ err, user: ctx.user.telegram_id }, 'profile refer convert failed');
-      await ctx.answerCallbackQuery({
-        text: ctx.t('profile.refer.convert_error'),
-        show_alert: true,
-      });
-    }
+    await ctx.answerCallbackQuery({
+      text: 'Referral wallet conversion is disabled.',
+      show_alert: true,
+    });
   });
 
   // ---- Notifications submenu ----

@@ -253,8 +253,6 @@ export function referKeyboard(
   kb.row();
   inlineUrl(kb, lang, 'live_refers', 'https://t.me/TigerStockChat');
   kb.row();
-  inlineBtn(kb, lang, 'convert_refers', 'profile:refer:convert');
-  kb.row();
   inlineBtn(kb, lang, 'refresh', options.refreshCallback ?? 'profile:refer');
   kb.row();
   inlineBtn(kb, lang, 'back', options.backCallback ?? 'main:open');

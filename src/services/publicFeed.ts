@@ -175,11 +175,6 @@ export async function notifyActiveReferral(api: Api, _args: {
   totalEarned: number;
 }): Promise<void> {
   const active = Math.max(0, _args.activeReferrals ?? _args.totalReferrals);
-  const remaining = active > 0 && active % 10 === 0 ? 0 : 10 - (active % 10);
-  const milestone =
-    remaining === 0
-      ? '{refer_prize_l} <b>Reward milestone unlocked!</b>'
-      : `{refer_left} <b>${remaining} more to earn $0.50</b>`;
   const html = renderHtmlTemplate(
     [
       '<blockquote>',
@@ -187,8 +182,6 @@ export async function notifyActiveReferral(api: Api, _args: {
       '',
       `{refer_user} <b>Referrer:</b> <b>${escapeAttr(_args.referrerName)}</b>`,
       `{refer_active} <b>Active Referrals:</b> <b>${active}</b>`,
-      `{refer_coin} <b>Total earned from invites:</b> <b>$${money(_args.totalEarned)}</b>`,
-      milestone,
       '</blockquote>',
     ].join('\n'),
   );

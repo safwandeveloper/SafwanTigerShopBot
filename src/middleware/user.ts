@@ -123,7 +123,15 @@ async function sendReferralNotification(
   // Existing notification templates call this "totalRefs", but the
   // number shown to users must be the spendable Referral Pay balance:
   // lifetime referrals minus purchase/conversion spends.
-  const totalRefs = refBalance.available;
+  const totalRefs = refBalance.total;
+  const cleanUserMsg = [
+    '*You Got a Refer +1!*',
+    '',
+    `*New Active Refer:* ${refereeDisplay}`,
+    `*Active Refers:* ${totalRefs} refs`,
+    '',
+    'Keep sharing your link.',
+  ].join('\n');
 
   const userMsg = `🎁 *You Got a Refer +1!*
 
@@ -134,16 +142,16 @@ async function sendReferralNotification(
 Keep sharing your link and stack rewards.`;
 
   await ctx.api
-    .sendMessage(referrerId, renderMdHtml(userMsg), { parse_mode: 'HTML' })
+    .sendMessage(referrerId, renderMdHtml(cleanUserMsg), { parse_mode: 'HTML' })
     .catch(() => {});
 
   void publicFeed.notifyActiveReferral(ctx.api, {
     referrerName: referrerUsername,
     totalReferrals: refBalance.total,
     activeReferrals: totalRefs,
-    totalEarned,
+    totalEarned: 0,
   });
-  if (totalRefs > 0 && totalRefs % 10 === 0) {
+  if (false && totalRefs > 0 && totalRefs % 10 === 0) {
     void publicFeed.notifyReferralAchievement(ctx.api, {
       userId: referrerId,
       amount: 0.5,
