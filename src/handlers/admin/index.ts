@@ -10009,6 +10009,32 @@ adminBot.command('rollbackorder', async (ctx) => {
   });
 });
 
+adminBot.command('flagrefer', async (ctx) => {
+  const [, telegramIdRaw] = (ctx.message?.text ?? '').split(/\s+/);
+  if (!telegramIdRaw) {
+    await ctx.reply('Usage: /flagrefer <telegram_id>\n\nFlags user for referral fraud. They cannot convert referrals to wallet.');
+    return;
+  }
+  const telegramId = parseInt(telegramIdRaw, 10);
+  if (isNaN(telegramId) || telegramId <= 0) {
+    await ctx.reply('Invalid telegram_id. Use a number like: /flagrefer 8158489713');
+    return;
+  }
+  
+  const { setReferralFraudSuspected, findUserById } = await import('../../db/queries.js');
+  
+  const user = await findUserById(telegramId);
+  if (!user) {
+    await ctx.reply('User not found.');
+    return;
+  }
+  
+  await setReferralFraudSuspected(telegramId, true);
+  await ctx.reply(`🚫 *User Flagged for Referral Fraud*\n\nTelegram ID: \`${telegramId}\`\nUsername: @${user.username ?? 'N/A'}\nName: ${user.first_name ?? 'N/A'}\n\nUser can no longer convert referrals to wallet.`, {
+    parse_mode: 'Markdown',
+  });
+});
+
 adminBot.command('setemoji', async (ctx) => {
   const [, key, unicode, customId] = (ctx.message?.text ?? '').split(/\s+/);
   if (!key || !unicode) {
