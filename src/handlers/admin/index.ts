@@ -9978,6 +9978,63 @@ adminBot.command('setcolor', async (ctx) => {
   await ctx.reply(`✅ Color for \`${key}\` set to *${mode}*.`, { parse_mode: 'Markdown' });
 });
 
+adminBot.command('rollbackorder', async (ctx) => {
+  const [, orderIdRaw] = (ctx.message?.text ?? '').split(/\s+/);
+  if (!orderIdRaw) {
+    await ctx.reply('Usage: /rollbackorder <order_id>\n\nThis recovers links from an order back to inventory.\nUse when user got refund but links were already sent.');
+    return;
+  }
+  const orderId = parseInt(orderIdRaw, 10);
+  if (isNaN(orderId) || orderId <= 0) {
+    await ctx.reply('Invalid order_id. Use a number like: /rollbackorder 123');
+    return;
+  }
+  
+  const { rollbackOrderItems, getOrder } = await import('../../db/queries.js');
+  
+  const order = await getOrder(orderId);
+  if (!order) {
+    await ctx.reply('Order not found.');
+    return;
+  }
+  
+  const links = await rollbackOrderItems(orderId);
+  if (links.length === 0) {
+    await ctx.reply(`No links to recover from order #${orderId}.`);
+    return;
+  }
+  
+  await ctx.reply(`✅ *Links Recovered!*\n\nOrder #${orderId}\nRecovered: *${links.length}* links\n\nLinks:\n${links.slice(0, 10).join('\n')}${links.length > 10 ? '\n... and more' : ''}`, {
+    parse_mode: 'Markdown',
+  });
+});
+
+adminBot.command('flagrefer', async (ctx) => {
+  const [, telegramIdRaw] = (ctx.message?.text ?? '').split(/\s+/);
+  if (!telegramIdRaw) {
+    await ctx.reply('Usage: /flagrefer <telegram_id>\n\nFlags user for referral fraud. They cannot convert referrals to wallet.');
+    return;
+  }
+  const telegramId = parseInt(telegramIdRaw, 10);
+  if (isNaN(telegramId) || telegramId <= 0) {
+    await ctx.reply('Invalid telegram_id. Use a number like: /flagrefer 8158489713');
+    return;
+  }
+  
+  const { setReferralFraudSuspected, findUserById } = await import('../../db/queries.js');
+  
+  const user = await findUserById(telegramId);
+  if (!user) {
+    await ctx.reply('User not found.');
+    return;
+  }
+  
+  await setReferralFraudSuspected(telegramId, true);
+  await ctx.reply(`🚫 *User Flagged for Referral Fraud*\n\nTelegram ID: \`${telegramId}\`\nUsername: @${user.username ?? 'N/A'}\nName: ${user.first_name ?? 'N/A'}\n\nUser can no longer convert referrals to wallet.`, {
+    parse_mode: 'Markdown',
+  });
+});
+
 adminBot.command('setemoji', async (ctx) => {
   const [, key, unicode, customId] = (ctx.message?.text ?? '').split(/\s+/);
   if (!key || !unicode) {
