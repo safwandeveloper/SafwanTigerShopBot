@@ -5,7 +5,7 @@
 import type { MiddlewareFn } from 'grammy';
 import { normalizeCurrency } from '../../config/currencies.js';
 import type { Lang } from '../../config/index.js';
-import { getOrCreateUser } from '../db/queries.js';
+import { getOrCreateUser, setReferralFraudSuspected, getRecentReferralsByReferrer } from '../db/queries.js';
 import { env } from '../env.js';
 import { t as translate } from '../i18n/index.js';
 import { renderMdHtml } from '../services/premium.js';
@@ -19,6 +19,10 @@ export type AppCtx = SessionCtx & {
   lang: Lang;
   t: (key: string, vars?: Record<string, string | number>) => string;
 };
+
+// Anti-fraud settings
+const REFERRAL_BURST_THRESHOLD = 10; // Flag if 10+ referrals in short time
+const REFERRAL_BURST_WINDOW_HOURS = 2; // Within 2 hours
 
 /**
  * Look at the most recent /start payload (if any) for a referral code
@@ -59,7 +63,8 @@ export const userMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
     (user as DBUser & { __just_created?: boolean }).__just_created &&
     user.referred_by
   ) {
-    void sendReferralNotification(ctx, user.referred_by, ctx.from.id, ctx.from.username ?? null, ctx.from.first_name);
+    // Fire-and-forget referral notification (non-blocking)
+    void sendReferralNotificationSafe(ctx, user.referred_by, ctx.from.id, ctx.from.username ?? null, ctx.from.first_name);
   }
 
   return next();
@@ -67,6 +72,66 @@ export const userMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
 
 function cleanDisplayName(value: string): string {
   return value.replace(/[*_`~]/g, '').trim() || 'New user';
+}
+
+/**
+ * Safe referral notification - doesn't block the bot
+ */
+async function sendReferralNotificationSafe(
+  ctx: AppCtx,
+  referrerId: number,
+  refereeId: number,
+  refereeUsername: string | null,
+  refereeFirstName: string | null,
+) {
+  try {
+    await sendReferralNotification(ctx, referrerId, refereeId, refereeUsername, refereeFirstName);
+  } catch (err) {
+    console.error('Referral notification failed:', err);
+  }
+}
+
+/**
+ * Check for referral fraud patterns and alert admin
+ */
+async function checkReferralFraud(
+  ctx: AppCtx,
+  referrerId: number,
+  refereeId: number,
+  refereeUsername: string | null,
+  refereeFirstName: string | null,
+) {
+  try {
+    // Get recent referrals for this referrer
+    const recentRefs = await getRecentReferralsByReferrer(referrerId, REFERRAL_BURST_WINDOW_HOURS);
+    
+    if (recentRefs.length >= REFERRAL_BURST_THRESHOLD) {
+      // Suspicious activity detected!
+      const referrer = await ctx.api.getChat(referrerId).catch(() => null);
+      const referrerName = referrer?.username ? `@${referrer.username}` : referrer?.first_name ?? `ID: ${referrerId}`;
+      
+      const refereeDisplay = cleanDisplayName(
+        refereeUsername ? `@${refereeUsername}` : refereeFirstName ?? `ID: ${refereeId}`,
+      );
+      
+      // Auto-flag the referrer for fraud
+      await setReferralFraudSuspected(referrerId, true);
+      
+      // Alert admin channel
+      if (env.LOG_CHAT_ID && env.LOG_CHAT_ID !== '0') {
+        const alertMsg = `🚨 *REFERRAL FRAUD ALERT*\n\n` +
+          `User ${referrerName} got *${recentRefs.length}* referrals in *${REFERRAL_BURST_WINDOW_HOURS} hour(s)*!\n\n` +
+          `Latest refer: ${refereeDisplay}\n\n` +
+          `User has been auto-flagged. Use /banuser ${referrerId} to ban.`;
+        
+        await ctx.api.sendMessage(env.LOG_CHAT_ID, renderMdHtml(alertMsg), { parse_mode: 'HTML' }).catch(() => {});
+      }
+      
+      console.warn(`Referral fraud detected: User ${referrerId} got ${recentRefs.length} referrals in ${REFERRAL_BURST_WINDOW_HOURS}h`);
+    }
+  } catch (err) {
+    console.error('Referral fraud check failed:', err);
+  }
 }
 
 /**
@@ -133,4 +198,7 @@ Keep sharing your link and stack rewards.`;
       amount: 0.1,
     });
   }
+  
+  // Check for fraud after successful referral
+  await checkReferralFraud(ctx, referrerId, refereeId, refereeUsername, refereeFirstName);
 }

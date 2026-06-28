@@ -71,6 +71,24 @@ async function ensureReferralRecord(
   }
 }
 
+export async function getRecentReferralsByReferrer(
+  referrerId: number,
+  hours: number,
+): Promise<Array<{ referee_id: number; created_at: string }>> {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('referrals')
+    .select('referee_id, created_at')
+    .eq('referrer_id', referrerId)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false });
+  if (error) {
+    logger.warn({ err: error, referrerId, hours }, 'getRecentReferralsByReferrer failed');
+    return [];
+  }
+  return (data as Array<{ referee_id: number; created_at: string }>) ?? [];
+}
+
 export async function getOrCreateUser(args: {
   telegram_id: number;
   username?: string | null;
