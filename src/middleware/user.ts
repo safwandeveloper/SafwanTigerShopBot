@@ -13,6 +13,7 @@ import type { DBUser } from '../types.js';
 import type { SessionCtx } from './session.js';
 import { maybeSendEmailNag } from '../services/emailNag.js';
 import * as publicFeed from '../services/publicFeed.js';
+import { InlineKeyboard } from 'grammy';
 
 export type AppCtx = SessionCtx & {
   user: DBUser;
@@ -23,6 +24,102 @@ export type AppCtx = SessionCtx & {
 // Anti-fraud settings
 const REFERRAL_BURST_THRESHOLD = 10; // Flag if 10+ referrals in short time
 const REFERRAL_BURST_WINDOW_HOURS = 2; // Within 2 hours
+
+/**
+ * Check if user has joined all required channels
+ */
+async function checkRequiredChannels(ctx: AppCtx): Promise<{ passed: boolean; notJoined: string[] }> {
+  const requiredChannels = env.REQUIRED_JOIN_CHANNELS || [];
+  if (requiredChannels.length === 0) {
+    return { passed: true, notJoined: [] };
+  }
+
+  const notJoined: string[] = [];
+  
+  for (const channel of requiredChannels) {
+    try {
+      const chatMember = await ctx.api.getChatMember(channel, ctx.from!.id);
+      const status = chatMember.status;
+      // Valid statuses: 'member', 'administrator', 'creator', 'restricted' (if not left)
+      const isValid = ['member', 'administrator', 'creator', 'restricted'].includes(status);
+      if (!isValid) {
+        notJoined.push(channel);
+      }
+    } catch {
+      // If we can't check (e.g., bot not in channel), skip
+      notJoined.push(channel);
+    }
+  }
+
+  return { passed: notJoined.length === 0, notJoined };
+}
+
+/**
+ * Send force-join message with channel buttons
+ */
+async function sendForceJoinMessage(ctx: AppCtx, channels: string[]) {
+  const kb = new InlineKeyboard();
+  
+  for (const channel of channels) {
+    let displayName = channel;
+    if (channel.startsWith('@')) {
+      displayName = channel;
+    } else if (channel.match(/^-?\d+$/)) {
+      displayName = `Channel ${channel}`;
+    }
+    kb.url('📢 Join Channel', channel.startsWith('@') ? `https://t.me/${channel.slice(1)}` : `https://t.me/c/${Math.abs(parseInt(channel))}`);
+    kb.row();
+  }
+  
+  // Done button with unique callback data
+  const doneCallbackData = `forcejoin_done:${ctx.from!.id}:${Date.now()}`;
+  kb.text('✅ Done - I Have Joined', doneCallbackData);
+
+  const message = `━━━━━━━━━━━━━━━━━━━━
+🔒 *Access Restricted*
+
+⚠️ Please join our channel(s) first to use this bot!
+
+👇 Tap below to join:
+━━━━━━━━━━━━━━━━━━━━`;
+
+  await ctx.reply(renderMdHtml(message), {
+    parse_mode: 'HTML',
+    reply_markup: kb,
+  });
+}
+
+/**
+ * Handle force-join callback (when user clicks "Done")
+ */
+export async function handleForceJoinCallback(ctx: AppCtx): Promise<boolean> {
+  const requiredChannels = env.REQUIRED_JOIN_CHANNELS || [];
+  if (requiredChannels.length === 0) return false;
+
+  const match = ctx.callbackQuery?.data?.match(/^forcejoin_done:(\d+):(\d+)$/);
+  if (!match) return false;
+  
+  const callbackUserId = parseInt(match[1]!);
+  // Verify this callback is from the same user
+  if (callbackUserId !== ctx.from!.id) {
+    await ctx.answerCallbackQuery({ text: '❌ This is not for you!' });
+    return true;
+  }
+
+  // Re-check membership
+  const { passed, notJoined } = await checkRequiredChannels(ctx);
+  
+  if (passed) {
+    await ctx.answerCallbackQuery({ text: '✅ Access granted! You can now use the bot.' });
+    await ctx.editMessageText('━━━━━━━━━━━━━━━━━━━━\n🎉 *Access Granted!*\n\nWelcome aboard! You now have full access to the bot.\n━━━━━━━━━━━━━━━━━━━━', {
+      parse_mode: 'Markdown',
+    });
+    return true;
+  } else {
+    await ctx.answerCallbackQuery({ text: '❌ You still haven\'t joined all channels!', show_alert: true });
+    return true;
+  }
+}
 
 /**
  * Look at the most recent /start payload (if any) for a referral code
@@ -38,6 +135,17 @@ function extractReferral(text: string | undefined): number | null {
 
 export const userMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   if (!ctx.from) return next();
+  
+  // Check force-join channels first
+  const requiredChannels = env.REQUIRED_JOIN_CHANNELS || [];
+  if (requiredChannels.length > 0) {
+    const { passed, notJoined } = await checkRequiredChannels(ctx);
+    if (!passed) {
+      await sendForceJoinMessage(ctx, notJoined);
+      return; // Block access until they join
+    }
+  }
+  
   const referred_by = extractReferral(ctx.message?.text ?? undefined);
 
   const user = await getOrCreateUser({
