@@ -16,10 +16,11 @@ import { clearAiSession } from './support.js';
 import { inlineBtn } from '../keyboards/helpers.js';
 import { showProfile, showReferScreen } from './profile.js';
 import { showTopupMenu } from './topup.js';
-import { getChannelUrl, getForceJoinEnabled } from '../services/settings.js';
-import { logger } from '../logger.js';
-
-const DEFAULT_FORCE_JOIN_CHANNEL = '@safwantigerstore';
+import {
+  checkForceJoinStatus,
+  isForceJoinSatisfied,
+  sendForceJoinPrompt,
+} from '../middleware/forceJoin.js';
 
 /**
  * Silently dismiss any leftover persistent reply keyboard from older
@@ -80,60 +81,9 @@ export async function showMainMenu(
   await ctx.reply(html, { parse_mode: 'HTML', reply_markup });
 }
 
-function forceJoinChatId(channelUrl: string): string | number | null {
-  const raw = channelUrl.trim();
-  if (/^-100\d+$/.test(raw)) return Number(raw);
-  if (/^@[A-Za-z0-9_]{5,}$/i.test(raw)) return raw;
-  const m = raw.match(/^https?:\/\/t\.me\/([A-Za-z0-9_]{5,})(?:\/.*)?$/i);
-  if (m) return `@${m[1]}`;
-  return null;
-}
-
-function forceJoinUrl(channelUrl: string): string {
-  const raw = channelUrl.trim();
-  if (/^https?:\/\//i.test(raw)) return raw;
-  if (raw.startsWith('@')) return `https://t.me/${raw.slice(1)}`;
-  return raw;
-}
-
-async function hasJoinedForceChannel(ctx: AppCtx): Promise<boolean> {
-  if (!getForceJoinEnabled()) return true;
-  const channelUrl = getChannelUrl() ?? DEFAULT_FORCE_JOIN_CHANNEL;
-  const chatId = forceJoinChatId(channelUrl);
-  if (!chatId) {
-    logger.warn({ channelUrl }, 'force-join: invalid channel URL; blocking access');
-    return false;
-  }
-  try {
-    const member = await ctx.api.getChatMember(chatId, ctx.from!.id);
-    return !['left', 'kicked'].includes(member.status);
-  } catch (err) {
-    logger.warn({ err, channelUrl }, 'force-join: membership check failed; blocking access');
-    return false;
-  }
-}
-
-async function showForceJoinPrompt(ctx: AppCtx): Promise<void> {
-  const channelUrl = getChannelUrl() ?? DEFAULT_FORCE_JOIN_CHANNEL;
-  const kb = new InlineKeyboard()
-    .url('📣 Join Channel', forceJoinUrl(channelUrl))
-    .row()
-    .text('✅ Done', 'forcejoin:done');
-  await ctx.reply(
-    renderMdHtml(
-      [
-        '🔔 *Please join our Channel to continue using this bot.*',
-        '',
-        'After joining, tap *"Done ✅"* below.',
-      ].join('\n'),
-    ),
-    { parse_mode: 'HTML', reply_markup: kb },
-  );
-}
-
 async function maybeGateForceJoin(ctx: AppCtx): Promise<boolean> {
-  if (await hasJoinedForceChannel(ctx)) return false;
-  await showForceJoinPrompt(ctx);
+  if (await isForceJoinSatisfied(ctx)) return false;
+  await sendForceJoinPrompt(ctx);
   return true;
 }
 
@@ -304,13 +254,15 @@ export function registerStart(bot: Composer<AppCtx>): void {
   });
 
   bot.callbackQuery('forcejoin:done', async (ctx) => {
-    if (!(await hasJoinedForceChannel(ctx))) {
+    const status = await checkForceJoinStatus(ctx);
+    if (status === 'not_joined') {
       await ctx.answerCallbackQuery({
         text: 'Please join the channel first, then tap Done.',
         show_alert: true,
       });
       return;
     }
+    ctx.session.forceJoinUnlocked = true;
     await ctx.answerCallbackQuery({ text: 'Access unlocked.' });
     await showMainMenu(ctx);
   });

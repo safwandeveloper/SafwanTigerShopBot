@@ -741,6 +741,12 @@ export type SessionData = {
    * Cleared when the user re-opens topup from anywhere else.
    */
   topupOriginBuyProductId?: number;
+  /**
+   * Set after the user successfully passes the optional force-join
+   * screen in this chat session. Prevents already-joined users from
+   * being re-prompted if Telegram's member API is briefly flaky.
+   */
+  forceJoinUnlocked?: boolean;
 };
 
 export type SessionCtx = Context & SessionFlavor<SessionData>;

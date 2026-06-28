@@ -1,10 +1,14 @@
 import { InlineKeyboard, type MiddlewareFn } from 'grammy';
 import type { AppCtx } from './user.js';
 import { logger } from '../logger.js';
-import { renderMdHtml } from '../services/premium.js';
 import { getChannelUrl, getForceJoinEnabled } from '../services/settings.js';
 
 const DEFAULT_FORCE_JOIN_CHANNEL = '@safwantigerstore';
+const BELL_EMOJI_ID = '5798670723975221399';
+const JOIN_BUTTON_EMOJI_ID = '5041888071851705019';
+const DONE_EMOJI_ID = '6170055790146098906';
+
+export type ForceJoinStatus = 'disabled' | 'joined' | 'not_joined' | 'unknown';
 
 function forceJoinChatId(channelUrl: string): string | number | null {
   const raw = channelUrl.trim();
@@ -21,38 +25,48 @@ function forceJoinUrl(channelUrl: string): string {
   return raw;
 }
 
-async function hasJoinedForceChannel(ctx: AppCtx, channelUrl: string): Promise<boolean> {
+async function checkChannelMembership(ctx: AppCtx, channelUrl: string): Promise<ForceJoinStatus> {
   const chatId = forceJoinChatId(channelUrl);
   if (!chatId) {
-    logger.warn({ channelUrl }, 'force-join: invalid channel URL; blocking access');
-    return false;
+    logger.warn({ channelUrl }, 'force-join: invalid channel URL');
+    return 'unknown';
   }
   try {
     const member = await ctx.api.getChatMember(chatId, ctx.from!.id);
-    return !['left', 'kicked'].includes(member.status);
+    return ['left', 'kicked'].includes(member.status) ? 'not_joined' : 'joined';
   } catch (err) {
-    logger.warn({ err, channelUrl }, 'force-join: membership check failed; blocking access');
-    return false;
+    logger.warn({ err, channelUrl }, 'force-join: membership check failed');
+    return 'unknown';
   }
 }
 
 async function showForceJoinPrompt(ctx: AppCtx, channelUrl: string): Promise<void> {
   const kb = new InlineKeyboard()
-    .url('📣 Join Channel', forceJoinUrl(channelUrl))
+    .url('Join Channel', forceJoinUrl(channelUrl))
+    .icon(JOIN_BUTTON_EMOJI_ID)
     .row()
-    .text('✅ Done', 'forcejoin:done');
+    .text('Done', 'forcejoin:done')
+    .icon(DONE_EMOJI_ID);
   const text = [
-    '🔔 *Please join our Channel to continue using this bot.*',
+    `<tg-emoji emoji-id="${BELL_EMOJI_ID}">🔔</tg-emoji> <b>Please join our Channel to continue using this bot.</b>`,
     '',
-    'After joining, tap *"Done ✅"* below.',
+    `After joining, tap <b>"Done <tg-emoji emoji-id="${DONE_EMOJI_ID}">✅</tg-emoji>"</b> below.`,
   ].join('\n');
-  await ctx.reply(renderMdHtml(text), { parse_mode: 'HTML', reply_markup: kb });
+  await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+}
+
+export async function checkForceJoinStatus(ctx: AppCtx): Promise<ForceJoinStatus> {
+  if (!getForceJoinEnabled()) return 'disabled';
+  if (ctx.session.forceJoinUnlocked) return 'joined';
+  const channelUrl = getChannelUrl() ?? DEFAULT_FORCE_JOIN_CHANNEL;
+  const status = await checkChannelMembership(ctx, channelUrl);
+  if (status === 'joined') ctx.session.forceJoinUnlocked = true;
+  return status;
 }
 
 export async function isForceJoinSatisfied(ctx: AppCtx): Promise<boolean> {
-  if (!getForceJoinEnabled()) return true;
-  const channelUrl = getChannelUrl() ?? DEFAULT_FORCE_JOIN_CHANNEL;
-  return hasJoinedForceChannel(ctx, channelUrl);
+  const status = await checkForceJoinStatus(ctx);
+  return status === 'disabled' || status === 'joined';
 }
 
 export async function sendForceJoinPrompt(ctx: AppCtx): Promise<void> {
@@ -66,7 +80,8 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   if (ctx.callbackQuery?.data === 'forcejoin:done') return next();
   if (ctx.from.id === Number(process.env.ADMIN_USER_ID || 0)) return next();
 
-  if (await isForceJoinSatisfied(ctx)) return next();
+  const status = await checkForceJoinStatus(ctx);
+  if (status === 'disabled' || status === 'joined') return next();
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery({
       text: 'Please join the channel first, then tap Done.',
