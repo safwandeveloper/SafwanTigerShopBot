@@ -2693,11 +2693,25 @@ export async function deleteSetting(key: string): Promise<void> {
 // ---------- Announcements ----------
 
 export async function listUsersForAnnouncement(): Promise<{ telegram_id: number }[]> {
-  const { data } = await supabase
-    .from('users')
-    .select('telegram_id')
-    .eq('announcements', true);
-  return (data ?? []) as { telegram_id: number }[];
+  const rows: { telegram_id: number }[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('users')
+      .select('telegram_id')
+      .eq('announcements', true)
+      .order('telegram_id', { ascending: true })
+      .range(from, to);
+    if (error) {
+      logger.error({ err: error }, 'listUsersForAnnouncement failed');
+      throw error;
+    }
+    const batch = (data ?? []) as { telegram_id: number }[];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return rows;
 }
 
 // ---------- Admin: stats / management ----------

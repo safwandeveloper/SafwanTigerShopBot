@@ -5,6 +5,15 @@ import { inlineBtn, inlineUrl } from './helpers.js';
 
 const DEFAULT_CHANNEL_URL = 'https://t.me/safwantigerstore';
 
+function normalizeChannelUrl(value: string | undefined): string {
+  const raw = (value ?? DEFAULT_CHANNEL_URL).trim();
+  if (!raw) return DEFAULT_CHANNEL_URL;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('@')) return `https://t.me/${raw.slice(1)}`;
+  if (/^-100\d+$/.test(raw)) return DEFAULT_CHANNEL_URL;
+  return `https://t.me/${raw.replace(/^t\.me\//i, '')}`;
+}
+
 /**
  * Map main-menu button keys to their callback data.
  *
@@ -42,7 +51,7 @@ export function mainMenuKeyboard(lang: Lang): InlineKeyboard {
   MAIN_MENU_LAYOUT.forEach((row, i) => {
     row.forEach((k) => {
       if (k === 'channel') {
-        inlineUrl(kb, lang, k, getChannelUrl() ?? DEFAULT_CHANNEL_URL);
+        inlineUrl(kb, lang, k, normalizeChannelUrl(getChannelUrl()));
         return;
       }
       inlineBtn(kb, lang, k, CALLBACK[k] ?? `noop:${k}`);
