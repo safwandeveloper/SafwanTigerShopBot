@@ -10035,6 +10035,44 @@ adminBot.command('flagrefer', async (ctx) => {
   });
 });
 
+adminBot.command('resetrefer', async (ctx) => {
+  const [, telegramIdRaw] = (ctx.message?.text ?? '').split(/\s+/);
+  if (!telegramIdRaw) {
+    await ctx.reply('Usage: /resetrefer <telegram_id>\n\nResets user\'s refer link (new code) and flags for fraud.');
+    return;
+  }
+  const telegramId = parseInt(telegramIdRaw, 10);
+  if (isNaN(telegramId) || telegramId <= 0) {
+    await ctx.reply('Invalid telegram_id. Use a number like: /resetrefer 8004955979');
+    return;
+  }
+  
+  const { findUserById } = await import('../../db/queries.js');
+  const { supabase } = await import('../../db/supabase.js');
+  
+  const user = await findUserById(telegramId);
+  if (!user) {
+    await ctx.reply('User not found.');
+    return;
+  }
+  
+  // Generate new referral code
+  const newReferCode = telegramId.toString(36).toUpperCase();
+  
+  // Update user's refer_code and flag as fraud
+  await supabase
+    .from('users')
+    .update({ 
+      refer_code: newReferCode,
+      referral_fraud_suspected: true 
+    })
+    .eq('telegram_id', telegramId);
+  
+  await ctx.reply(`🔄 *Refer Link Reset & Flagged*\n\nTelegram ID: \`${telegramId}\`\nUsername: @${user.username ?? 'N/A'}\n\nNew refer link: https://t.me/${ctx.me?.username ?? 'YourBot'}?start=R${newReferCode}\n\nUser is now flagged for fraud.`, {
+    parse_mode: 'Markdown',
+  });
+});
+
 adminBot.command('setemoji', async (ctx) => {
   const [, key, unicode, customId] = (ctx.message?.text ?? '').split(/\s+/);
   if (!key || !unicode) {
