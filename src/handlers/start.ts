@@ -82,6 +82,9 @@ export async function showMainMenu(
 }
 
 async function maybeGateForceJoin(ctx: AppCtx): Promise<boolean> {
+  if (!(ctx.user as typeof ctx.user & { __just_created?: boolean }).__just_created) {
+    return false;
+  }
   if (await isForceJoinSatisfied(ctx)) return false;
   await sendForceJoinPrompt(ctx);
   return true;
@@ -264,6 +267,12 @@ export function registerStart(bot: Composer<AppCtx>): void {
     }
     ctx.session.forceJoinUnlocked = true;
     await ctx.answerCallbackQuery({ text: 'Access unlocked.' });
+    await showMainMenu(ctx);
+  });
+
+  bot.callbackQuery('forcejoin:skip', async (ctx) => {
+    ctx.session.forceJoinUnlocked = true;
+    await ctx.answerCallbackQuery({ text: 'Skipped.' });
     await showMainMenu(ctx);
   });
 
