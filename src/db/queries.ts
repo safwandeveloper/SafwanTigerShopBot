@@ -71,24 +71,6 @@ async function ensureReferralRecord(
   }
 }
 
-export async function getRecentReferralsByReferrer(
-  referrerId: number,
-  hours: number,
-): Promise<Array<{ referee_id: number; created_at: string }>> {
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from('referrals')
-    .select('referee_id, created_at')
-    .eq('referrer_id', referrerId)
-    .gte('created_at', since)
-    .order('created_at', { ascending: false });
-  if (error) {
-    logger.warn({ err: error, referrerId, hours }, 'getRecentReferralsByReferrer failed');
-    return [];
-  }
-  return (data as Array<{ referee_id: number; created_at: string }>) ?? [];
-}
-
 export async function getOrCreateUser(args: {
   telegram_id: number;
   username?: string | null;
@@ -316,39 +298,6 @@ export async function toggleNotification(
     throw updateErr;
   }
   return next;
-}
-
-/**
- * Check if a user is flagged as suspected of referral fraud.
- */
-export async function isReferralFraudSuspected(telegram_id: number): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('referral_fraud_suspected')
-    .eq('telegram_id', telegram_id)
-    .single();
-  if (error) {
-    logger.error({ err: error, telegram_id }, 'isReferralFraudSuspected failed');
-    return false;
-  }
-  return Boolean((data as Record<string, unknown> | null)?.referral_fraud_suspected);
-}
-
-/**
- * Set the referral fraud suspicion flag for a user.
- */
-export async function setReferralFraudSuspected(
-  telegram_id: number,
-  suspected: boolean,
-): Promise<void> {
-  const { error } = await supabase
-    .from('users')
-    .update({ referral_fraud_suspected: suspected })
-    .eq('telegram_id', telegram_id);
-  if (error) {
-    logger.error({ err: error, telegram_id, suspected }, 'setReferralFraudSuspected failed');
-    throw error;
-  }
 }
 
 export async function countReferrals(telegram_id: number): Promise<number> {
@@ -784,9 +733,9 @@ export async function updateProduct(
     delivery_instruction: string | null;
     delivery_fields: DeliveryFieldSpec[];
     delivery_success_message: string | null;
+    delivery_completion_message: string | null;
     delivery_vendor_chat_id: number | null;
     delivery_vendor_label: string | null;
-    delivery_completion_message: string | null;
     // Pinning + OOS auto-reorder (migration 0025).
     is_pinned: boolean;
     stashed_sort_order: number | null;
@@ -1058,10 +1007,13 @@ export async function getDeliverySubmission(
     product_id: Number((data as { product_id: number | string }).product_id),
     payload: (data as { payload: Record<string, string> }).payload ?? {},
     revision: Number((data as { revision: number | string }).revision),
+    status: ((data as { status?: string }).status === 'completed' ? 'completed' : 'pending'),
+    completed_at: (data as { completed_at?: string | null }).completed_at ?? null,
+    completed_by: (data as { completed_by?: number | string | null }).completed_by == null
+      ? null
+      : Number((data as { completed_by: number | string }).completed_by),
     submitted_at: String((data as { submitted_at: string }).submitted_at),
     updated_at: String((data as { updated_at: string }).updated_at),
-    admin_completed_at: (data as { admin_completed_at: string | null }).admin_completed_at,
-    admin_completed_by: (data as { admin_completed_by: number | null }).admin_completed_by,
   };
 }
 
@@ -1088,6 +1040,7 @@ export async function upsertDeliverySubmission(args: {
         product_id: args.product_id,
         payload: args.payload,
         revision: 1,
+        status: 'pending',
       })
       .select('*')
       .single();
@@ -1102,10 +1055,13 @@ export async function upsertDeliverySubmission(args: {
       product_id: Number((data as { product_id: number | string }).product_id),
       payload: (data as { payload: Record<string, string> }).payload ?? {},
       revision: Number((data as { revision: number | string }).revision),
+      status: ((data as { status?: string }).status === 'completed' ? 'completed' : 'pending'),
+      completed_at: (data as { completed_at?: string | null }).completed_at ?? null,
+      completed_by: (data as { completed_by?: number | string | null }).completed_by == null
+        ? null
+        : Number((data as { completed_by: number | string }).completed_by),
       submitted_at: String((data as { submitted_at: string }).submitted_at),
       updated_at: String((data as { updated_at: string }).updated_at),
-      admin_completed_at: (data as { admin_completed_at: string | null }).admin_completed_at,
-      admin_completed_by: (data as { admin_completed_by: number | null }).admin_completed_by,
     };
   }
   const nextRevision = existing.revision + 1;
@@ -1114,6 +1070,9 @@ export async function upsertDeliverySubmission(args: {
     .update({
       payload: args.payload,
       revision: nextRevision,
+      status: 'pending',
+      completed_at: null,
+      completed_by: null,
       updated_at: new Date().toISOString(),
     })
     .eq('order_id', args.order_id)
@@ -1130,11 +1089,64 @@ export async function upsertDeliverySubmission(args: {
     product_id: Number((data as { product_id: number | string }).product_id),
     payload: (data as { payload: Record<string, string> }).payload ?? {},
     revision: Number((data as { revision: number | string }).revision),
+    status: ((data as { status?: string }).status === 'completed' ? 'completed' : 'pending'),
+    completed_at: (data as { completed_at?: string | null }).completed_at ?? null,
+    completed_by: (data as { completed_by?: number | string | null }).completed_by == null
+      ? null
+      : Number((data as { completed_by: number | string }).completed_by),
     submitted_at: String((data as { submitted_at: string }).submitted_at),
     updated_at: String((data as { updated_at: string }).updated_at),
-    admin_completed_at: (data as { admin_completed_at: string | null }).admin_completed_at,
-    admin_completed_by: (data as { admin_completed_by: number | null }).admin_completed_by,
   };
+}
+
+export async function getDeliverySubmissionById(
+  id: number,
+): Promise<DBOrderDeliverySubmission | null> {
+  const { data, error } = await supabase
+    .from('order_delivery_submissions')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !data) {
+    if (error) logger.error({ err: error, id }, 'getDeliverySubmissionById failed');
+    return null;
+  }
+  return {
+    id: Number((data as { id: number | string }).id),
+    order_id: Number((data as { order_id: number | string }).order_id),
+    user_id: Number((data as { user_id: number | string }).user_id),
+    product_id: Number((data as { product_id: number | string }).product_id),
+    payload: (data as { payload: Record<string, string> }).payload ?? {},
+    revision: Number((data as { revision: number | string }).revision),
+    status: ((data as { status?: string }).status === 'completed' ? 'completed' : 'pending'),
+    completed_at: (data as { completed_at?: string | null }).completed_at ?? null,
+    completed_by: (data as { completed_by?: number | string | null }).completed_by == null
+      ? null
+      : Number((data as { completed_by: number | string }).completed_by),
+    submitted_at: String((data as { submitted_at: string }).submitted_at),
+    updated_at: String((data as { updated_at: string }).updated_at),
+  };
+}
+
+export async function completeDeliverySubmission(
+  id: number,
+  completedBy: number,
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('order_delivery_submissions')
+    .update({
+      status: 'completed',
+      completed_at: now,
+      completed_by: completedBy,
+      updated_at: now,
+    })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 }
 
 /**
@@ -1351,44 +1363,6 @@ export async function claimProductItems(
   if (upd) {
     logger.error({ err: upd, ids }, 'claimProductItems update failed');
   }
-  return rows.map((r) => String(r.payload));
-}
-
-export async function rollbackOrderItems(order_id: number): Promise<string[]> {
-  // Get the consumed items for this order
-  const { data: rows, error } = await supabase
-    .from('product_items')
-    .select('id, payload, product_id')
-    .eq('consumed_order_id', order_id);
-  if (error) {
-    logger.error({ err: error, order_id }, 'rollbackOrderItems select failed');
-    return [];
-  }
-  if (!rows || rows.length === 0) return [];
-  
-  // Reset consumed status
-  const ids = rows.map((r) => r.id);
-  const { error: upd } = await supabase
-    .from('product_items')
-    .update({ consumed_at: null, consumed_order_id: null })
-    .in('id', ids);
-  if (upd) {
-    logger.error({ err: upd, ids }, 'rollbackOrderItems update failed');
-    return [];
-  }
-  
-  // Restore product stock
-  const productIds = [...new Set(rows.map((r) => r.product_id))];
-  for (const product_id of productIds) {
-    const qty = rows.filter((r) => r.product_id === product_id).length;
-    // Get current stock and add back
-    const { data: prod } = await supabase.from('products').select('stock').eq('id', product_id).single();
-    if (prod) {
-      await supabase.from('products').update({ stock: Number(prod.stock ?? 0) + qty }).eq('id', product_id);
-    }
-  }
-  
-  logger.info({ order_id, recoveredCount: rows.length, productIds }, 'rollbackOrderItems: recovered links');
   return rows.map((r) => String(r.payload));
 }
 
@@ -2708,32 +2682,11 @@ export async function deleteSetting(key: string): Promise<void> {
 // ---------- Announcements ----------
 
 export async function listUsersForAnnouncement(): Promise<{ telegram_id: number }[]> {
-  const allUsers: { telegram_id: number }[] = [];
-  let page = 0;
-  const pageSize = 1000;
-  
-  while (true) {
-    const { data, error } = await supabase
-      .from('users')
-      .select('telegram_id')
-      .eq('announcements', true)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-    
-    if (error) {
-      logger.error({ error, page }, 'listUsersForAnnouncement page fetch failed');
-      break;
-    }
-    
-    const users = (data ?? []) as { telegram_id: number }[];
-    if (users.length === 0) break;
-    
-    allUsers.push(...users);
-    
-    if (users.length < pageSize) break;
-    page++;
-  }
-  
-  return allUsers;
+  const { data } = await supabase
+    .from('users')
+    .select('telegram_id')
+    .eq('announcements', true);
+  return (data ?? []) as { telegram_id: number }[];
 }
 
 // ---------- Admin: stats / management ----------

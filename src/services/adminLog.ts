@@ -252,17 +252,20 @@ export async function logOrderCreated(api: Api, args: {
   total: number;
   paidVia: string;
   balanceAfter: number;
-  lifecycle?: 'delivered' | 'preorder' | 'auto_delivered';
+  lifecycle?: 'delivered' | 'preorder' | 'auto_delivered' | 'manual_pending';
 }): Promise<void> {
   const preorder = args.lifecycle === 'preorder';
   const autoDelivered = args.lifecycle === 'auto_delivered';
+  const manualPending = args.lifecycle === 'manual_pending';
   const body = compose({
     tag: preorder || autoDelivered ? 'PREORDER' : 'ORDER',
     title: preorder
       ? 'Preorder Placed - Delivery Remain'
       : autoDelivered
         ? 'Preorder Auto Delivered'
-        : 'Order Delivered',
+        : manualPending
+          ? 'Order Paid - Buyer Details Pending'
+          : 'Order Delivered',
     user: args.user,
     headerLines: [
       `🆔 Order ID# :: <code>${args.orderPublicId}</code>`,
@@ -278,6 +281,7 @@ export async function logOrderCreated(api: Api, args: {
       `Paid Via: ${escapeHtml(args.paidVia)}`,
       preorder ? 'Status: Preorder delivery remain until restock.' : '',
       autoDelivered ? 'Status: Automatic delivery completed after restock.' : '',
+      manualPending ? 'Status: Waiting for buyer details and admin fulfillment.' : '',
       '',
       '👛 <b>Wallet</b>',
       `💳 Balance After: ${args.balanceAfter} USDT`,

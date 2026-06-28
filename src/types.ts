@@ -26,8 +26,6 @@ export type DBUser = {
   is_banned: boolean;
   banned_at: string | null;
   banned_reason: string | null;
-  /** When true, the user is flagged as suspected of referral fraud and cannot convert/use referrals. */
-  referral_fraud_suspected: boolean;
   /**
    * When true, the bot suppresses the 12-hour "please add your
    * email" nag *and* every Send-PDF-to-mail action. Drives the
@@ -86,7 +84,7 @@ export type DBProduct = {
   delivery_fields: DeliveryFieldSpec[];
   /** Admin-set success message shown after the buyer submits the form. */
   delivery_success_message: string | null;
-  /** Admin-set completion message sent to buyer after admin processes the order. */
+  /** Admin-set message sent after the seller marks fulfillment complete. */
   delivery_completion_message: string | null;
   /**
    * Telegram chat id (user / group) of the vendor for THIS product.
@@ -127,6 +125,9 @@ export type DeliveryFieldSpec = {
   key: string;
   label: string;
   required?: boolean;
+  type?: 'text' | 'email';
+  /** Require one value per purchased unit, entered one per line. */
+  per_unit?: boolean;
 };
 
 /**
@@ -142,12 +143,11 @@ export type DBOrderDeliverySubmission = {
   /** `{ <field.key>: <user value> }`. */
   payload: Record<string, string>;
   revision: number;
+  status: 'pending' | 'completed';
+  completed_at: string | null;
+  completed_by: number | null;
   submitted_at: string;
   updated_at: string;
-  /** When admin marked this order as complete. */
-  admin_completed_at: string | null;
-  /** Admin user id who completed it. */
-  admin_completed_by: number | null;
 };
 
 /** A single item in the per-product delivery pool. */

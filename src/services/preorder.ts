@@ -176,6 +176,7 @@ export async function fulfillPendingPreordersForProduct(
         orderPublicId: publicId,
         buyerTelegramId: order.user_id,
         buyerLang: lang,
+        qty: order.qty,
       }).catch((err) => {
         logger.warn(
           { err, orderId: order.id, productId },

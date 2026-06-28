@@ -39,7 +39,10 @@ import { renderMdHtml } from './premium.js';
 import { buildOrderDeliveredChunks } from './orderRender.js';
 import { trySupplierAutoOrder } from './supplierApi.js';
 import { InlineKeyboard, inlineBtn } from '../keyboards/helpers.js';
-import { maybeStartDeliveryFormFromApi } from './postPurchaseDelivery.js';
+import {
+  maybeStartDeliveryFormFromApi,
+  productHasDeliveryForm,
+} from './postPurchaseDelivery.js';
 import { t as translate } from '../i18n/index.js';
 import type { DBDeposit, OrderIntent, PaymentProvider } from '../types.js';
 
@@ -117,6 +120,7 @@ export async function fulfilOrderForDeposit(args: {
   const t = (key: string, vars?: Record<string, string | number>) =>
     translate(lang, key, vars);
   const preorder = !product.unlimited_stock && product.stock < intent.qty;
+  const manualForm = productHasDeliveryForm(product);
 
   const order = await createOrder({
     user_id: deposit.user_id,
@@ -134,7 +138,7 @@ export async function fulfilOrderForDeposit(args: {
   }
   const publicId = publicOrderId(order);
   const paidVia = paidViaLabel(provider, methodName);
-  const supplierOrder = preorder
+  const supplierOrder = preorder || manualForm
     ? null
     : await trySupplierAutoOrder({
         localProductId: intent.product_id,
@@ -162,7 +166,7 @@ export async function fulfilOrderForDeposit(args: {
             lowBalance: failure.lowBalance,
           }).catch((err) => logger.warn({ err }, 'direct-pay: supplier failure admin log failed')),
       });
-  const claimed = preorder
+  const claimed = preorder || manualForm
     ? []
     : supplierOrder
       ? supplierOrder.items
@@ -177,7 +181,9 @@ export async function fulfilOrderForDeposit(args: {
   // header card; subsequent chunks are sent as plain blockquote
   // messages right below it.
   const deliveredChunks = buildOrderDeliveredChunks(claimed);
-  const pendingText = preorder
+  const pendingText = manualForm
+    ? 'Buyer details pending admin fulfillment.'
+    : preorder
     ? t('shop.buy.preorder_pending')
     : t('shop.buy.delivery_pending');
   const firstChunkBlock =
@@ -207,25 +213,27 @@ export async function fulfilOrderForDeposit(args: {
 
   // Step 2: Order Delivered card with the first chunk of items.
   const headerHasKeyboard = deliveredChunks.length <= 1;
-  await safeSendHtml(
-    api,
-    deposit.user_id,
-    renderMdHtml(
-      t(preorder ? 'shop.buy.order_preordered' : 'shop.buy.order_delivered', {
-        order_id: publicId,
-        name: intent.product_name,
-        qty: intent.qty,
-        total: intent.total.toFixed(2),
-        items: firstChunkBlock,
-      }),
-    ),
-    headerHasKeyboard ? { reply_markup: deliveredKb } : undefined,
-  );
+  if (!manualForm) {
+    await safeSendHtml(
+      api,
+      deposit.user_id,
+      renderMdHtml(
+        t(preorder ? 'shop.buy.order_preordered' : 'shop.buy.order_delivered', {
+          order_id: publicId,
+          name: intent.product_name,
+          qty: intent.qty,
+          total: intent.total.toFixed(2),
+          items: firstChunkBlock,
+        }),
+      ),
+      headerHasKeyboard ? { reply_markup: deliveredKb } : undefined,
+    );
+  }
 
   // Step 2b: send any remaining 7-link chunks as plain blockquote
   // follow-up messages. We push on through individual failures so a
   // single bad link doesn't keep the buyer from receiving the rest.
-  for (let i = 1; i < deliveredChunks.length; i++) {
+  for (let i = 1; !manualForm && i < deliveredChunks.length; i++) {
     const chunk = deliveredChunks[i];
     if (!chunk) continue;
     try {
@@ -261,6 +269,7 @@ export async function fulfilOrderForDeposit(args: {
       orderPublicId: publicId,
       buyerTelegramId: deposit.user_id,
       buyerLang: lang,
+      qty: intent.qty,
     });
   } catch (err) {
     logger.warn(
@@ -311,7 +320,7 @@ export async function fulfilOrderForDeposit(args: {
       total: intent.total,
       paidVia,
       balanceAfter: Number((user?.balance ?? 0).toFixed(3)),
-      lifecycle: preorder ? 'preorder' : 'delivered',
+      lifecycle: manualForm ? 'manual_pending' : preorder ? 'preorder' : 'delivered',
     })
     .catch((err) => logger.warn({ err }, 'direct-pay: logOrderCreated failed'));
 
