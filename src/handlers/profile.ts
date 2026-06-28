@@ -15,7 +15,6 @@ import {
   getReferralBalance,
   getReferralEarnings,
   getUserStats,
-  isReferralFraudSuspected,
   listAllProducts,
   listActivePromos,
   listDeposits,
@@ -964,18 +963,8 @@ export function registerProfile(bot: Composer<AppCtx>): void {
   });
 
   bot.callbackQuery('profile:refer:convert', async (ctx) => {
-    const REF_COST = 50;
-    const USDT_AMOUNT = 0.5;
-
-    // Block fraud-suspected users from converting referrals to wallet
-    if (ctx.user.referral_fraud_suspected) {
-      await ctx.answerCallbackQuery({
-        text: ctx.t('profile.refer.convert_fraud_blocked'),
-        show_alert: true,
-      });
-      return;
-    }
-
+    const REF_COST = 20;
+    const USDT_AMOUNT = 1;
     try {
       const result = await convertReferralBalance({
         user_id: ctx.user.telegram_id,
