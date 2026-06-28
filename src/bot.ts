@@ -4,6 +4,7 @@ import { logger } from './logger.js';
 import { sessionMiddleware, type SessionCtx } from './middleware/session.js';
 import { userMiddleware, type AppCtx } from './middleware/user.js';
 import { banMiddleware } from './middleware/ban.js';
+import { forceJoinMiddleware } from './middleware/forceJoin.js';
 import { registerStart } from './handlers/start.js';
 import { registerShop } from './handlers/shop.js';
 import { registerProfile } from './handlers/profile.js';
@@ -23,6 +24,7 @@ export async function buildBot(): Promise<Bot<AppCtx>> {
   bot.use(sessionMiddleware as unknown as (ctx: SessionCtx, next: () => Promise<void>) => Promise<void>);
   bot.use(userMiddleware);
   bot.use(banMiddleware);
+  bot.use(forceJoinMiddleware);
 
   registerStart(bot);
   registerShop(bot);

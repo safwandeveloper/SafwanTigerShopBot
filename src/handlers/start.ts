@@ -19,6 +19,8 @@ import { showTopupMenu } from './topup.js';
 import { getChannelUrl, getForceJoinEnabled } from '../services/settings.js';
 import { logger } from '../logger.js';
 
+const DEFAULT_FORCE_JOIN_CHANNEL = '@safwantigerstore';
+
 /**
  * Silently dismiss any leftover persistent reply keyboard from older
  * versions of the bot. We send a near-invisible message with
@@ -96,28 +98,23 @@ function forceJoinUrl(channelUrl: string): string {
 
 async function hasJoinedForceChannel(ctx: AppCtx): Promise<boolean> {
   if (!getForceJoinEnabled()) return true;
-  const channelUrl = getChannelUrl();
-  if (!channelUrl) return true;
+  const channelUrl = getChannelUrl() ?? DEFAULT_FORCE_JOIN_CHANNEL;
   const chatId = forceJoinChatId(channelUrl);
   if (!chatId) {
-    logger.warn({ channelUrl }, 'force-join: invalid channel URL; allowing access');
-    return true;
+    logger.warn({ channelUrl }, 'force-join: invalid channel URL; blocking access');
+    return false;
   }
   try {
     const member = await ctx.api.getChatMember(chatId, ctx.from!.id);
-    return ['creator', 'administrator', 'member'].includes(member.status);
+    return !['left', 'kicked'].includes(member.status);
   } catch (err) {
-    logger.warn({ err, channelUrl }, 'force-join: membership check failed; allowing access');
-    return true;
+    logger.warn({ err, channelUrl }, 'force-join: membership check failed; blocking access');
+    return false;
   }
 }
 
 async function showForceJoinPrompt(ctx: AppCtx): Promise<void> {
-  const channelUrl = getChannelUrl();
-  if (!channelUrl) {
-    await showMainMenu(ctx, { fresh: true });
-    return;
-  }
+  const channelUrl = getChannelUrl() ?? DEFAULT_FORCE_JOIN_CHANNEL;
   const kb = new InlineKeyboard()
     .url('📣 Join Channel', forceJoinUrl(channelUrl))
     .row()
