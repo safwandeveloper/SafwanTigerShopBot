@@ -13,6 +13,7 @@ import type { DBUser } from '../types.js';
 import type { SessionCtx } from './session.js';
 import { maybeSendEmailNag } from '../services/emailNag.js';
 import * as publicFeed from '../services/publicFeed.js';
+import { getForceJoinEnabled } from '../services/settings.js';
 
 export type AppCtx = SessionCtx & {
   user: DBUser;
@@ -57,9 +58,10 @@ export const userMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   // directly and mirror it to the admin channel when configured.
   if (
     (user as DBUser & { __just_created?: boolean }).__just_created &&
-    user.referred_by
+    user.referred_by &&
+    !getForceJoinEnabled()
   ) {
-    void sendReferralNotification(ctx, user.referred_by, ctx.from.id, ctx.from.username ?? null, ctx.from.first_name);
+    void activateReferralForUser(ctx);
   }
 
   return next();
@@ -73,6 +75,20 @@ function cleanDisplayName(value: string): string {
  * Send referral notifications. The user DM must not depend on optional
  * admin-channel settings or newer referral-balance tables.
  */
+export async function activateReferralForUser(ctx: AppCtx): Promise<void> {
+  if (!ctx.user?.referred_by || !ctx.from) return;
+  const { activateReferralRecord } = await import('../db/queries.js');
+  const activated = await activateReferralRecord(ctx.user.referred_by, ctx.user.telegram_id);
+  if (!activated) return;
+  await sendReferralNotification(
+    ctx,
+    ctx.user.referred_by,
+    ctx.user.telegram_id,
+    ctx.from.username ?? null,
+    ctx.from.first_name ?? null,
+  );
+}
+
 async function sendReferralNotification(
   ctx: AppCtx,
   referrerId: number,

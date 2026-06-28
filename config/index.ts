@@ -988,7 +988,7 @@ export const MAIN_MENU_LAYOUT: ReadonlyArray<ReadonlyArray<keyof typeof BUTTON_K
   ['shop'],
   ['topup', 'profile'],
   ['support', 'ai_support'],
-  ['refer'],
+  ['refer', 'channel'],
 ];
 
 /** Shop pagination size — products per page */

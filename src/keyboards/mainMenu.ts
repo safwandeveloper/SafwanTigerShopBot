@@ -1,6 +1,9 @@
 import { InlineKeyboard } from 'grammy';
 import { MAIN_MENU_LAYOUT, BUTTON_KEYS, type Lang } from '../../config/index.js';
-import { inlineBtn } from './helpers.js';
+import { getChannelUrl } from '../services/settings.js';
+import { inlineBtn, inlineUrl } from './helpers.js';
+
+const DEFAULT_CHANNEL_URL = 'https://t.me/safwantigerstore';
 
 /**
  * Map main-menu button keys to their callback data.
@@ -38,6 +41,10 @@ export function mainMenuKeyboard(lang: Lang): InlineKeyboard {
   const kb = new InlineKeyboard();
   MAIN_MENU_LAYOUT.forEach((row, i) => {
     row.forEach((k) => {
+      if (k === 'channel') {
+        inlineUrl(kb, lang, k, getChannelUrl() ?? DEFAULT_CHANNEL_URL);
+        return;
+      }
       inlineBtn(kb, lang, k, CALLBACK[k] ?? `noop:${k}`);
     });
     if (i < MAIN_MENU_LAYOUT.length - 1) kb.row();

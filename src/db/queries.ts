@@ -51,24 +51,37 @@ async function resolveValidReferrer(
   return data ? referrerId : null;
 }
 
-async function ensureReferralRecord(
+export async function activateReferralRecord(
   referrerId: number | null | undefined,
   refereeId: number,
-): Promise<void> {
+): Promise<boolean> {
   const validReferrer = await resolveValidReferrer(referrerId, refereeId);
-  if (!validReferrer) return;
+  if (!validReferrer) return false;
+  const { data: existing, error: existingError } = await supabase
+    .from('referrals')
+    .select('id')
+    .eq('referrer_id', validReferrer)
+    .eq('referee_id', refereeId)
+    .maybeSingle();
+  if (existingError) {
+    logger.warn(
+      { err: existingError, referrerId: validReferrer, refereeId },
+      'activateReferralRecord lookup failed',
+    );
+    return false;
+  }
+  if (existing) return false;
   const { error } = await supabase
     .from('referrals')
-    .upsert(
-      { referrer_id: validReferrer, referee_id: refereeId },
-      { onConflict: 'referrer_id,referee_id', ignoreDuplicates: true },
-    );
+    .insert({ referrer_id: validReferrer, referee_id: refereeId });
   if (error) {
     logger.warn(
       { err: error, referrerId: validReferrer, refereeId },
-      'ensureReferralRecord failed',
+      'activateReferralRecord failed',
     );
+    return false;
   }
+  return true;
 }
 
 export async function getOrCreateUser(args: {
@@ -104,7 +117,6 @@ export async function getOrCreateUser(args: {
         (existing as { wallet_alert?: boolean }).wallet_alert ?? true,
     } as DBUser & { __just_created?: boolean };
     out.__just_created = false;
-    await ensureReferralRecord(out.referred_by, out.telegram_id);
     return out;
   }
 
@@ -124,7 +136,6 @@ export async function getOrCreateUser(args: {
     logger.error({ err: error }, 'getOrCreateUser failed');
     throw error ?? new Error('Failed to create user');
   }
-  await ensureReferralRecord(validReferrer, args.telegram_id);
   const created = data as DBUser & { __just_created?: boolean };
   created.__just_created = true;
   return created;

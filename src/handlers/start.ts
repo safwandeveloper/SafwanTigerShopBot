@@ -2,6 +2,7 @@ import type { Composer } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 import { formatPriceWithCurrency } from '../../config/currencies.js';
 import type { AppCtx } from '../middleware/user.js';
+import { activateReferralForUser } from '../middleware/user.js';
 import { mainMenuKeyboard } from '../keyboards/mainMenu.js';
 import { renderMdHtml } from '../services/premium.js';
 import { getOrder, getProduct } from '../db/queries.js';
@@ -230,6 +231,9 @@ export function registerStart(bot: Composer<AppCtx>): void {
       });
     }
     if (await maybeGateForceJoin(ctx)) return;
+    if (flagged.__just_created) {
+      await activateReferralForUser(ctx);
+    }
     if (await handleReferDeepLink(ctx)) return;
     if (await handleSettingsDeepLink(ctx)) return;
     if (await handleTopupDeepLink(ctx)) return;
@@ -266,6 +270,9 @@ export function registerStart(bot: Composer<AppCtx>): void {
       return;
     }
     ctx.session.forceJoinUnlocked = true;
+    if (status === 'joined') {
+      await activateReferralForUser(ctx);
+    }
     await ctx.answerCallbackQuery({ text: 'Access unlocked.' });
     await showMainMenu(ctx);
   });
