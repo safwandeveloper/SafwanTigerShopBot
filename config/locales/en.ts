@@ -357,8 +357,6 @@ export const en: Record<string, string> = {
   'shop.buy.failed':
     '❌ Payment could not be completed right now. Please try again in a moment, or contact admin if it keeps happening.',
   'shop.referral.disabled': '❌ Referral Pay is not enabled for this product.',
-  'shop.referral.fraud_blocked':
-    '⛔ Referral Pay blocked.\n\nYour account is flagged for suspicious referral activity. Please contact support for review.',
   'shop.referral.already_redeemed': '✅ Referral Pay was already used on this legacy order.',
   'shop.referral.insufficient':
     '❌ Not enough referrals. Required: {required}. Available: {total}. Missing: {remaining}.',
@@ -423,22 +421,22 @@ export const en: Record<string, string> = {
   'shop.delivery.box.invalid':
     '{qty_invalid} _That doesn\'t look right. Please send your *{label}* again._',
   'shop.delivery.success.default': [
-    '🎉 *Details Submitted Successfully!* {email_saved_check}',
+    '{delivery_check} *Your Details Has been Submitted Successfully* {email_saved_check}',
     '',
-    '_Your information has been received and is being processed._',
-    '',
-    '⏳ *You will be notified here when your order is ready!*',
-    '',
-    '_If you don\'t hear back soon, tap *Admin Help* below._',
+    '_Thank you — our team is reviewing your submission and will approve it shortly. If you don\'t hear back soon, tap *Admin Help* below._',
   ].join('\n'),
   'shop.delivery.success.resubmitted': [
-    '🎉 *Details Updated Successfully!* {email_saved_check}',
+    '{delivery_resubmit} *Your Details Has been Re submitted as Corrected* {email_saved_check}',
     '',
-    '_Your corrected info has been forwarded to our vendor._',
+    '_Thank you — your corrected info has been forwarded to our vendor. They will use this NEW submission instead of the previous one._',
+  ].join('\n'),
+  'shop.delivery.completed.default': [
+    '{delivery_check} *Your Order Is Ready*',
     '',
-    '⏳ *You will be notified here when your order is ready!*',
+    '*Product:* {product_name}',
+    '*Order:* `{order_id}`',
     '',
-    '_They will use this NEW submission instead of the previous one._',
+    '_Your submitted details were processed successfully. You can use the service now._',
   ].join('\n'),
   // Auto-text pre-filled into the admin DM when the buyer taps the
   // Admin Help button on the success card. Telegram URL-encodes this
@@ -751,7 +749,7 @@ export const en: Record<string, string> = {
   // Refer & Earn screen.
   'profile.refer.title': '{refer_title} *Refer & Earn*',
   'profile.refer.body':
-    '{refer_prize_l} *Refer 10 users and win $0.10* {refer_prize_r}\n\n' +
+    '{refer_prize_l} *Refer 10 users and win $0.50* {refer_prize_r}\n\n' +
     '{refer_clicks} *Clicks:* {clicks}\n' +
     '{refer_pending} *Pending:* {pending}\n' +
     '{refer_active} *Active:* {active}\n' +
@@ -766,11 +764,9 @@ export const en: Record<string, string> = {
   'profile.refer.convert_success':
     '💱 Converted *{refs} refs* into *{amount} USDT*.\n\n💳 Wallet Balance: *{balance} USDT*',
   'profile.refer.convert_low':
-    '⚠️ Not enough refs to convert.\n\nYou need *50 active refs* to convert into *$0.50 USDT*.\nCurrent Referral Pay Balance: *{available} refs*',
+    '⚠️ Not enough refs to convert.\n\nYou need *20 active refs* to convert into *1 USDT*.\nCurrent Referral Pay Balance: *{available} refs*',
   'profile.refer.convert_error':
     '⚠️ Could not convert refs right now. Please try again.',
-  'profile.refer.convert_fraud_blocked':
-    '⛔ Conversion blocked.\n\nYour account is flagged for suspicious referral activity. Please contact support for review.',
   'btn.copy_link': '📋 Copy Link',
   'btn.live_refers': '🔵 See Your Live Refers',
   'btn.currency': '💱 Currency',
@@ -930,9 +926,9 @@ export const en: Record<string, string> = {
 
   // ---------- Channel ----------
   'channel.not_set': '📢 The channel link hasn\'t been set yet. Ask the admin to configure it.',
-  'channel.subscribe.title': '📢 *Join our channel* to continue',
-  'channel.subscribe.body': 'Please join the channel below, then tap *I joined*.',
-  'channel.subscribe.joined': '✅ I joined',
+  'channel.subscribe.title': '📢 *Channel*',
+  'channel.subscribe.body': 'Channel joining is optional. You can continue using the bot.',
+  'channel.subscribe.joined': '✅ Continue',
 
   // ---------- Admin ----------
   'admin.only': '⛔ Admin only.',

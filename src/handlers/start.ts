@@ -239,10 +239,10 @@ export function registerStart(bot: Composer<AppCtx>): void {
     await showMainMenu(ctx);
   });
 
-  // Fallback for the channel button when admin hasn't set the URL yet.
-  // (When the URL is set, mainMenuKeyboard renders a direct URL button
-  // and Telegram never sends us this callback.)
+  // Legacy channel button callback. The old join/channel prompt is disabled:
+  // users should always be able to access the bot without joining anything.
   bot.callbackQuery('channel:open', async (ctx) => {
-    await ctx.answerCallbackQuery({ text: ctx.t('channel.not_set'), show_alert: true });
+    await ctx.answerCallbackQuery();
+    await showMainMenu(ctx);
   });
 }

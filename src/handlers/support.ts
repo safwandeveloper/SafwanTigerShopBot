@@ -5,7 +5,6 @@ import type { AppCtx } from '../middleware/user.js';
 import { renderMdHtml } from '../services/premium.js';
 import {
   getAdminContactUrlWithPrefill,
-  getChannelUrl,
   getTextOverride,
 } from '../services/settings.js';
 import { logger } from '../logger.js';
@@ -1566,11 +1565,6 @@ async function buildStoreContextBlock(): Promise<string> {
       for (const m of payments) {
         lines.push(`  - ${m.name}`);
       }
-    }
-    const channel = getChannelUrl();
-    if (channel) {
-      lines.push('');
-      lines.push(`Announcements channel: ${channel}`);
     }
     lines.push('');
     lines.push(

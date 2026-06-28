@@ -113,9 +113,6 @@ import {
   setEmoji,
   setText,
   refreshSettings,
-  setChannelUrl,
-  clearChannelUrl,
-  getChannelUrl,
   getEmoji,
   getButtonColor,
   getButtonIcon,
@@ -154,8 +151,7 @@ import { fulfillPendingPreordersForProduct } from '../../services/preorder.js';
 import { buildOrderDeliveredChunks } from '../../services/orderRender.js';
 import { publicOrderId } from '../../services/orderId.js';
 import {
-  getPendingDeliverySubmissions,
-  markDeliveryCompleteAndNotify,
+  completeManualDelivery,
   maybeStartDeliveryFormFromApi,
 } from '../../services/postPurchaseDelivery.js';
 import {
@@ -264,8 +260,6 @@ function rootMenu(): InlineKeyboard {
     .text('📣 Broadcast', 'adm:ann')
     .row()
     .text('🎁 Referrals', 'adm:refs:0')
-    .row()
-    .text('📋 Delivery Forms', 'adm:dlv:0')
     .text('🧾 Orders', 'adm:ord:0')
     .row()
     .text('🎨 Customize', 'adm:cust')
@@ -322,15 +316,13 @@ adminBot.callbackQuery('adm:close', async (ctx) => {
 
 // ---------- Bot Settings ----------
 // One-stop hub for bot-wide toggles + URLs the admin can edit at
-// runtime: channel link, email PDF URL, admin contact link, plus the
-// reload settings shortcut. We deliberately keep this lean for now —
-// each item edits a single key in the `settings` table.
+// runtime: email PDF URL, admin contact link, plus the reload settings
+// shortcut. We deliberately keep this lean for now — each item edits
+// a single key in the `settings` table.
 adminBot.callbackQuery('adm:bot', async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.adminFlow = undefined;
   const kb = new InlineKeyboard()
-    .text('🔗 Set Channel URL', 'adm:cust:channel')
-    .row()
     .text('📄 Set Email PDF URL', 'adm:bot:emailpdf')
     .row()
     .text('💬 Set Admin Contact URL', 'adm:bot:contact')
@@ -2808,12 +2800,11 @@ async function showProductEditor(
       .text('🗂 Fields', `adm:prod:del:fields:${p.id}:${page}`)
       .row();
     kb.text('✅ Success Message', `adm:prod:del:succ:${p.id}:${page}`)
-      .text('🎉 Completion Msg', `adm:prod:del:complete:${p.id}:${page}`)
+      .text('🤝 Vendor Chat ID', `adm:prod:del:vendor:${p.id}:${page}`)
       .row();
-    kb.text('🤝 Vendor Chat ID', `adm:prod:del:vendor:${p.id}:${page}`)
-      .text('🏷 Vendor Label', `adm:prod:del:vlabel:${p.id}:${page}`)
-      .row();
-    kb.text('🧹 Clear Delivery', `adm:prod:del:clr:${p.id}:${page}`)
+    kb.text('🎉 Completed Message', `adm:prod:del:complete_msg:${p.id}:${page}`).row();
+    kb.text('🏷 Vendor Label', `adm:prod:del:vlabel:${p.id}:${page}`)
+      .text('🧹 Clear Delivery', `adm:prod:del:clr:${p.id}:${page}`)
       .row();
   }
   kb.text('🧾 View Buyers', `adm:ord:p:${p.id}:0`).row();
@@ -3167,7 +3158,7 @@ adminBot.callbackQuery(/^adm:prod:del:succ:(\d+):(\d+)$/, async (ctx) => {
   );
 });
 
-adminBot.callbackQuery(/^adm:prod:del:complete:(\d+):(\d+)$/, async (ctx) => {
+adminBot.callbackQuery(/^adm:prod:del:complete_msg:(\d+):(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const product_id = Number(ctx.match[1]);
   const page = Number(ctx.match[2]);
@@ -3178,17 +3169,47 @@ adminBot.callbackQuery(/^adm:prod:del:complete:(\d+):(\d+)$/, async (ctx) => {
   };
   await ctx.reply(
     [
-      '🎉 *Send the completion message now.*',
+      '🎉 *Send the completed-order message now.*',
       '',
-      'This message will be sent to the buyer after you click "✅ Notify Buyer Done".',
-      'Example: _"🎉 Your order is complete! Your account has been set up. Go check your email!"_',
+      'The buyer receives this only after you tap *Mark Fulfilled*. Premium emojis and Telegram formatting are preserved.',
       '',
-      'Supports premium emojis. Use `{{product}}` for product name.',
+      'Available placeholders: `{product_name}` and `{order_id}`.',
       '',
-      'Send `clear` to reset to the default message, or `/cancel` to abort.',
+      'Send `clear` for the default message, or `/cancel` to abort.',
     ].join('\n'),
     { parse_mode: 'Markdown' },
   );
+});
+
+adminBot.callbackQuery(/^adm:delivery:complete:(\d+)$/, async (ctx) => {
+  const submissionId = Number(ctx.match[1]);
+  await ctx.answerCallbackQuery({ text: 'Completing fulfillment...' });
+  try {
+    const result = await completeManualDelivery({
+      api: ctx.api,
+      submissionId,
+      adminId: ctx.from!.id,
+    });
+    if (!result.ok) {
+      await ctx.reply('⚠️ Submission or order not found. It may have been removed.');
+      return;
+    }
+    if (result.alreadyCompleted) {
+      await ctx.reply('✅ This fulfillment was already completed. No duplicate buyer message was sent.');
+      return;
+    }
+    await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard() }).catch(() => undefined);
+    await ctx.reply(
+      `✅ Fulfillment completed for *${escapeMd(result.productName ?? 'product')}*. The buyer was notified automatically.`,
+      { parse_mode: 'Markdown' },
+    );
+  } catch (err) {
+    logger.error({ err, submissionId }, 'manual delivery completion failed');
+    await ctx.reply(
+      `⚠️ Could not complete fulfillment: \`${escapeMd((err as Error)?.message ?? String(err))}\``,
+      { parse_mode: 'Markdown' },
+    );
+  }
 });
 
 adminBot.callbackQuery(/^adm:prod:del:fields:(\d+):(\d+)$/, async (ctx) => {
@@ -3204,11 +3225,13 @@ adminBot.callbackQuery(/^adm:prod:del:fields:(\d+):(\d+)$/, async (ctx) => {
     [
       '🗂 *Send the field spec — one field per line.*',
       '',
-      'Each line is `key | Label | required` (the third token is optional and defaults to *required*; type `optional` to make the field skippable).',
+      'Each line is `key | Label | required | options`.',
+      'Options can include `email` and `per_unit`. Use `email_per_unit` to require one valid email for every purchased slot.',
       '',
       '*Examples:*',
       '```',
       'email | Email | required',
+      'slot_email | Slot Email | required | email_per_unit',
       'password | Password | required',
       'recovery_code | Recovery Code | optional',
       '```',
@@ -3272,6 +3295,7 @@ adminBot.callbackQuery(/^adm:prod:del:clr:(\d+):(\d+)$/, async (ctx) => {
       delivery_instruction: null,
       delivery_fields: [],
       delivery_success_message: null,
+      delivery_completion_message: null,
       delivery_vendor_chat_id: null,
       delivery_vendor_label: null,
     });
@@ -4453,7 +4477,6 @@ adminBot.callbackQuery(/^adm:dep:rv:(\d+)$/, async (ctx) => {
 adminBot.callbackQuery('adm:cust', async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.adminFlow = undefined;
-  const channelUrl = getChannelUrl();
   const kb = new InlineKeyboard()
     .text('📝 Edit Text', 'adm:cust:text')
     .text('🎨 Set Color', 'adm:cust:color:pick')
@@ -4463,37 +4486,12 @@ adminBot.callbackQuery('adm:cust', async (ctx) => {
     .text('😀 Set Emoji', 'adm:cust:emoji')
     .text('🎯 Set Button Icon', 'adm:cust:btnicon')
     .row()
-    .text('🔗 Set Channel URL', 'adm:cust:channel')
     .text('🔁 Reload Settings', 'adm:reload');
   backRow(kb);
-  const channelLine = channelUrl
-    ? `\n\nChannel URL: \`${channelUrl}\``
-    : '\n\n_No channel URL set yet._';
   await ctx.editMessageText(
-    `✏️ *Customize*\n\nEdit any text, button color, emoji, or the channel link used by the bot.${channelLine}`,
+    '✏️ *Customize*\n\nEdit any text, button color, emoji, or button icon used by the bot.',
     { parse_mode: 'Markdown', reply_markup: kb },
   );
-});
-
-adminBot.callbackQuery('adm:cust:channel', async (ctx) => {
-  await ctx.answerCallbackQuery();
-  ctx.session.adminFlow = { type: 'set_channel', step: 'value', data: {} };
-  const kb = new InlineKeyboard()
-    .text('🗑 Remove channel', 'adm:cust:channel:clear')
-    .row()
-    .text('⬅️ Back', 'adm:cust');
-  await ctx.editMessageText(
-    '🔗 *Set Channel URL*\n\nSend the channel link (e.g. `https://t.me/yourchannel`).' +
-      '\n\nOr `/cancel`.',
-    { parse_mode: 'Markdown', reply_markup: kb },
-  );
-});
-
-adminBot.callbackQuery('adm:cust:channel:clear', async (ctx) => {
-  await clearChannelUrl(ctx.from!.id);
-  ctx.session.adminFlow = undefined;
-  await ctx.answerCallbackQuery({ text: 'Channel link removed.' });
-  await showRoot(ctx);
 });
 
 adminBot.callbackQuery('adm:cust:text', async (ctx) => {
@@ -7448,7 +7446,7 @@ adminBot.on('message:text', async (ctx, next) => {
         return;
       }
 
-      const product = order.product_id ? await getProduct(order.product_id) : null;
+      const product = await getProduct(order.product_id);
       const buyer = await findUserById(order.user_id);
       const lang = buyer?.language ?? env.DEFAULT_LANG;
       const tr = (key: string, vars?: Record<string, string | number>) =>
@@ -7501,6 +7499,7 @@ adminBot.on('message:text', async (ctx, next) => {
           orderPublicId: publicId,
           buyerTelegramId: order.user_id,
           buyerLang: lang,
+          qty: order.qty,
         }).catch((err) => {
           logger.warn(
             { err, orderId: order.id, productId: order.product_id },
@@ -7980,7 +7979,7 @@ adminBot.on('message:text', async (ctx, next) => {
         delivery_completion_message: cleared ? null : text,
       });
       ctx.session.adminFlow = undefined;
-      await ctx.reply(cleared ? '✅ Completion message reset to default.' : '✅ Completion message saved.');
+      await ctx.reply(cleared ? '✅ Completed message reset.' : '✅ Completed message saved.');
       await showProductEditor(ctx, flow.data.product_id, flow.data.page);
       return;
     }
@@ -8000,7 +7999,13 @@ adminBot.on('message:text', async (ctx, next) => {
         .split(/\r?\n/)
         .map((l) => l.trim())
         .filter((l) => l.length > 0);
-      const fields: { key: string; label: string; required?: boolean }[] = [];
+      const fields: {
+        key: string;
+        label: string;
+        required?: boolean;
+        type?: 'text' | 'email';
+        per_unit?: boolean;
+      }[] = [];
       const seenKeys = new Set<string>();
       const errors: string[] = [];
       for (const line of rawLines) {
@@ -8018,13 +8023,16 @@ adminBot.on('message:text', async (ctx, next) => {
           parts[2] === undefined
             ? true
             : !/^(optional|opt|false|no)$/i.test(parts[2]);
+        const options = (parts[3] ?? '').toLowerCase();
+        const type = options.includes('email') || /email/i.test(key) ? 'email' : 'text';
+        const per_unit = /per[_ -]?unit|email[_ -]?per[_ -]?unit/.test(options);
         if (seenKeys.has(key)) {
           // last-write-wins
           const idx = fields.findIndex((f) => f.key === key);
           if (idx >= 0) fields.splice(idx, 1);
         }
         seenKeys.add(key);
-        fields.push({ key, label: parts[1], required });
+        fields.push({ key, label: parts[1], required, type, per_unit });
       }
       if (errors.length > 0) {
         await ctx.reply(
@@ -8839,23 +8847,6 @@ adminBot.on('message:text', async (ctx, next) => {
         await showAnnounceBuyEdit(ctx);
         return;
       }
-      return;
-    }
-
-    if (flow.type === 'set_channel') {
-      if (!/^https?:\/\/t\.me\//i.test(text) && !/^https?:\/\//i.test(text)) {
-        await ctx.reply(
-          '❌ That doesn\'t look like a URL. Send a link like `https://t.me/yourchannel`.',
-          { parse_mode: 'Markdown' },
-        );
-        return;
-      }
-      await setChannelUrl(text, ctx.from!.id);
-      ctx.session.adminFlow = undefined;
-      await ctx.reply(`✅ Channel link saved:\n\`${text}\``, {
-        parse_mode: 'Markdown',
-        reply_markup: rootMenu(),
-      });
       return;
     }
 
@@ -9978,101 +9969,6 @@ adminBot.command('setcolor', async (ctx) => {
   await ctx.reply(`✅ Color for \`${key}\` set to *${mode}*.`, { parse_mode: 'Markdown' });
 });
 
-adminBot.command('rollbackorder', async (ctx) => {
-  const [, orderIdRaw] = (ctx.message?.text ?? '').split(/\s+/);
-  if (!orderIdRaw) {
-    await ctx.reply('Usage: /rollbackorder <order_id>\n\nThis recovers links from an order back to inventory.\nUse when user got refund but links were already sent.');
-    return;
-  }
-  const orderId = parseInt(orderIdRaw, 10);
-  if (isNaN(orderId) || orderId <= 0) {
-    await ctx.reply('Invalid order_id. Use a number like: /rollbackorder 123');
-    return;
-  }
-  
-  const { rollbackOrderItems, getOrder } = await import('../../db/queries.js');
-  
-  const order = await getOrder(orderId);
-  if (!order) {
-    await ctx.reply('Order not found.');
-    return;
-  }
-  
-  const links = await rollbackOrderItems(orderId);
-  if (links.length === 0) {
-    await ctx.reply(`No links to recover from order #${orderId}.`);
-    return;
-  }
-  
-  await ctx.reply(`✅ *Links Recovered!*\n\nOrder #${orderId}\nRecovered: *${links.length}* links\n\nLinks:\n${links.slice(0, 10).join('\n')}${links.length > 10 ? '\n... and more' : ''}`, {
-    parse_mode: 'Markdown',
-  });
-});
-
-adminBot.command('flagrefer', async (ctx) => {
-  const [, telegramIdRaw] = (ctx.message?.text ?? '').split(/\s+/);
-  if (!telegramIdRaw) {
-    await ctx.reply('Usage: /flagrefer <telegram_id>\n\nFlags user for referral fraud. They cannot convert referrals to wallet.');
-    return;
-  }
-  const telegramId = parseInt(telegramIdRaw, 10);
-  if (isNaN(telegramId) || telegramId <= 0) {
-    await ctx.reply('Invalid telegram_id. Use a number like: /flagrefer 8158489713');
-    return;
-  }
-  
-  const { setReferralFraudSuspected, findUserById } = await import('../../db/queries.js');
-  
-  const user = await findUserById(telegramId);
-  if (!user) {
-    await ctx.reply('User not found.');
-    return;
-  }
-  
-  await setReferralFraudSuspected(telegramId, true);
-  await ctx.reply(`🚫 *User Flagged for Referral Fraud*\n\nTelegram ID: \`${telegramId}\`\nUsername: @${user.username ?? 'N/A'}\nName: ${user.first_name ?? 'N/A'}\n\nUser can no longer convert referrals to wallet.`, {
-    parse_mode: 'Markdown',
-  });
-});
-
-adminBot.command('resetrefer', async (ctx) => {
-  const [, telegramIdRaw] = (ctx.message?.text ?? '').split(/\s+/);
-  if (!telegramIdRaw) {
-    await ctx.reply('Usage: /resetrefer <telegram_id>\n\nResets user\'s refer link (new code) and flags for fraud.');
-    return;
-  }
-  const telegramId = parseInt(telegramIdRaw, 10);
-  if (isNaN(telegramId) || telegramId <= 0) {
-    await ctx.reply('Invalid telegram_id. Use a number like: /resetrefer 8004955979');
-    return;
-  }
-  
-  const { findUserById } = await import('../../db/queries.js');
-  const { supabase } = await import('../../db/supabase.js');
-  
-  const user = await findUserById(telegramId);
-  if (!user) {
-    await ctx.reply('User not found.');
-    return;
-  }
-  
-  // Generate new referral code
-  const newReferCode = telegramId.toString(36).toUpperCase();
-  
-  // Update user's refer_code and flag as fraud
-  await supabase
-    .from('users')
-    .update({ 
-      refer_code: newReferCode,
-      referral_fraud_suspected: true 
-    })
-    .eq('telegram_id', telegramId);
-  
-  await ctx.reply(`🔄 *Refer Link Reset & Flagged*\n\nTelegram ID: \`${telegramId}\`\nUsername: @${user.username ?? 'N/A'}\n\nNew refer link: https://t.me/${ctx.me?.username ?? 'YourBot'}?start=R${newReferCode}\n\nUser is now flagged for fraud.`, {
-    parse_mode: 'Markdown',
-  });
-});
-
 adminBot.command('setemoji', async (ctx) => {
   const [, key, unicode, customId] = (ctx.message?.text ?? '').split(/\s+/);
   if (!key || !unicode) {
@@ -10362,173 +10258,6 @@ adminBot.command('showbottutorial', async (ctx) => {
     { parse_mode: 'Markdown' },
   );
 });
-
-// ============================================================
-// Delivery Form Submissions Admin Panel
-// ============================================================
-
-const DELIVERY_PER_PAGE = 10;
-
-adminBot.callbackQuery(/^adm:dlv:(?:(\d+))?$/, async (ctx) => {
-  const page = parseInt(ctx.match[1] ?? '0', 10);
-  const pending = await getPendingDeliverySubmissions();
-
-  if (pending.length === 0) {
-    await ctx.editMessageText(
-      '📋 *Delivery Form Submissions*\n\nNo pending submissions. All caught up! 🎉',
-      { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().row().text('⬅️ Back', 'adm:root') },
-    );
-    return;
-  }
-
-  const start = page * DELIVERY_PER_PAGE;
-  const pageItems = pending.slice(start, start + DELIVERY_PER_PAGE);
-  const kb = new InlineKeyboard();
-
-  for (const item of pageItems) {
-    const buyer = item.buyer;
-    const buyerName = buyer.username ? `@${buyer.username}` : (buyer.first_name || `ID: ${buyer.telegram_id}`);
-    kb.text(
-      `📝 #${item.order.public_id} — ${buyerName}`,
-      `adm:dlv:v:${item.order.id}`,
-    );
-    kb.row();
-  }
-
-  // Pagination
-  if (page > 0) kb.text('◀️ Prev', `adm:dlv:${page - 1}`);
-  if (start + DELIVERY_PER_PAGE < pending.length) kb.text('Next ▶️', `adm:dlv:${page + 1}`);
-  kb.row().text('⬅️ Back', 'adm:root');
-
-  await ctx.editMessageText(
-    `📋 *Pending Delivery Submissions* (${pending.length} total)\n\nPage ${page + 1} of ${Math.ceil(pending.length / DELIVERY_PER_PAGE)}`,
-    { parse_mode: 'Markdown', reply_markup: kb },
-  );
-});
-
-adminBot.callbackQuery(/^adm:dlv:v:(\d+)$/, async (ctx) => {
-  const orderId = parseInt(ctx.match[1]!, 10);
-  const { getOrder, getUserByTelegramId: getUser, getProduct, getDeliverySubmission } = await import('../../db/queries.js');
-
-  const [order, submission] = await Promise.all([
-    getOrder(orderId),
-    getDeliverySubmission(orderId),
-  ]);
-
-  if (!order || !submission) {
-    await ctx.answerCallbackQuery({ text: 'Order not found', show_alert: true });
-    return;
-  }
-
-  const product = order.product_id ? order.product_id ? await getProduct(order.product_id) : null : null;
-  const user = await getUser(order.user_id);
-
-  const buyerName = user?.username ? `@${user.username}` : (user?.first_name || `ID: ${user?.telegram_id || order.user_id}`);
-  const completed = submission.admin_completed_at ? '✅ Completed' : '⏳ Pending';
-  const orderPublicId = publicOrderId(order);
-
-  // Build fields display
-  const fieldsLines = Object.entries(submission.payload)
-    .map(([key, value]) => `• <b>${key}:</b> <code>${value}</code>`)
-    .join('\n') || '_No fields submitted_';
-
-  const text = [
-    `📋 *Delivery Submission Details*\n`,
-    `━━━━━━━━━━━━━━━━━━━━`,
-    `🆔 <b>Order:</b> #${orderPublicId}`,
-    `📦 <b>Product:</b> ${product?.name || 'Unknown'}`,
-    `👤 <b>Buyer:</b> ${buyerName}`,
-    `🔢 <b>Qty:</b> ${order.qty}`,
-    `💰 <b>Total:</b> ${order.total} USDT`,
-    `📅 <b>Submitted:</b> ${new Date(submission.submitted_at).toLocaleString()}`,
-    `📌 <b>Status:</b> ${completed}`,
-    ``,
-    `<b>Submitted Details:</b>`,
-    fieldsLines,
-    ``,
-    submission.admin_completed_at
-      ? `_Already marked as completed on ${new Date(submission.admin_completed_at).toLocaleString()}_`
-      : `_Process this order, then click "✅ Notify Buyer" below_`,
-  ].join('\n');
-
-  const kb = new InlineKeyboard();
-  if (!submission.admin_completed_at) {
-    kb.text('✅ Notify Buyer Done', `adm:dlv:done:${orderId}`);
-    kb.row();
-  }
-  kb.text('💬 Contact Buyer', `adm:usr:v:${order.user_id}`);
-  kb.row().text('⬅️ Back to List', `adm:dlv:0`);
-
-  await ctx.editMessageText(text, {
-    parse_mode: 'HTML',
-    reply_markup: kb,
-  });
-});
-
-adminBot.callbackQuery(/^adm:dlv:done:(\d+)$/, async (ctx) => {
-  const orderId = parseInt(ctx.match[1]!, 10);
-  const adminId = ctx.from.id;
-
-  const ok = await markDeliveryCompleteAndNotify({
-    api: ctx.api,
-    orderId,
-    adminId,
-  });
-
-  if (ok) {
-    await ctx.answerCallbackQuery({ text: '✅ Buyer notified!', show_alert: true });
-  } else {
-    await ctx.answerCallbackQuery({ text: '❌ Failed to notify buyer', show_alert: true });
-  }
-
-  // Refresh the view
-  const { getOrder, getUserByTelegramId: getUser, getProduct, getDeliverySubmission } = await import('../../db/queries.js');
-
-  const [order, submission] = await Promise.all([
-    getOrder(orderId),
-    getDeliverySubmission(orderId),
-  ]);
-
-  if (!order || !submission) return;
-
-  const product = order.product_id ? await getProduct(order.product_id) : null;
-  const user = await getUser(order.user_id);
-  const buyerName = user?.username ? `@${user.username}` : (user?.first_name || `ID: ${user?.telegram_id || order.user_id}`);
-
-  const fieldsLines = Object.entries(submission.payload)
-    .map(([key, value]) => `• <b>${key}:</b> <code>${value}</code>`)
-    .join('\n') || '_No fields submitted_';
-
-  const text = [
-    `📋 *Delivery Submission Details*\n`,
-    `━━━━━━━━━━━━━━━━━━━━`,
-    `🆔 <b>Order:</b> #${publicOrderId(order)}`,
-    `📦 <b>Product:</b> ${product?.name || 'Unknown'}`,
-    `👤 <b>Buyer:</b> ${buyerName}`,
-    `🔢 <b>Qty:</b> ${order.qty}`,
-    `💰 <b>Total:</b> ${order.total} USDT`,
-    `📅 <b>Submitted:</b> ${new Date(submission.submitted_at).toLocaleString()}`,
-    `📌 <b>Status:</b> ✅ Completed`,
-    ``,
-    `<b>Submitted Details:</b>`,
-    fieldsLines,
-    ``,
-    `_Marked as completed on ${new Date(submission.admin_completed_at!).toLocaleString()}_`,
-  ].join('\n');
-
-  const kb = new InlineKeyboard();
-  kb.text('💬 Contact Buyer', `adm:usr:v:${order.user_id}`);
-  kb.row().text('⬅️ Back to List', `adm:dlv:0`);
-
-  await ctx.editMessageText(text, {
-    parse_mode: 'HTML',
-    reply_markup: kb,
-  });
-});
-
-// ============================================================
-// End Delivery Form Submissions
-// ============================================================
 
 adminBot.command('clearcache', async (ctx) => {
   cache.clearAll();

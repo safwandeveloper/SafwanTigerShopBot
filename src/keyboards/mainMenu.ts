@@ -1,7 +1,6 @@
 import { InlineKeyboard } from 'grammy';
 import { MAIN_MENU_LAYOUT, BUTTON_KEYS, type Lang } from '../../config/index.js';
-import { applyButtonChrome, btn, inlineBtn } from './helpers.js';
-import { getChannelUrl } from '../services/settings.js';
+import { inlineBtn } from './helpers.js';
 
 /**
  * Map main-menu button keys to their callback data.
@@ -37,17 +36,9 @@ const CALLBACK: Partial<Record<keyof typeof BUTTON_KEYS, string>> = {
 /** Inline keyboard rendered under the welcome message. */
 export function mainMenuKeyboard(lang: Lang): InlineKeyboard {
   const kb = new InlineKeyboard();
-  const channelUrl = getChannelUrl();
   MAIN_MENU_LAYOUT.forEach((row, i) => {
     row.forEach((k) => {
-      // Render the channel button as a direct URL when configured so
-      // the user is sent straight to Telegram's join screen.
-      if (k === 'channel' && channelUrl) {
-        kb.url(btn(lang, 'channel'), channelUrl);
-        applyButtonChrome(kb, 'channel');
-      } else {
-        inlineBtn(kb, lang, k, CALLBACK[k] ?? `noop:${k}`);
-      }
+      inlineBtn(kb, lang, k, CALLBACK[k] ?? `noop:${k}`);
     });
     if (i < MAIN_MENU_LAYOUT.length - 1) kb.row();
   });

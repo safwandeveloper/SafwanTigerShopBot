@@ -134,6 +134,11 @@ export type AdminFlow =
       data: { product_id: number; page: number };
     }
   | {
+      type: 'edit_product_delivery_completion';
+      step: 'text';
+      data: { product_id: number; page: number };
+    }
+  | {
       type: 'edit_product_delivery_fields';
       step: 'spec';
       data: { product_id: number; page: number };
@@ -145,11 +150,6 @@ export type AdminFlow =
     }
   | {
       type: 'edit_product_delivery_vendor_label';
-      step: 'text';
-      data: { product_id: number; page: number };
-    }
-  | {
-      type: 'edit_product_delivery_completion';
       step: 'text';
       data: { product_id: number; page: number };
     }
@@ -256,7 +256,6 @@ export type AdminFlow =
         };
       };
     }
-  | { type: 'set_channel'; step: 'value'; data: Record<string, never> }
   | { type: 'find_user'; step: 'query'; data: Record<string, never> }
   | { type: 'adjust_balance'; step: 'amount'; data: { telegram_id: number } }
   | { type: 'referral_find_user'; step: 'query'; data: Record<string, never> }
@@ -706,6 +705,7 @@ export type UserFlow =
         fields: import('../types.js').DeliveryFieldSpec[];
         collected: Record<string, string>;
         cursor: number;
+        qty: number;
         edit_mode: boolean;
         prompt_chat_id: number;
         prompt_message_id?: number;

@@ -977,7 +977,7 @@ export const LOCALES = { en, ar, vi } as const satisfies Record<Lang, Record<str
  *   Row 1: Shop
  *   Row 2: Topup | My Profile
  *   Row 3: Support | AI Support
- *   Row 4: Refer & Earn | Channel
+ *   Row 4: Refer & Earn
  *
  * The legacy `bot_tutorial` row is intentionally absent here — the
  * bot-wide tutorial is still reachable from /profile → Bot Tutorial,
@@ -988,7 +988,7 @@ export const MAIN_MENU_LAYOUT: ReadonlyArray<ReadonlyArray<keyof typeof BUTTON_K
   ['shop'],
   ['topup', 'profile'],
   ['support', 'ai_support'],
-  ['refer', 'channel'],
+  ['refer'],
 ];
 
 /** Shop pagination size — products per page */

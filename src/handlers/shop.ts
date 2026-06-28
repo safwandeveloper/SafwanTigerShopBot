@@ -15,7 +15,6 @@ import {
   getOrder,
   getReferralBalance,
   InsufficientReferralBalanceError,
-  isReferralFraudSuspected,
   listActiveProducts,
   claimProductItems,
   spendReferralBalance,
@@ -62,6 +61,7 @@ import { t as translate } from '../i18n/index.js';
 import {
   handleDeliveryFormMessage,
   maybeStartDeliveryFormForCtx,
+  productHasDeliveryForm,
   startEditDelivery,
 } from '../services/postPurchaseDelivery.js';
 
@@ -368,6 +368,7 @@ async function finalizeOrderDelivery(args: {
 }): Promise<void> {
   const { ctx, product: p, qty, total, discount, order, paidVia, balanceAfter, confirmationText } = args;
   const preorder = isPreorder(p, qty);
+  const manualForm = productHasDeliveryForm(p);
   if (!preorder) {
     await decrementProductStock(p.id, qty);
   }
@@ -377,7 +378,7 @@ async function finalizeOrderDelivery(args: {
   // pool. When the pool is empty (or short), fall back to a
   // "manual delivery" placeholder; the admin gets pinged via
   // logOrderCreated either way.
-  const supplierOrder = preorder
+  const supplierOrder = preorder || manualForm
     ? null
     : await trySupplierAutoOrder({
         localProductId: p.id,
@@ -405,7 +406,7 @@ async function finalizeOrderDelivery(args: {
             lowBalance: failure.lowBalance,
           }).catch((err) => logger.warn({ err }, 'supplier failure admin log failed')),
       });
-  const claimed = preorder
+  const claimed = preorder || manualForm
     ? []
     : supplierOrder
       ? supplierOrder.items
@@ -428,7 +429,9 @@ async function finalizeOrderDelivery(args: {
   // existing /myorders renderer (and the /admin orders block)
   // doesn't suddenly contain blockquote markers.
   const deliveredChunks = buildOrderDeliveredChunks(claimed);
-  const pendingText = preorder
+  const pendingText = manualForm
+    ? 'Buyer details pending admin fulfillment.'
+    : preorder
     ? ctx.t('shop.buy.preorder_pending')
     : ctx.t('shop.buy.delivery_pending');
   const firstChunkBlock =
@@ -474,25 +477,27 @@ async function finalizeOrderDelivery(args: {
   inlineBtn(deliveredKb, ctx.lang, 'using_method', `tut:${p.id}`);
   deliveredKb.row();
   inlineBtn(deliveredKb, ctx.lang, 'send_note_txt', `order:txt:${order.id}`);
-  const headerHasKeyboard = deliveredChunks.length <= 1;
-  await ctx.reply(
-    renderMdHtml(
-      ctx.t(preorder ? 'shop.buy.order_preordered' : 'shop.buy.order_delivered', {
-        order_id: publicId,
-        name: p.name,
-        qty,
-        total: total.toFixed(2),
-        items: firstChunkBlock,
-      }),
-    ),
-    headerHasKeyboard ? { parse_mode: 'HTML', reply_markup: deliveredKb } : { parse_mode: 'HTML' },
-  );
+  if (!manualForm) {
+    const headerHasKeyboard = deliveredChunks.length <= 1;
+    await ctx.reply(
+      renderMdHtml(
+        ctx.t(preorder ? 'shop.buy.order_preordered' : 'shop.buy.order_delivered', {
+          order_id: publicId,
+          name: p.name,
+          qty,
+          total: total.toFixed(2),
+          items: firstChunkBlock,
+        }),
+      ),
+      headerHasKeyboard ? { parse_mode: 'HTML', reply_markup: deliveredKb } : { parse_mode: 'HTML' },
+    );
+  }
   // Send the remaining 7-link chunks as plain blockquote
   // follow-up messages. Only the very last one gets the inline
   // keyboard. If a follow-up message fails to render we still
   // press on so a single bad link doesn't keep the buyer from
   // seeing the rest. The DB has the full list either way.
-  for (let i = 1; i < deliveredChunks.length; i++) {
+  for (let i = 1; !manualForm && i < deliveredChunks.length; i++) {
     const chunk = deliveredChunks[i];
     if (!chunk) continue;
     const opts = chunk.isLast
@@ -630,7 +635,7 @@ async function finalizeOrderDelivery(args: {
     total,
     paidVia,
     balanceAfter: Number(balanceAfter.toFixed(3)),
-    lifecycle: preorder ? 'preorder' : 'delivered',
+    lifecycle: manualForm ? 'manual_pending' : preorder ? 'preorder' : 'delivered',
   });
 }
 
@@ -1038,6 +1043,28 @@ export function registerShop(bot: Composer<AppCtx>): void {
     if (!consumed) return next();
   });
 
+  bot.callbackQuery(/^delivery:start:(\d+)$/, async (ctx) => {
+    const orderId = Number(ctx.match[1]);
+    const order = await getOrder(orderId);
+    if (!order || order.user_id !== ctx.user.telegram_id || order.product_id === null) {
+      await ctx.answerCallbackQuery({ text: 'Order not found.', show_alert: true });
+      return;
+    }
+    const product = await getProduct(order.product_id);
+    if (!product || !productHasDeliveryForm(product)) {
+      await ctx.answerCallbackQuery({ text: 'This form is no longer available.', show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    await maybeStartDeliveryFormForCtx({
+      ctx,
+      product,
+      orderId: order.id,
+      orderPublicId: publicOrderId(order),
+      qty: order.qty,
+    });
+  });
+
   // ---- Edit Details (re-open the form with the last submission) ----
   // Callback fires from the success card after the buyer's first
   // submission. `startEditDelivery` looks up the existing
@@ -1276,14 +1303,6 @@ export function registerShop(bot: Composer<AppCtx>): void {
       });
       return;
     }
-    // Block fraud-suspected users from buying with referrals
-    if (ctx.user.referral_fraud_suspected) {
-      await ctx.answerCallbackQuery({
-        text: ctx.t('shop.referral.fraud_blocked'),
-        show_alert: true,
-      });
-      return;
-    }
     const qty = ctx.session.qty[productId] ?? QTY_MIN;
     const referral = await getReferralPaymentState(ctx, p, qty);
     if (!referral) {
@@ -1327,14 +1346,6 @@ export function registerShop(bot: Composer<AppCtx>): void {
     if (!p.referral_required_count || p.referral_required_count <= 0) {
       await ctx.answerCallbackQuery({
         text: ctx.t('shop.referral.disabled'),
-        show_alert: true,
-      });
-      return;
-    }
-    // Block fraud-suspected users from buying with referrals
-    if (ctx.user.referral_fraud_suspected) {
-      await ctx.answerCallbackQuery({
-        text: ctx.t('shop.referral.fraud_blocked'),
         show_alert: true,
       });
       return;

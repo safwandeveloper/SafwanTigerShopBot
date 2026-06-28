@@ -25,15 +25,16 @@ import type { Api, InlineKeyboard as InlineKeyboardType } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 import { logger } from '../logger.js';
 import { env } from '../env.js';
-import { supabase } from '../db/supabase.js';
 import { t as translate } from '../i18n/index.js';
 import { renderMdHtml } from './premium.js';
 import { getAdminContactUrlWithPrefill } from './settings.js';
 import {
+  completeDeliverySubmission as markDeliverySubmissionComplete,
   getDeliverySubmission,
+  getDeliverySubmissionById,
   getOrder,
   getProduct,
-  getUserByTelegramId,
+  setOrderDeliveredItems,
   upsertDeliverySubmission,
 } from '../db/queries.js';
 import { applyButtonChrome, btn } from '../keyboards/helpers.js';
@@ -170,11 +171,16 @@ function renderPrompt(args: {
   product_name: string;
   fields: DeliveryFieldSpec[];
   cursor: number;
+  qty: number;
 }): string {
   const t = tFor(args.lang);
   const total = args.fields.length;
   const field = args.fields[args.cursor];
   if (!field) return '';
+  if (field.per_unit) {
+    const unit = field.type === 'email' ? 'email' : field.label.toLowerCase();
+    return `Please enter *${args.qty} ${field.label}(s)*, one ${unit} per line.`;
+  }
   const promptKey =
     field.required === false
       ? 'shop.delivery.box.prompt_optional'
@@ -202,6 +208,7 @@ async function pushPromptCard(args: {
   product_name: string;
   fields: DeliveryFieldSpec[];
   cursor: number;
+  qty: number;
   existingMessageId?: number;
 }): Promise<number | undefined> {
   const html = renderMdHtml(
@@ -210,6 +217,7 @@ async function pushPromptCard(args: {
       product_name: args.product_name,
       fields: args.fields,
       cursor: args.cursor,
+      qty: args.qty,
     }),
   );
   if (args.existingMessageId !== undefined) {
@@ -255,7 +263,6 @@ async function sendVendorMessage(args: {
   isResubmit: boolean;
 }): Promise<void> {
   const vendorId = args.product.delivery_vendor_chat_id;
-  if (vendorId === null || vendorId === undefined) return;
   // Vendor messages always render in the bot owner's default
   // language — we have no language preference for an arbitrary
   // vendor account.
@@ -276,157 +283,27 @@ async function sendVendorMessage(args: {
     details: detailsBlock,
     revision: args.submission.revision,
   });
-  try {
-    await args.api.sendMessage(vendorId, renderMdHtml(body), {
-      parse_mode: 'HTML',
-    });
-  } catch (err) {
-    logger.warn(
-      { err, vendorId, productId: args.product.id, orderPublicId: args.orderPublicId },
-      'delivery: vendor DM failed (the vendor likely needs to /start the bot)',
-    );
+  const targets = new Set<number>([env.ADMIN_USER_ID]);
+  if (vendorId !== null && vendorId !== undefined) targets.add(vendorId);
+  for (const target of targets) {
+    const kb = new InlineKeyboard();
+    if (target === env.ADMIN_USER_ID) {
+      kb.text('Mark Fulfilled', `adm:delivery:complete:${args.submission.id}`);
+      applyButtonChrome(kb, 'delivery_admin_help');
+      kb.style('success');
+    }
+    try {
+      await args.api.sendMessage(target, renderMdHtml(body), {
+        parse_mode: 'HTML',
+        ...(target === env.ADMIN_USER_ID ? { reply_markup: kb } : {}),
+      });
+    } catch (err) {
+      logger.warn(
+        { err, target, productId: args.product.id, orderPublicId: args.orderPublicId },
+        'delivery: admin/vendor notification failed',
+      );
+    }
   }
-
-  // Also notify the admin directly
-  const { env: botEnv } = await import('../env.js');
-  const adminMsg = [
-    '🔔 *New Delivery Form Submission!*',
-    '',
-    `*Order:* ${buildOrderTag(args.orderPublicId)}`,
-    `*Product:* ${args.product.name}`,
-    `*Qty:* ${args.qty}`,
-    `*Buyer:* ${args.buyer.username ? '@' + args.buyer.username : args.buyer.first_name ?? args.buyer.telegram_id} (${args.buyer.telegram_id})`,
-    '',
-    '*Submitted Details:*',
-    renderPayloadBlock(args.fields, args.submission.payload),
-    '',
-    `_Review and process this order._`,
-  ].join('\n');
-  try {
-    await args.api.sendMessage(botEnv.ADMIN_USER_ID, renderMdHtml(adminMsg), {
-      parse_mode: 'HTML',
-    });
-  } catch (err) {
-    logger.warn({ err, adminId: botEnv.ADMIN_USER_ID }, 'delivery: admin notification failed');
-  }
-}
-
-/**
- * Mark a delivery submission as completed by admin and notify the buyer.
- * Returns true if notification was sent successfully.
- */
-export async function markDeliveryCompleteAndNotify(args: {
-  api: Api;
-  orderId: number;
-  adminId: number;
-}): Promise<boolean> {
-  const { api, orderId, adminId } = args;
-
-  // Get the submission
-  const submission = await getDeliverySubmission(orderId);
-  if (!submission) {
-    logger.warn({ orderId }, 'markDeliveryComplete: submission not found');
-    return false;
-  }
-
-  // Check if already completed
-  if (submission.admin_completed_at) {
-    logger.warn({ orderId }, 'markDeliveryComplete: already completed');
-    return false;
-  }
-
-  // Get order details
-  const order = await getOrder(orderId);
-  if (!order) {
-    logger.warn({ orderId }, 'markDeliveryComplete: order not found');
-    return false;
-  }
-
-  // Get product
-  if (!order.product_id) {
-    logger.warn({ orderId }, 'markDeliveryComplete: order has no product_id');
-    return false;
-  }
-  const product = await getProduct(order.product_id);
-  if (!product) {
-    logger.warn({ orderId, productId: order.product_id }, 'markDeliveryComplete: product not found');
-    return false;
-  }
-
-  // Get buyer info
-  const user = await getUserByTelegramId(order.user_id);
-  if (!user) {
-    logger.warn({ orderId, userId: order.user_id }, 'markDeliveryComplete: user not found');
-    return false;
-  }
-
-  // Update submission as completed
-  const { error: updateError } = await supabase
-    .from('order_delivery_submissions')
-    .update({
-      admin_completed_at: new Date().toISOString(),
-      admin_completed_by: adminId,
-    })
-    .eq('order_id', orderId);
-
-  if (updateError) {
-    logger.error({ err: updateError, orderId }, 'markDeliveryComplete: update failed');
-    return false;
-  }
-
-  // Build completion message
-  const completionMessage = product.delivery_completion_message?.trim()
-    || `🎉 *Your order is complete!*\n\n✅ ${product.name}\n\nThank you for your purchase!`;
-
-  // Send to buyer
-  try {
-    await api.sendMessage(user.telegram_id, renderMdHtml(completionMessage), {
-      parse_mode: 'HTML',
-    });
-    return true;
-  } catch (err) {
-    logger.warn({ err, buyerId: user.telegram_id }, 'markDeliveryComplete: buyer notification failed');
-    return false;
-  }
-}
-
-/**
- * Get all pending (not completed) delivery submissions for admin panel.
- */
-export async function getPendingDeliverySubmissions(): Promise<Array<{
-  submission: DBOrderDeliverySubmission;
-  order: { id: number; public_id: string; };
-  product: { id: number; name: string; };
-  buyer: { telegram_id: number; first_name: string | null; username: string | null };
-}>> {
-  const { data, error } = await supabase
-    .from('order_delivery_submissions')
-    .select('*, order:orders(id, public_id), product:products(id, name), user:users(telegram_id, first_name, username)')
-    .is('admin_completed_at', null)
-    .order('submitted_at', { ascending: false });
-
-  if (error) {
-    logger.error({ err: error }, 'getPendingDeliverySubmissions failed');
-    return [];
-  }
-
-  return (data ?? []).map(row => ({
-    submission: {
-      id: Number((row as { id: number | string }).id),
-      order_id: Number((row as { order_id: number | string }).order_id),
-      user_id: Number((row as { user_id: number | string }).user_id),
-      product_id: Number((row as { product_id: number | string }).product_id),
-      payload: (row as { payload: Record<string, string> }).payload ?? {},
-      revision: Number((row as { revision: number | string }).revision),
-      submitted_at: String((row as { submitted_at: string }).submitted_at),
-      updated_at: String((row as { updated_at: string }).updated_at),
-      admin_completed_at: (row as { admin_completed_at: string | null }).admin_completed_at,
-      admin_completed_by: (row as { admin_completed_by: number | null }).admin_completed_by,
-    },
-    order: (row as { order: { id: number; public_id: string } }).order,
-    product: (row as { product: { id: number; name: string } }).product,
-    buyer: (row as { user: { telegram_id: number; first_name: string | null; username: string | null } }).user,
-  }));
 }
 
 /**
@@ -482,12 +359,15 @@ async function finalizeSubmission(args: {
     )
     .join('\n');
   const summaryHtml = `${summaryHeader}\n\n${renderMdHtml(summaryRows)}`;
+  const configuredSuccess = args.product.delivery_success_message?.trim();
   const successHtml = renderMdHtml(
-    t(
-      args.isResubmit
-        ? 'shop.delivery.success.resubmitted'
-        : 'shop.delivery.success.default',
-    ),
+    configuredSuccess && configuredSuccess.length > 0
+      ? configuredSuccess
+      : t(
+          args.isResubmit
+            ? 'shop.delivery.success.resubmitted'
+            : 'shop.delivery.success.default',
+        ),
   );
   const kb = buildSuccessKeyboard({
     lang: args.lang,
@@ -545,20 +425,24 @@ export async function maybeStartDeliveryFormFromApi(args: {
   orderPublicId: string;
   buyerTelegramId: number;
   buyerLang: Lang;
+  qty: number;
 }): Promise<boolean> {
   if (!productHasDeliveryForm(args.product)) return false;
   const t = tFor(args.buyerLang);
-  const effectiveFields = getEffectiveDeliveryFields(args.product);
   const instruction = args.product.delivery_instruction?.trim();
   const instructionText =
     instruction && instruction.length > 0
       ? instruction
       : t('shop.delivery.instruction.default');
+  const startKb = new InlineKeyboard();
+  startKb.text('Submit Details', `delivery:start:${args.orderId}`);
+  applyButtonChrome(startKb, 'delivery_edit');
+  startKb.style('primary');
   try {
     await args.api.sendMessage(
       args.buyerTelegramId,
       renderMdHtml(instructionText),
-      { parse_mode: 'HTML' },
+      { parse_mode: 'HTML', reply_markup: startKb },
     );
   } catch (err) {
     logger.warn(
@@ -566,24 +450,6 @@ export async function maybeStartDeliveryFormFromApi(args: {
       'delivery: instruction send failed',
     );
   }
-  const promptMessageId = await pushPromptCard({
-    api: args.api,
-    chatId: args.buyerTelegramId,
-    lang: args.buyerLang,
-    product_name: args.product.name,
-    fields: effectiveFields,
-    cursor: 0,
-  });
-  await seedDeliveryFormState({
-    telegramId: args.buyerTelegramId,
-    orderId: args.orderId,
-    orderPublicId: args.orderPublicId,
-    product: args.product,
-    promptChatId: args.buyerTelegramId,
-    promptMessageId,
-    editMode: false,
-    prefill: {},
-  });
   return true;
 }
 
@@ -626,6 +492,7 @@ export async function maybeStartDeliveryFormForCtx(args: {
     product_name: args.product.name,
     fields: effectiveFields,
     cursor: 0,
+    qty: args.qty,
   });
   ctx.session.userFlow = {
     type: 'delivery_form',
@@ -638,6 +505,7 @@ export async function maybeStartDeliveryFormForCtx(args: {
       fields: effectiveFields,
       collected: { ...(args.prefill ?? {}) },
       cursor: 0,
+      qty: args.qty,
       edit_mode: args.editMode === true,
       prompt_chat_id: chatId,
       prompt_message_id: promptMessageId,
@@ -663,24 +531,6 @@ export async function maybeStartDeliveryFormForCtx(args: {
  * Future improvement: a tiny `deliveryFormPending` table keyed by
  * `user_id` so a process restart can recover mid-flow.
  */
-async function seedDeliveryFormState(_args: {
-  telegramId: number;
-  orderId: number;
-  orderPublicId: string;
-  product: DBProduct;
-  promptChatId: number;
-  promptMessageId: number | undefined;
-  editMode: boolean;
-  prefill: Record<string, string>;
-}): Promise<void> {
-  // No external persistence yet — session-flow seed-on-next-message
-  // is enough for the wallet-pay path because the session is alive
-  // throughout. Direct-pay sets up the prompt but relies on the
-  // user's first reply triggering session middleware which assigns
-  // a fresh state.
-  return;
-}
-
 /**
  * Handle a single user message while `userFlow.type === 'delivery_form'`.
  *
@@ -713,6 +563,30 @@ export async function handleDeliveryFormMessage(ctx: AppCtx): Promise<boolean> {
     );
     return true;
   }
+  const values = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (field.per_unit && values.length !== flow.data.qty) {
+    await ctx.reply(
+      renderMdHtml(
+        `Please send exactly *${flow.data.qty} ${field.label}(s)*, one per line. You sent *${values.length}*.`,
+      ),
+      { parse_mode: 'HTML' },
+    );
+    return true;
+  }
+  if (field.type === 'email') {
+    const invalid = values.find((entry) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry));
+    if (invalid) {
+      await ctx.reply(
+        renderMdHtml(`*${invalid}* is not a valid email address. Please send it again.`),
+        { parse_mode: 'HTML' },
+      );
+      return true;
+    }
+  }
+  if (field.per_unit || field.type === 'email') value = values.join('\n');
   flow.data.collected[field.key] = value;
   flow.data.cursor += 1;
   // Auto-delete the user's typed answer so the chat stays clean —
@@ -731,6 +605,7 @@ export async function handleDeliveryFormMessage(ctx: AppCtx): Promise<boolean> {
       product_name: flow.data.product_name,
       fields: flow.data.fields,
       cursor: flow.data.cursor,
+      qty: flow.data.qty,
       existingMessageId: flow.data.prompt_message_id,
     });
     flow.data.prompt_message_id = nextMsgId;
@@ -752,7 +627,7 @@ export async function handleDeliveryFormMessage(ctx: AppCtx): Promise<boolean> {
     orderId: flow.data.order_id,
     orderPublicId: flow.data.order_public_id,
     product,
-    qty: 1,
+    qty: flow.data.qty,
     buyer: {
       telegram_id: ctx.user.telegram_id,
       first_name: ctx.user.first_name ?? null,
@@ -788,14 +663,15 @@ export async function startEditDelivery(args: {
   if (!submission) return false;
   const product = await getProduct(submission.product_id);
   if (!product) return false;
-  const publicId = await derivePublicOrderId(args.orderId);
+  const order = await getOrder(args.orderId);
+  const publicId = order ? await derivePublicOrderId(args.orderId) : String(args.orderId);
   try {
     return await maybeStartDeliveryFormForCtx({
       ctx: args.ctx,
       product,
       orderId: args.orderId,
       orderPublicId: publicId,
-      qty: 1,
+      qty: order?.qty ?? 1,
       editMode: true,
       prefill: submission.payload,
     });
@@ -812,9 +688,57 @@ export async function startEditDelivery(args: {
  * with the rest of the post-purchase code.
  */
 async function derivePublicOrderId(orderId: number): Promise<string> {
-  const { getOrder } = await import('../db/queries.js');
   const order = await getOrder(orderId);
   if (!order) return `${orderId}`;
   const { publicOrderId } = await import('./orderId.js');
   return publicOrderId(order);
+}
+
+export async function completeManualDelivery(args: {
+  api: Api;
+  submissionId: number;
+  adminId: number;
+}): Promise<{ ok: boolean; alreadyCompleted: boolean; buyerId?: number; productName?: string }> {
+  const submission = await getDeliverySubmissionById(args.submissionId);
+  if (!submission) return { ok: false, alreadyCompleted: false };
+  if (submission.status === 'completed') {
+    return {
+      ok: true,
+      alreadyCompleted: true,
+      buyerId: submission.user_id,
+    };
+  }
+  const product = await getProduct(submission.product_id);
+  const order = await getOrder(submission.order_id);
+  if (!product || !order) return { ok: false, alreadyCompleted: false };
+  const changed = await markDeliverySubmissionComplete(submission.id, args.adminId);
+  if (!changed) {
+    return {
+      ok: true,
+      alreadyCompleted: true,
+      buyerId: submission.user_id,
+      productName: product.name,
+    };
+  }
+  await setOrderDeliveredItems(order.id, 'Manual fulfillment completed by admin.');
+  const completion = product.delivery_completion_message?.trim();
+  const publicId = await derivePublicOrderId(order.id);
+  const template = completion && completion.length > 0
+    ? completion
+    : translate(env.DEFAULT_LANG, 'shop.delivery.completed.default', {
+        product_name: product.name,
+        order_id: publicId,
+      });
+  const body = template
+    .replace(/\{product_name\}/g, product.name)
+    .replace(/\{order_id\}/g, publicId);
+  await args.api.sendMessage(submission.user_id, renderMdHtml(body), {
+    parse_mode: 'HTML',
+  });
+  return {
+    ok: true,
+    alreadyCompleted: false,
+    buyerId: submission.user_id,
+    productName: product.name,
+  };
 }
