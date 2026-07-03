@@ -171,7 +171,7 @@ async function showProductGroup(ctx: AppCtx, categoryId: number): Promise<void> 
   const html = renderMdHtml(`*${titleEmoji}${category.name}*\n\nChoose a variant:`);
   await ctx.editMessageText(html, {
     parse_mode: 'HTML',
-    reply_markup: productVariantKeyboard(ctx.lang, rows),
+    reply_markup: productVariantKeyboard(ctx.lang, rows, ctx.user.currency ?? 'USDT'),
   });
 }
 

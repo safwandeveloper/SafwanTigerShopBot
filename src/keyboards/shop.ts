@@ -34,6 +34,23 @@ function premiumIconId(key: string): string | undefined {
   return typeof v === 'object' && v.custom_emoji_id ? v.custom_emoji_id : undefined;
 }
 
+const CE_BUTTON_MARKER_RX = /\{\{ce:([^|}\n]+)\|([^}\n]+)\}\}/;
+
+function buttonEmojiParts(text: string | null | undefined): {
+  iconId: string | undefined;
+  label: string;
+  fallback: string;
+} {
+  const raw = text ?? '';
+  const match = raw.match(CE_BUTTON_MARKER_RX);
+  if (!match) return { iconId: undefined, label: raw.trim(), fallback: '' };
+  return {
+    iconId: match[1]?.trim() || undefined,
+    fallback: match[2] ?? '',
+    label: raw.replace(CE_BUTTON_MARKER_RX, '').trim(),
+  };
+}
+
 /**
  * Top-level Shop home — paginated all-products list. The categories
  * step has been removed; tapping the Shop button drops the user
@@ -62,10 +79,14 @@ export function shopProductsKeyboard(
 
   products.forEach((entry) => {
     if (entry.kind === 'group') {
-      const stockLabel = entry.unlimited_stock ? '∞' : String(entry.stock);
-      const prefix = entry.emoji ? `${entry.emoji} ` : '';
-      const label = `${prefix}${entry.name} ▸ ${entry.count} plans (${formatPriceWithCurrency(entry.min_price, currency)}+)`.trim();
+      const emojiParts = buttonEmojiParts(entry.emoji);
+      const nameParts = buttonEmojiParts(entry.name);
+      const iconId = emojiParts.iconId ?? nameParts.iconId;
+      const prefix = iconId ? '' : (emojiParts.label || emojiParts.fallback ? `${emojiParts.label || emojiParts.fallback} ` : '');
+      const name = nameParts.label || nameParts.fallback || entry.name;
+      const label = `${prefix}${name} ▸ ${entry.count} plans (${formatPriceWithCurrency(entry.min_price, currency)}+)`.trim();
       kb.text(label, `grp:${entry.category_id}`);
+      if (iconId) kb.icon(iconId);
       const style = colorModeToStyle(entry.in_stock ? getStateColor('in_stock') : getStateColor('out_of_stock'));
       if (style !== undefined) kb.style(style);
       kb.row();
@@ -161,6 +182,7 @@ export function shopProductsKeyboard(
 export function productVariantKeyboard(
   lang: Lang,
   products: DBProduct[],
+  currency = 'USDT',
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
   const defaultInStockIcon = premiumIconId('orders_product');
@@ -171,7 +193,7 @@ export function productVariantKeyboard(
     const hasPremiumIcon = Boolean(p.emoji_id);
     const productEmoji = p.emoji === '🛒' ? '' : (p.emoji ?? '');
     const namePrefix = hasPremiumIcon ? '' : (productEmoji ? `${productEmoji} ` : '');
-    kb.text(`${namePrefix}${p.name} (${stockLabel})`.trim(), `prod:${p.id}`);
+    kb.text(`${namePrefix}${p.name} - ${formatPriceWithCurrency(p.price, currency)} (Stock: ${stockLabel})`.trim(), `prod:${p.id}`);
     const iconId = inStock ? p.emoji_id ?? defaultInStockIcon : p.emoji_id ?? oosIcon;
     if (iconId) kb.icon(iconId);
     const style = colorModeToStyle(inStock ? getStateColor('in_stock') : getStateColor('out_of_stock'));
