@@ -46,6 +46,7 @@ import {
   referKeyboard,
   whyEmailKeyboard,
   currencyKeyboard,
+  shopGroupModeKeyboard,
   shopListModeKeyboard,
 } from '../keyboards/profile.js';
 import { regionPickerKeyboard } from '../keyboards/region.js';
@@ -347,12 +348,8 @@ async function showCurrencyPicker(ctx: AppCtx, page = 0) {
 }
 
 async function showShopListMode(ctx: AppCtx) {
-  const [selected, groupMode] = await Promise.all([
-    getUserShopListMode(ctx.user.telegram_id),
-    getUserShopGroupMode(ctx.user.telegram_id),
-  ]);
+  const selected = await getUserShopListMode(ctx.user.telegram_id);
   const modeLabel = selected === 'all' ? 'All products list' : '10 per page';
-  const groupLabel = groupMode === 'grouped' ? 'Grouped plans' : 'Ungrouped products';
   const text = [
     ctx.t('profile.shop_view.title'),
     '',
@@ -360,15 +357,31 @@ async function showShopListMode(ctx: AppCtx) {
     '',
     ctx.t('profile.shop_view.paged'),
     ctx.t('profile.shop_view.all'),
+    '',
+    ctx.t('profile.shop_view.current', { mode: modeLabel }),
+  ].join('\n');
+  await ctx.editMessageText(renderMdHtml(text), {
+    parse_mode: 'HTML',
+    reply_markup: shopListModeKeyboard(ctx.lang, selected),
+  });
+}
+
+async function showShopGroupMode(ctx: AppCtx) {
+  const groupMode = await getUserShopGroupMode(ctx.user.telegram_id);
+  const groupLabel = groupMode === 'grouped' ? 'Grouped plans' : 'Ungrouped products';
+  const text = [
+    ctx.t('profile.shop_group.title'),
+    '',
+    ctx.t('profile.shop_group.body'),
+    '',
     ctx.t('profile.shop_view.grouped'),
     ctx.t('profile.shop_view.ungrouped'),
     '',
-    ctx.t('profile.shop_view.current', { mode: modeLabel }),
     ctx.t('profile.shop_view.group_current', { mode: groupLabel }),
   ].join('\n');
   await ctx.editMessageText(renderMdHtml(text), {
     parse_mode: 'HTML',
-    reply_markup: shopListModeKeyboard(ctx.lang, selected, groupMode),
+    reply_markup: shopGroupModeKeyboard(ctx.lang, groupMode),
   });
 }
 
@@ -645,13 +658,18 @@ export function registerProfile(bot: Composer<AppCtx>): void {
     await showShopListMode(ctx);
   });
 
+  bot.callbackQuery('profile:shopgroup', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await showShopGroupMode(ctx);
+  });
+
   bot.callbackQuery(/^profile:shopgroup:set:(grouped|ungrouped)$/, async (ctx) => {
     const mode = ctx.match[1] as 'grouped' | 'ungrouped';
     await setUserShopGroupMode(ctx.user.telegram_id, mode);
     await ctx.answerCallbackQuery({
       text: ctx.t(mode === 'grouped' ? 'profile.shop_view.saved.grouped' : 'profile.shop_view.saved.ungrouped'),
     });
-    await showShopListMode(ctx);
+    await showShopGroupMode(ctx);
   });
 
   bot.callbackQuery(/^profile:shopview:set:(paged|all)$/, async (ctx) => {
