@@ -24,6 +24,7 @@ import {
   findUserByUsername,
   getDeposit,
   getOrder,
+  getCategory,
   getProductSales,
   getProductSalesSince,
   getRangeStats,
@@ -2874,6 +2875,7 @@ async function showProductEditor(
     `🎨 Select Button Color: ${productColor ?? 'Default'}`,
     `adm:prod:color:${p.id}:${page}`,
   ).row();
+  kb.text('🗂 Group / Category', `adm:prod:cat:${p.id}:${page}`).row();
   kb.text('💰 Edit Price', `adm:prod:price:set:${p.id}:${page}`)
     .text('🔢 Edit Stock', `adm:prod:stock:set:${p.id}:${page}`)
     .text('🅰️ Edit Name', `adm:prod:name:set:${p.id}:${page}`)
@@ -2925,6 +2927,69 @@ async function showProductEditor(
 adminBot.callbackQuery(/^adm:prod:edit:(\d+):(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   await showProductEditor(ctx, Number(ctx.match[1]), Number(ctx.match[2]));
+});
+
+const CATEGORY_CE_MARKER_RX = /\{\{ce:([^|}\n]+)\|([^}\n]+)\}\}/;
+
+function cleanCategoryButtonText(text: string | null | undefined): string {
+  return (text ?? '').replace(CATEGORY_CE_MARKER_RX, '$2').trim();
+}
+
+async function showProductCategoryPicker(
+  ctx: AppCtx,
+  productId: number,
+  page: number,
+): Promise<void> {
+  const product = await getProduct(productId);
+  if (!product) {
+    await ctx.answerCallbackQuery({ text: 'Product not found.', show_alert: true });
+    return;
+  }
+  const cats = await listAllCategories();
+  const kb = new InlineKeyboard();
+  for (const c of cats) {
+    const emoji = cleanCategoryButtonText(c.emoji) || '🗂';
+    const name = cleanCategoryButtonText(c.name) || c.name;
+    const label = `${product.category_id === c.id ? '✓ ' : ''}${emoji} ${name}`.slice(0, 60);
+    kb.text(label, `adm:prod:cat:set:${productId}:${page}:${c.id}`);
+    const style = colorModeToStyle(getCategoryColor(c.id));
+    if (style !== undefined) kb.style(style);
+    kb.row();
+  }
+  kb.text('⬅️ Back to product', `adm:prod:edit:${productId}:${page}`);
+  await ctx.editMessageText(
+    [
+      '🗂 <b>Move Product To Group / Category</b>',
+      '',
+      `<b>Product:</b> ${escapeHtml(product.name)}`,
+      '',
+      'Pick the custom group/category where this product should appear.',
+      'Tip: category names like <b>Grok Super All Plans</b> show as one grouped button in Shop.',
+    ].join('\n'),
+    { parse_mode: 'HTML', reply_markup: kb },
+  );
+}
+
+adminBot.callbackQuery(/^adm:prod:cat:(\d+):(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await showProductCategoryPicker(ctx, Number(ctx.match[1]), Number(ctx.match[2]));
+});
+
+adminBot.callbackQuery(/^adm:prod:cat:set:(\d+):(\d+):(\d+)$/, async (ctx) => {
+  const productId = Number(ctx.match[1]);
+  const page = Number(ctx.match[2]);
+  const categoryId = Number(ctx.match[3]);
+  const category = await getCategory(categoryId);
+  if (!category) {
+    await ctx.answerCallbackQuery({ text: 'Category not found.', show_alert: true });
+    return;
+  }
+  await updateProduct(productId, { category_id: category.id });
+  cache.del('cats');
+  await ctx.answerCallbackQuery({
+    text: `Moved to ${cleanCategoryButtonText(category.name) || category.name}.`,
+  });
+  await showProductEditor(ctx, productId, page);
 });
 
 // --- Per-product catalog select-button color ---
@@ -7778,7 +7843,18 @@ adminBot.on('message:text', async (ctx, next) => {
           { parse_mode: 'Markdown', reply_markup: kb },
         );
       } else if (flow.step === 'emoji') {
-        const cat = await addCategory(flow.data.name, text);
+        const ent = ctx.message.entities?.find(
+          (e) => e.type === 'custom_emoji' && 'custom_emoji_id' in e,
+        ) as { offset: number; length: number; custom_emoji_id: string } | undefined;
+        const emoji = ent
+          ? `{{ce:${ent.custom_emoji_id.replace(/[|}\n]/g, '')}|${
+              text
+                .substring(ent.offset, ent.offset + ent.length)
+                .replace(/[|}\n]/g, '')
+                .trim() || text.slice(0, 4)
+            }}}`
+          : text;
+        const cat = await addCategory(flow.data.name, emoji);
         ctx.session.adminFlow = undefined;
         cache.del('cats');
         await ctx.reply(
