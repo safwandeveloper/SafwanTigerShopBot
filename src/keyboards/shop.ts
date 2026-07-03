@@ -10,6 +10,20 @@ import {
 } from '../services/settings.js';
 import type { DBProduct } from '../types.js';
 
+export type ShopProductRow =
+  | { kind: 'product'; product: DBProduct }
+  | {
+      kind: 'group';
+      category_id: number;
+      name: string;
+      emoji: string | null;
+      count: number;
+      stock: number;
+      unlimited_stock: boolean;
+      min_price: number;
+      in_stock: boolean;
+    };
+
 /**
  * Resolve the premium `custom_emoji_id` for the given EMOJI key.
  * Returns `undefined` when the key is absent or its value is plain
@@ -36,7 +50,7 @@ function premiumIconId(key: string): string | undefined {
  */
 export function shopProductsKeyboard(
   lang: Lang,
-  products: DBProduct[],
+  products: ShopProductRow[],
   page: number,
   totalPages: number,
   currency = 'USDT',
@@ -46,7 +60,18 @@ export function shopProductsKeyboard(
   const defaultInStockIcon = premiumIconId('orders_product');
   const oosIcon = premiumIconId('gift_invalid');
 
-  products.forEach((p) => {
+  products.forEach((entry) => {
+    if (entry.kind === 'group') {
+      const stockLabel = entry.unlimited_stock ? '∞' : String(entry.stock);
+      const prefix = entry.emoji ? `${entry.emoji} ` : '';
+      const label = `${prefix}${entry.name} ▸ ${entry.count} plans (${formatPriceWithCurrency(entry.min_price, currency)}+)`.trim();
+      kb.text(label, `grp:${entry.category_id}`);
+      const style = colorModeToStyle(entry.in_stock ? getStateColor('in_stock') : getStateColor('out_of_stock'));
+      if (style !== undefined) kb.style(style);
+      kb.row();
+      return;
+    }
+    const p = entry.product;
     const inStock = p.unlimited_stock || p.stock > 0;
     // Stock label format matches pic 1: `(Stock: ∞)` for unlimited
     // products, otherwise `(Stock: N)` with the actual count.
@@ -82,8 +107,6 @@ export function shopProductsKeyboard(
       : getStateColor('out_of_stock');
     const style = colorModeToStyle(mode);
     if (style !== undefined) kb.style(style);
-    kb.row();
-    // Add blank space between products
     kb.row();
   });
 
@@ -132,6 +155,30 @@ export function shopProductsKeyboard(
   }
   // Bottom row: full-width Back, like the old layout used to be.
   inlineBtn(kb, lang, 'back', 'main:open');
+  return kb;
+}
+
+export function productVariantKeyboard(
+  lang: Lang,
+  products: DBProduct[],
+): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  const defaultInStockIcon = premiumIconId('orders_product');
+  const oosIcon = premiumIconId('gift_invalid');
+  for (const p of products) {
+    const inStock = p.unlimited_stock || p.stock > 0;
+    const stockLabel = p.unlimited_stock ? '∞' : String(p.stock);
+    const hasPremiumIcon = Boolean(p.emoji_id);
+    const productEmoji = p.emoji === '🛒' ? '' : (p.emoji ?? '');
+    const namePrefix = hasPremiumIcon ? '' : (productEmoji ? `${productEmoji} ` : '');
+    kb.text(`${namePrefix}${p.name} (${stockLabel})`.trim(), `prod:${p.id}`);
+    const iconId = inStock ? p.emoji_id ?? defaultInStockIcon : p.emoji_id ?? oosIcon;
+    if (iconId) kb.icon(iconId);
+    const style = colorModeToStyle(inStock ? getStateColor('in_stock') : getStateColor('out_of_stock'));
+    if (style !== undefined) kb.style(style);
+    kb.row();
+  }
+  inlineBtn(kb, lang, 'back', 'shop:home');
   return kb;
 }
 

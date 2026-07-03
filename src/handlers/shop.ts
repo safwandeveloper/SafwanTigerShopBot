@@ -15,6 +15,7 @@ import {
   getOrder,
   getReferralBalance,
   InsufficientReferralBalanceError,
+  listCategories,
   listActiveProducts,
   claimProductItems,
   spendReferralBalance,
@@ -31,12 +32,14 @@ import {
   resolvePromo,
   type PromoMatch,
 } from '../services/promo.js';
-import type { DBPromo } from '../types.js';
+import type { DBProduct, DBPromo } from '../types.js';
 import { charge } from '../services/wallet.js';
 import {
   paymentMethodKeyboard,
+  productVariantKeyboard,
   productKeyboard,
   qtyKeypadKeyboard,
+  type ShopProductRow,
   shopProductsKeyboard,
 } from '../keyboards/shop.js';
 import { inlineBtn } from '../keyboards/helpers.js';
@@ -72,13 +75,60 @@ import {
  * `Available Products:` header and a Prev / Refresh / Next / Back
  * footer.
  */
+function categoryCanGroup(name: string): boolean {
+  return /\b(all|plans?|subscription|bundle|variants?|section)\b/i.test(name);
+}
+
+function buildShopRows(
+  products: DBProduct[],
+  categories: Array<{ id: number; name: string; emoji: string | null }>,
+): ShopProductRow[] {
+  const catById = new Map(categories.map((c) => [c.id, c]));
+  const byCat = new Map<number, DBProduct[]>();
+  for (const p of products) {
+    if (p.category_id == null) continue;
+    const list = byCat.get(p.category_id) ?? [];
+    list.push(p);
+    byCat.set(p.category_id, list);
+  }
+  const groupedCats = new Set<number>();
+  for (const [catId, rows] of byCat) {
+    const cat = catById.get(catId);
+    if (cat && rows.length >= 2 && categoryCanGroup(cat.name)) groupedCats.add(catId);
+  }
+
+  const out: ShopProductRow[] = [];
+  for (const p of products) {
+    if (p.category_id != null && groupedCats.has(p.category_id)) {
+      if (out.some((row) => row.kind === 'group' && row.category_id === p.category_id)) continue;
+      const cat = catById.get(p.category_id);
+      const rows = byCat.get(p.category_id) ?? [];
+      const inStockRows = rows.filter((row) => row.unlimited_stock || row.stock > 0);
+      out.push({
+        kind: 'group',
+        category_id: p.category_id,
+        name: cat?.name ?? p.name,
+        emoji: cat?.emoji ?? p.emoji,
+        count: rows.length,
+        stock: rows.reduce((sum, row) => sum + (row.unlimited_stock ? 0 : Math.max(0, row.stock)), 0),
+        unlimited_stock: rows.some((row) => row.unlimited_stock),
+        min_price: Math.min(...rows.map((row) => Number(row.price))),
+        in_stock: inStockRows.length > 0,
+      });
+      continue;
+    }
+    out.push({ kind: 'product', product: p });
+  }
+  return out;
+}
+
 async function showShopHome(ctx: AppCtx, page = 0) {
-  const { rows: rawRows, total } = await listActiveProducts(page, PRODUCTS_PER_PAGE);
+  const { rows: rawRows, total: rawTotal } = await listActiveProducts(0, 10000);
   // Layer per-user price overrides onto the catalog rows before we
   // build the keyboard so the price embedded in each button label
   // matches what the user will actually be charged.
   const rows = await applyUserPriceToProducts(ctx.user.telegram_id, rawRows);
-  if (total === 0) {
+  if (rawTotal === 0) {
     const empty = renderMdHtml(ctx.t('shop.empty_products'));
     if (ctx.callbackQuery) {
       await ctx.editMessageText(empty, { parse_mode: 'HTML' });
@@ -87,18 +137,42 @@ async function showShopHome(ctx: AppCtx, page = 0) {
     }
     return;
   }
+  const categories = await listCategories();
+  const shopRows = buildShopRows(rows, categories);
+  const total = shopRows.length;
   const totalPages = Math.max(1, Math.ceil(total / PRODUCTS_PER_PAGE));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
+  const pageRows = shopRows.slice(safePage * PRODUCTS_PER_PAGE, (safePage + 1) * PRODUCTS_PER_PAGE);
   // Header is the single bold line `Available Products:` — page /
   // total counts live in the keyboard footer where they don't
   // clutter the body copy.
   const html = renderMdHtml(ctx.t('shop.home.header'));
-  const kb = shopProductsKeyboard(ctx.lang, rows, safePage, totalPages, ctx.user.currency ?? 'USDT');
+  const kb = shopProductsKeyboard(ctx.lang, pageRows, safePage, totalPages, ctx.user.currency ?? 'USDT');
   if (ctx.callbackQuery) {
     await ctx.editMessageText(html, { parse_mode: 'HTML', reply_markup: kb });
   } else {
     await ctx.reply(html, { parse_mode: 'HTML', reply_markup: kb });
   }
+}
+
+async function showProductGroup(ctx: AppCtx, categoryId: number): Promise<void> {
+  const [categories, { rows: rawRows }] = await Promise.all([
+    listCategories(),
+    listActiveProducts(0, 10000),
+  ]);
+  const category = categories.find((c) => c.id === categoryId) ?? null;
+  const filtered = rawRows.filter((p) => p.category_id === categoryId);
+  if (!category || filtered.length === 0) {
+    await ctx.editMessageText(renderMdHtml(ctx.t('shop.empty_products')), { parse_mode: 'HTML' });
+    return;
+  }
+  const rows = await applyUserPriceToProducts(ctx.user.telegram_id, filtered);
+  const titleEmoji = category.emoji ? `${category.emoji} ` : '';
+  const html = renderMdHtml(`*${titleEmoji}${category.name}*\n\nChoose a variant:`);
+  await ctx.editMessageText(html, {
+    parse_mode: 'HTML',
+    reply_markup: productVariantKeyboard(ctx.lang, rows),
+  });
 }
 
 const STORED_HTML_RX =
@@ -770,12 +844,17 @@ export function registerShop(bot: Composer<AppCtx>): void {
     await showShopHome(ctx, Number(ctx.match[1]));
   });
 
+  bot.callbackQuery(/^grp:(\d+)$/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await showProductGroup(ctx, Number(ctx.match[1]));
+  });
+
   // Legacy category callbacks (`cat:<id>:<page>`) from older
   // messages still in users' chat histories — redirect to the new
   // all-products home so taps don't appear hung.
   bot.callbackQuery(/^cat:(\d+):(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await showShopHome(ctx, 0);
+    await showProductGroup(ctx, Number(ctx.match[1]));
   });
 
   bot.callbackQuery(/^prod:(\d+)$/, async (ctx) => {
