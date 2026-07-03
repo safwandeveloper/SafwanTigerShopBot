@@ -13,6 +13,7 @@ import {
   decrementProductStock,
   getProduct,
   getOrder,
+  getUserShopListMode,
   getReferralBalance,
   InsufficientReferralBalanceError,
   listCategories,
@@ -139,15 +140,19 @@ async function showShopHome(ctx: AppCtx, page = 0) {
   }
   const categories = await listCategories();
   const shopRows = buildShopRows(rows, categories);
+  const listMode = await getUserShopListMode(ctx.user.telegram_id);
+  const allMode = listMode === 'all';
   const total = shopRows.length;
   const totalPages = Math.max(1, Math.ceil(total / PRODUCTS_PER_PAGE));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
-  const pageRows = shopRows.slice(safePage * PRODUCTS_PER_PAGE, (safePage + 1) * PRODUCTS_PER_PAGE);
+  const pageRows = allMode
+    ? shopRows.slice(0, 95)
+    : shopRows.slice(safePage * PRODUCTS_PER_PAGE, (safePage + 1) * PRODUCTS_PER_PAGE);
   // Header is the single bold line `Available Products:` — page /
   // total counts live in the keyboard footer where they don't
   // clutter the body copy.
   const html = renderMdHtml(ctx.t('shop.home.header'));
-  const kb = shopProductsKeyboard(ctx.lang, pageRows, safePage, totalPages, ctx.user.currency ?? 'USDT');
+  const kb = shopProductsKeyboard(ctx.lang, pageRows, safePage, totalPages, ctx.user.currency ?? 'USDT', { allMode });
   if (ctx.callbackQuery) {
     await ctx.editMessageText(html, { parse_mode: 'HTML', reply_markup: kb });
   } else {

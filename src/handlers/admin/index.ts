@@ -1109,6 +1109,15 @@ function supplierImportCategory(source: DBSupplierApiSource): string {
   return source.import_category_name || `Supplier - ${source.name}`;
 }
 
+function supplierImportUsesGroupCategory(source: DBSupplierApiSource): boolean {
+  return /\b(all|plans?|subscription|bundle|variants?|section)\b/i.test(supplierImportCategory(source));
+}
+
+function supplierGroupCategoryName(source: DBSupplierApiSource): string {
+  const current = supplierImportCategory(source).replace(/\s+(all\s+plans|plans?|all|subscription|bundle|variants?|section)\s*$/i, '').trim();
+  return `${current || source.name} All Plans`;
+}
+
 async function supplierProductAt(
   source: DBSupplierApiSource,
   mode: SupplierCatalogMode,
@@ -1302,6 +1311,9 @@ function supplierDetailKeyboard(source: DBSupplierApiSource): InlineKeyboard {
   apiPremiumButton(kb, source.auto_import_new_products ? 'stats_refresh' : 'orders_note', source.auto_import_new_products ? 'success' : 'danger');
   kb.text(source.auto_import_active ? 'New Visible: ON' : 'New Visible: OFF', `adm:api:supplier:autoactive:${id}`);
   apiPremiumButton(kb, source.auto_import_active ? 'api_key' : 'orders_note', source.auto_import_active ? 'success' : 'danger');
+  kb.row();
+  kb.text(supplierImportUsesGroupCategory(source) ? 'Group Category: ON' : 'Group Category: OFF', `adm:api:supplier:groupcat:${id}`);
+  apiPremiumButton(kb, supplierImportUsesGroupCategory(source) ? 'api_key' : 'orders_note', supplierImportUsesGroupCategory(source) ? 'success' : 'primary');
   kb.row();
   kb.text('Test Connection', `adm:api:supplier:test:${id}`);
   apiPremiumButton(kb, 'stats_refresh', 'primary');
@@ -1929,6 +1941,22 @@ adminBot.callbackQuery(/^adm:api:supplier:autoactive:(\d+)$/, async (ctx) => {
     await updateSupplierApiSource(supplierId, {
       auto_import_active: !source.auto_import_active,
     });
+    await showSupplierDetail(ctx, supplierId);
+  } catch (err) {
+    await showSupplierError(ctx, err);
+  }
+});
+
+adminBot.callbackQuery(/^adm:api:supplier:groupcat:(\d+)$/, async (ctx) => {
+  const supplierId = Number(ctx.match[1]);
+  await ctx.answerCallbackQuery({ text: 'Updating import category...' });
+  try {
+    const source = await getSupplierApiSource(supplierId);
+    if (!source) return;
+    const nextName = supplierImportUsesGroupCategory(source)
+      ? `Supplier - ${source.name}`
+      : supplierGroupCategoryName(source);
+    await updateSupplierApiSource(supplierId, { import_category_name: nextName });
     await showSupplierDetail(ctx, supplierId);
   } catch (err) {
     await showSupplierError(ctx, err);

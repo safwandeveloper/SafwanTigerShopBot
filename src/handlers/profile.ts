@@ -22,6 +22,8 @@ import {
   recordLedger,
   setUserEmail,
   setUserCurrency,
+  getUserShopListMode,
+  setUserShopListMode,
   setUserLanguage,
   setUserRegion,
   toggleEmailReports,
@@ -42,6 +44,7 @@ import {
   referKeyboard,
   whyEmailKeyboard,
   currencyKeyboard,
+  shopListModeKeyboard,
 } from '../keyboards/profile.js';
 import { regionPickerKeyboard } from '../keyboards/region.js';
 import { ordersListKeyboard, orderDetailKeyboard, ORDERS_PER_PAGE } from '../keyboards/orders.js';
@@ -341,6 +344,24 @@ async function showCurrencyPicker(ctx: AppCtx, page = 0) {
   });
 }
 
+async function showShopListMode(ctx: AppCtx) {
+  const selected = await getUserShopListMode(ctx.user.telegram_id);
+  const text = [
+    '🛍 *Shop View Style*',
+    '',
+    'Choose how product buttons are shown in your Shop.',
+    '',
+    '*10 per page* = old default with Next/Prev.',
+    '*All products list* = one long list with only Refresh + Back.',
+    '',
+    `Current: *${selected === 'all' ? 'All products list' : '10 per page'}*`,
+  ].join('\n');
+  await ctx.editMessageText(renderMdHtml(text), {
+    parse_mode: 'HTML',
+    reply_markup: shopListModeKeyboard(ctx.lang, selected),
+  });
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
@@ -607,6 +628,20 @@ export function registerProfile(bot: Composer<AppCtx>): void {
   bot.callbackQuery('profile:currency', async (ctx) => {
     await ctx.answerCallbackQuery();
     await showCurrencyPicker(ctx);
+  });
+
+  bot.callbackQuery('profile:shopview', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await showShopListMode(ctx);
+  });
+
+  bot.callbackQuery(/^profile:shopview:set:(paged|all)$/, async (ctx) => {
+    const mode = ctx.match[1] as 'paged' | 'all';
+    await setUserShopListMode(ctx.user.telegram_id, mode);
+    await ctx.answerCallbackQuery({
+      text: mode === 'all' ? 'Shop view set to all products.' : 'Shop view set to 10 per page.',
+    });
+    await showShopListMode(ctx);
   });
 
   bot.callbackQuery(/^profile:currency:p:(\d+)$/, async (ctx) => {

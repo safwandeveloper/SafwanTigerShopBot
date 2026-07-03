@@ -2685,6 +2685,20 @@ export async function readSetting(key: string): Promise<unknown> {
   return (data as { value: unknown } | null)?.value ?? null;
 }
 
+export type ShopListMode = 'paged' | 'all';
+
+export async function getUserShopListMode(telegram_id: number): Promise<ShopListMode> {
+  const value = await readSetting(`user.${telegram_id}.shop_list_mode`);
+  return value === 'all' ? 'all' : 'paged';
+}
+
+export async function setUserShopListMode(
+  telegram_id: number,
+  mode: ShopListMode,
+): Promise<void> {
+  await setSetting(`user.${telegram_id}.shop_list_mode`, mode, telegram_id);
+}
+
 /** Hard-delete a settings row (for clearing state like Live Support). */
 export async function deleteSetting(key: string): Promise<void> {
   await supabase.from('settings').delete().eq('key', key);

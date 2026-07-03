@@ -71,6 +71,7 @@ export function shopProductsKeyboard(
   page: number,
   totalPages: number,
   currency = 'USDT',
+  opts: { allMode?: boolean } = {},
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
 
@@ -144,6 +145,13 @@ export function shopProductsKeyboard(
   //  • Single page →  [Refresh]    [1/1]
   //
   //  Bottom row, every case: [Back] (full width).
+  if (opts.allMode) {
+    inlineBtn(kb, lang, 'refresh', 'shop:p:0');
+    kb.row();
+    inlineBtn(kb, lang, 'back', 'main:open');
+    return kb;
+  }
+
   const hasPrev = page > 0;
   const hasNext = page + 1 < totalPages;
   const indicator = `${page + 1}/${totalPages}`;
