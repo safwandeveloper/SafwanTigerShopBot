@@ -29,6 +29,7 @@ import {
   getRangeStats,
   getStats,
   getUserOrderSummary,
+  getOrCreateCategory,
   isAdmin,
   listAllOrders,
   listOrdersForProduct,
@@ -1956,7 +1957,21 @@ adminBot.callbackQuery(/^adm:api:supplier:groupcat:(\d+)$/, async (ctx) => {
     const nextName = supplierImportUsesGroupCategory(source)
       ? `Supplier - ${source.name}`
       : supplierGroupCategoryName(source);
+    const category = await getOrCreateCategory(nextName);
+    const links = await listSupplierProductLinks(source.id);
     await updateSupplierApiSource(supplierId, { import_category_name: nextName });
+    for (const link of links) {
+      await updateProduct(link.local_product_id, { category_id: category.id });
+    }
+    await ctx.reply(
+      [
+        '✅ Supplier group category updated.',
+        '',
+        `Category: *${nextName}*`,
+        `Moved linked products: *${links.length}*`,
+      ].join('\n'),
+      { parse_mode: 'Markdown' },
+    );
     await showSupplierDetail(ctx, supplierId);
   } catch (err) {
     await showSupplierError(ctx, err);

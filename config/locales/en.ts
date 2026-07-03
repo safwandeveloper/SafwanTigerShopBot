@@ -1,4 +1,4 @@
-/* English (default) — edit text here. */
+﻿/* English (default) — edit text here. */
 export const en: Record<string, string> = {
   // ---------- Welcome / menu ----------
   'welcome': 'Welcome to SafwanTiger Shop',
@@ -764,6 +764,9 @@ export const en: Record<string, string> = {
   'btn.copy_link': '📋 Copy Link',
   'btn.live_refers': '🔵 See Your Live Refers',
   'btn.currency': '💱 Currency',
+  'btn.shop_view': '🛍 Shop View',
+  'btn.shop_view_paged': '🧾 10 per page',
+  'btn.shop_view_all': '📦 All products list',
   'btn.stats.24h': '24h',
   'btn.stats.7d': '7d',
   'btn.stats.30d': '30d',
@@ -774,6 +777,13 @@ export const en: Record<string, string> = {
   'profile.currency.saved': '✅ Currency set to {currency}.',
   'profile.currency.error':
     '⚠️ Could not save currency yet. Please apply migration `0033_user_currency.sql` first.',
+  'profile.shop_view.title': '{broadcast_shop_now} *Shop View Style*',
+  'profile.shop_view.body': 'Choose how product buttons are shown in your Shop.',
+  'profile.shop_view.paged': '{orders_title} *10 per page* = old default with Next/Prev.',
+  'profile.shop_view.all': '{orders_product} *All products list* = one long list with only Refresh + Back.',
+  'profile.shop_view.current': 'Current: *{mode}*',
+  'profile.shop_view.saved.paged': 'Shop view set to 10 per page.',
+  'profile.shop_view.saved.all': 'Shop view set to all products.',
   'profile.orders.empty': 'You have no orders yet.',
   'profile.orders.title': '🧾 *My Orders*',
   'profile.orders.line': '#{id} • {name} ×{qty} • {total} • {date}',

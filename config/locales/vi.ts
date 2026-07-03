@@ -187,8 +187,6 @@ export const vi: Record<string, string> = {
     '❌ Số dư ví không đủ. Cần *{need}* nhưng chỉ có *{have}*. Vui lòng nạp tiền trước.',
   'shop.buy.no_stock': '❌ Xin lỗi, sản phẩm đã hết hàng.',
   'shop.referral.disabled': '❌ Referral Pay chưa được bật cho sản phẩm này.',
-  'shop.referral.fraud_blocked':
-    '⛔ Referral Pay bị chặn.\n\nTài khoản của bạn bị đánh dấu vì hoạt động giới thiệu đáng ngờ. Vui lòng liên hệ hỗ trợ để được xem xét.',
   'shop.referral.already_redeemed': '✅ Referral Pay đã được dùng cho một đơn cũ.',
   'shop.referral.insufficient':
     '❌ Cần {required} lượt giới thiệu để đổi. Bạn có {total} (còn {remaining}).',
@@ -242,7 +240,7 @@ export const vi: Record<string, string> = {
   // Màn hình Giới thiệu & Kiếm.
   'profile.refer.title': '{refer_title} *Giới thiệu & Kiếm*',
   'profile.refer.body':
-    '{refer_prize_l} *Giới thiệu 10 người và thắng $0.10* {refer_prize_r}\n\n' +
+    '{refer_prize_l} *Giới thiệu 10 người và thắng $0.50* {refer_prize_r}\n\n' +
     '{refer_clicks} *Clicks:* {clicks}\n' +
     '{refer_pending} *Pending:* {pending}\n' +
     '{refer_active} *Active:* {active}\n' +
@@ -257,13 +255,14 @@ export const vi: Record<string, string> = {
   'profile.refer.convert_success':
     '💱 Đã đổi *{refs} refs* thành *{amount} USDT*.\n\n💳 Số dư ví: *{balance}*',
   'profile.refer.convert_low':
-    '⚠️ Không đủ refs để đổi.\n\nBạn cần *50 refs hoạt động* để đổi thành *$0.50 USDT*.\nSố dư Referral Pay hiện tại: *{available} refs*',
+    '⚠️ Không đủ refs để đổi.\n\nBạn cần *20 refs hoạt động* để đổi thành *1 USDT*.\nSố dư Referral Pay hiện tại: *{available} refs*',
   'profile.refer.convert_error':
     '⚠️ Không thể đổi refs lúc này. Vui lòng thử lại.',
-  'profile.refer.convert_fraud_blocked':
-    '⛔ Chuyển đổi bị chặn.\n\nTài khoản của bạn bị đánh dấu vì hoạt động giới thiệu đáng ngờ. Vui lòng liên hệ hỗ trợ để được xem xét.',
   'btn.live_refers': '🔵 See Your Live Refers',
   'btn.currency': '💱 Currency',
+  'btn.shop_view': '🛍 Shop View',
+  'btn.shop_view_paged': '🧾 10 per page',
+  'btn.shop_view_all': '📦 All products list',
   'btn.stats.24h': '24h',
   'btn.stats.7d': '7d',
   'btn.stats.30d': '30d',
@@ -274,6 +273,13 @@ export const vi: Record<string, string> = {
   'profile.currency.saved': '✅ Currency set to {currency}.',
   'profile.currency.error':
     '⚠️ Could not save currency yet. Please apply migration `0033_user_currency.sql` first.',
+  'profile.shop_view.title': '{broadcast_shop_now} *Shop View Style*',
+  'profile.shop_view.body': 'Choose how product buttons are shown in your Shop.',
+  'profile.shop_view.paged': '{orders_title} *10 per page* = old default with Next/Prev.',
+  'profile.shop_view.all': '{orders_product} *All products list* = one long list with only Refresh + Back.',
+  'profile.shop_view.current': 'Current: *{mode}*',
+  'profile.shop_view.saved.paged': 'Shop view set to 10 per page.',
+  'profile.shop_view.saved.all': 'Shop view set to all products.',
   'btn.copy_link': '📋 Sao chép',
   'btn.redeem': '🎁 Mã quà tặng',
   'profile.language.title': '{lang_left} *Chọn ngôn ngữ* {lang_right}',

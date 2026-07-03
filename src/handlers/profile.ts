@@ -346,15 +346,16 @@ async function showCurrencyPicker(ctx: AppCtx, page = 0) {
 
 async function showShopListMode(ctx: AppCtx) {
   const selected = await getUserShopListMode(ctx.user.telegram_id);
+  const modeLabel = selected === 'all' ? 'All products list' : '10 per page';
   const text = [
-    '🛍 *Shop View Style*',
+    ctx.t('profile.shop_view.title'),
     '',
-    'Choose how product buttons are shown in your Shop.',
+    ctx.t('profile.shop_view.body'),
     '',
-    '*10 per page* = old default with Next/Prev.',
-    '*All products list* = one long list with only Refresh + Back.',
+    ctx.t('profile.shop_view.paged'),
+    ctx.t('profile.shop_view.all'),
     '',
-    `Current: *${selected === 'all' ? 'All products list' : '10 per page'}*`,
+    ctx.t('profile.shop_view.current', { mode: modeLabel }),
   ].join('\n');
   await ctx.editMessageText(renderMdHtml(text), {
     parse_mode: 'HTML',
@@ -639,7 +640,7 @@ export function registerProfile(bot: Composer<AppCtx>): void {
     const mode = ctx.match[1] as 'paged' | 'all';
     await setUserShopListMode(ctx.user.telegram_id, mode);
     await ctx.answerCallbackQuery({
-      text: mode === 'all' ? 'Shop view set to all products.' : 'Shop view set to 10 per page.',
+      text: ctx.t(mode === 'all' ? 'profile.shop_view.saved.all' : 'profile.shop_view.saved.paged'),
     });
     await showShopListMode(ctx);
   });

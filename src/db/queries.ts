@@ -723,6 +723,7 @@ export async function updateProduct(
   id: number,
   patch: Partial<{
     name: string;
+    category_id: number | null;
     price: number;
     stock: number;
     referral_required_count: number;
@@ -3092,12 +3093,12 @@ export async function listActiveProducts(
     return { rows: [], total: 0 };
   }
   const all = ((data ?? []) as DBProduct[]).sort((a, b) => {
-    const aInStock = a.unlimited_stock || a.stock > 0;
-    const bInStock = b.unlimited_stock || b.stock > 0;
-    if (aInStock !== bInStock) return aInStock ? -1 : 1;
     if (Boolean(a.is_pinned) !== Boolean(b.is_pinned)) {
       return a.is_pinned ? -1 : 1;
     }
+    const aInStock = a.unlimited_stock || a.stock > 0;
+    const bInStock = b.unlimited_stock || b.stock > 0;
+    if (aInStock !== bInStock) return aInStock ? -1 : 1;
     if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
     return a.id - b.id;
   });

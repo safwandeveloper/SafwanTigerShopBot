@@ -37,7 +37,7 @@ export function profileKeyboard(lang: Lang): InlineKeyboard {
   inlineBtn(kb, lang, 'currency', 'profile:currency');
   inlineBtn(kb, lang, 'reseller_api', 'api:open');
   kb.row();
-  kb.text('🛍 Shop View', 'profile:shopview');
+  inlineBtn(kb, lang, 'shop_view', 'profile:shopview');
   kb.row();
   inlineBtn(kb, lang, 'back', 'main:open');
   return kb;
@@ -48,10 +48,10 @@ export function shopListModeKeyboard(
   selected: 'paged' | 'all',
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
-  kb.text(`${selected === 'paged' ? '✅ ' : ''}10 per page`, 'profile:shopview:set:paged');
+  inlineBtn(kb, lang, 'shop_view_paged', 'profile:shopview:set:paged');
   kb.style(selected === 'paged' ? 'success' : 'primary');
   kb.row();
-  kb.text(`${selected === 'all' ? '✅ ' : ''}All products list`, 'profile:shopview:set:all');
+  inlineBtn(kb, lang, 'shop_view_all', 'profile:shopview:set:all');
   kb.style(selected === 'all' ? 'success' : 'primary');
   kb.row();
   inlineBtn(kb, lang, 'back_to_settings', 'profile:open');

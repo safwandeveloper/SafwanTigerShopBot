@@ -115,6 +115,9 @@ export const BUTTON_KEYS = {
   set_region: 'btn.set_region',
   set_email: 'btn.set_email',
   currency: 'btn.currency',
+  shop_view: 'btn.shop_view',
+  shop_view_paged: 'btn.shop_view_paged',
+  shop_view_all: 'btn.shop_view_all',
 
   // ---- Email hub & sub-screens ---------------------------------
   email_settings: 'btn.email.settings',
@@ -313,6 +316,9 @@ export const DEFAULT_BUTTON_COLORS: Record<keyof typeof BUTTON_KEYS, ColorMode> 
   set_region: 'none',
   set_email: 'none',
   currency: 'blue',
+  shop_view: 'blue',
+  shop_view_paged: 'blue',
+  shop_view_all: 'blue',
 
   // Email hub: Set/Change blue, Delete red, Why neutral.
   email_settings: 'none',
@@ -821,6 +827,9 @@ export const BUTTON_ICONS: Partial<Record<keyof typeof BUTTON_KEYS, string>> = {
   set_region: 'profile_region',
   set_email: 'profile_email',
   currency: 'refer_coin',
+  shop_view: 'broadcast_shop_now',
+  shop_view_paged: 'orders_title',
+  shop_view_all: 'orders_product',
   reseller_api: 'api_key',
 
   // Email hub & sub-screens
