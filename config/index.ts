@@ -118,6 +118,8 @@ export const BUTTON_KEYS = {
   shop_view: 'btn.shop_view',
   shop_view_paged: 'btn.shop_view_paged',
   shop_view_all: 'btn.shop_view_all',
+  shop_grouped: 'btn.shop_grouped',
+  shop_ungrouped: 'btn.shop_ungrouped',
 
   // ---- Email hub & sub-screens ---------------------------------
   email_settings: 'btn.email.settings',
@@ -319,6 +321,8 @@ export const DEFAULT_BUTTON_COLORS: Record<keyof typeof BUTTON_KEYS, ColorMode> 
   shop_view: 'blue',
   shop_view_paged: 'blue',
   shop_view_all: 'blue',
+  shop_grouped: 'green',
+  shop_ungrouped: 'blue',
 
   // Email hub: Set/Change blue, Delete red, Why neutral.
   email_settings: 'none',
@@ -830,6 +834,8 @@ export const BUTTON_ICONS: Partial<Record<keyof typeof BUTTON_KEYS, string>> = {
   shop_view: 'broadcast_shop_now',
   shop_view_paged: 'orders_title',
   shop_view_all: 'orders_product',
+  shop_grouped: 'prod_promo',
+  shop_ungrouped: 'orders_product',
   reseller_api: 'api_key',
 
   // Email hub & sub-screens

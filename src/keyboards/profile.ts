@@ -46,6 +46,7 @@ export function profileKeyboard(lang: Lang): InlineKeyboard {
 export function shopListModeKeyboard(
   lang: Lang,
   selected: 'paged' | 'all',
+  groupMode: 'grouped' | 'ungrouped',
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
   inlineBtn(kb, lang, 'shop_view_paged', 'profile:shopview:set:paged');
@@ -53,6 +54,12 @@ export function shopListModeKeyboard(
   kb.row();
   inlineBtn(kb, lang, 'shop_view_all', 'profile:shopview:set:all');
   kb.style(selected === 'all' ? 'success' : 'primary');
+  kb.row();
+  inlineBtn(kb, lang, 'shop_grouped', 'profile:shopgroup:set:grouped');
+  kb.style(groupMode === 'grouped' ? 'success' : 'primary');
+  kb.row();
+  inlineBtn(kb, lang, 'shop_ungrouped', 'profile:shopgroup:set:ungrouped');
+  kb.style(groupMode === 'ungrouped' ? 'success' : 'primary');
   kb.row();
   inlineBtn(kb, lang, 'back_to_settings', 'profile:open');
   return kb;

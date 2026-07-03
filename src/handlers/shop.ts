@@ -13,6 +13,7 @@ import {
   decrementProductStock,
   getProduct,
   getOrder,
+  getUserShopGroupMode,
   getUserShopListMode,
   getReferralBalance,
   InsufficientReferralBalanceError,
@@ -83,7 +84,9 @@ function categoryCanGroup(name: string): boolean {
 function buildShopRows(
   products: DBProduct[],
   categories: Array<{ id: number; name: string; emoji: string | null }>,
+  grouped = true,
 ): ShopProductRow[] {
+  if (!grouped) return products.map((product) => ({ kind: 'product', product }));
   const catById = new Map(categories.map((c) => [c.id, c]));
   const byCat = new Map<number, DBProduct[]>();
   for (const p of products) {
@@ -139,8 +142,11 @@ async function showShopHome(ctx: AppCtx, page = 0) {
     return;
   }
   const categories = await listCategories();
-  const shopRows = buildShopRows(rows, categories);
-  const listMode = await getUserShopListMode(ctx.user.telegram_id);
+  const [listMode, groupMode] = await Promise.all([
+    getUserShopListMode(ctx.user.telegram_id),
+    getUserShopGroupMode(ctx.user.telegram_id),
+  ]);
+  const shopRows = buildShopRows(rows, categories, groupMode === 'grouped');
   const allMode = listMode === 'all';
   const total = shopRows.length;
   const totalPages = Math.max(1, Math.ceil(total / PRODUCTS_PER_PAGE));

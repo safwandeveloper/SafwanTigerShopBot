@@ -2687,6 +2687,7 @@ export async function readSetting(key: string): Promise<unknown> {
 }
 
 export type ShopListMode = 'paged' | 'all';
+export type ShopGroupMode = 'grouped' | 'ungrouped';
 
 export async function getUserShopListMode(telegram_id: number): Promise<ShopListMode> {
   const value = await readSetting(`user.${telegram_id}.shop_list_mode`);
@@ -2698,6 +2699,18 @@ export async function setUserShopListMode(
   mode: ShopListMode,
 ): Promise<void> {
   await setSetting(`user.${telegram_id}.shop_list_mode`, mode, telegram_id);
+}
+
+export async function getUserShopGroupMode(telegram_id: number): Promise<ShopGroupMode> {
+  const value = await readSetting(`user.${telegram_id}.shop_group_mode`);
+  return value === 'ungrouped' ? 'ungrouped' : 'grouped';
+}
+
+export async function setUserShopGroupMode(
+  telegram_id: number,
+  mode: ShopGroupMode,
+): Promise<void> {
+  await setSetting(`user.${telegram_id}.shop_group_mode`, mode, telegram_id);
 }
 
 /** Hard-delete a settings row (for clearing state like Live Support). */

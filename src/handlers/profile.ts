@@ -22,7 +22,9 @@ import {
   recordLedger,
   setUserEmail,
   setUserCurrency,
+  getUserShopGroupMode,
   getUserShopListMode,
+  setUserShopGroupMode,
   setUserShopListMode,
   setUserLanguage,
   setUserRegion,
@@ -345,8 +347,12 @@ async function showCurrencyPicker(ctx: AppCtx, page = 0) {
 }
 
 async function showShopListMode(ctx: AppCtx) {
-  const selected = await getUserShopListMode(ctx.user.telegram_id);
+  const [selected, groupMode] = await Promise.all([
+    getUserShopListMode(ctx.user.telegram_id),
+    getUserShopGroupMode(ctx.user.telegram_id),
+  ]);
   const modeLabel = selected === 'all' ? 'All products list' : '10 per page';
+  const groupLabel = groupMode === 'grouped' ? 'Grouped plans' : 'Ungrouped products';
   const text = [
     ctx.t('profile.shop_view.title'),
     '',
@@ -354,12 +360,15 @@ async function showShopListMode(ctx: AppCtx) {
     '',
     ctx.t('profile.shop_view.paged'),
     ctx.t('profile.shop_view.all'),
+    ctx.t('profile.shop_view.grouped'),
+    ctx.t('profile.shop_view.ungrouped'),
     '',
     ctx.t('profile.shop_view.current', { mode: modeLabel }),
+    ctx.t('profile.shop_view.group_current', { mode: groupLabel }),
   ].join('\n');
   await ctx.editMessageText(renderMdHtml(text), {
     parse_mode: 'HTML',
-    reply_markup: shopListModeKeyboard(ctx.lang, selected),
+    reply_markup: shopListModeKeyboard(ctx.lang, selected, groupMode),
   });
 }
 
@@ -633,6 +642,15 @@ export function registerProfile(bot: Composer<AppCtx>): void {
 
   bot.callbackQuery('profile:shopview', async (ctx) => {
     await ctx.answerCallbackQuery();
+    await showShopListMode(ctx);
+  });
+
+  bot.callbackQuery(/^profile:shopgroup:set:(grouped|ungrouped)$/, async (ctx) => {
+    const mode = ctx.match[1] as 'grouped' | 'ungrouped';
+    await setUserShopGroupMode(ctx.user.telegram_id, mode);
+    await ctx.answerCallbackQuery({
+      text: ctx.t(mode === 'grouped' ? 'profile.shop_view.saved.grouped' : 'profile.shop_view.saved.ungrouped'),
+    });
     await showShopListMode(ctx);
   });
 
