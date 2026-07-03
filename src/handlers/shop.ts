@@ -76,7 +76,7 @@ import {
  * footer.
  */
 function categoryCanGroup(name: string): boolean {
-  return name.trim().length > 0;
+  return /\b(all|plans?|subscription|bundle|variants?|section)\b/i.test(name);
 }
 
 function buildShopRows(
