@@ -1,6 +1,6 @@
 import { InlineKeyboard } from 'grammy';
 import { formatPriceWithCurrency } from '../../config/currencies.js';
-import { EMOJI, colorModeToStyle, type Lang } from '../../config/index.js';
+import { EMOJI, PRODUCTS_PER_PAGE, colorModeToStyle, type Lang } from '../../config/index.js';
 import { inlineBtn, inlineCopyText } from './helpers.js';
 import {
   getCategoryColor,
@@ -191,6 +191,7 @@ export function productVariantKeyboard(
   lang: Lang,
   products: DBProduct[],
   currency = 'USDT',
+  opts: { categoryId?: number; page?: number; totalPages?: number } = {},
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
   const defaultInStockIcon = premiumIconId('orders_product');
@@ -208,8 +209,29 @@ export function productVariantKeyboard(
     if (style !== undefined) kb.style(style);
     kb.row();
   }
+  if (opts.categoryId !== undefined && opts.totalPages && opts.totalPages > 1) {
+    const page = opts.page ?? 0;
+    if (page > 0) inlineBtn(kb, lang, 'prev', `grp:${opts.categoryId}:${page - 1}`);
+    inlineBtn(kb, lang, 'refresh', `grp:${opts.categoryId}:${page}`);
+    if (page + 1 < opts.totalPages) inlineBtn(kb, lang, 'next', `grp:${opts.categoryId}:${page + 1}`);
+    kb.row();
+  }
   inlineBtn(kb, lang, 'back', 'shop:home');
   return kb;
+}
+
+export function productVariantPage(products: DBProduct[], page: number): {
+  rows: DBProduct[];
+  page: number;
+  totalPages: number;
+} {
+  const totalPages = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE));
+  const safePage = Math.min(Math.max(0, page), totalPages - 1);
+  return {
+    rows: products.slice(safePage * PRODUCTS_PER_PAGE, (safePage + 1) * PRODUCTS_PER_PAGE),
+    page: safePage,
+    totalPages,
+  };
 }
 
 /**

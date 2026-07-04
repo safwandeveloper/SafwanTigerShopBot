@@ -38,6 +38,7 @@ import type { DBProduct, DBPromo } from '../types.js';
 import { charge } from '../services/wallet.js';
 import {
   paymentMethodKeyboard,
+  productVariantPage,
   productVariantKeyboard,
   productKeyboard,
   qtyKeypadKeyboard,
@@ -166,24 +167,49 @@ async function showShopHome(ctx: AppCtx, page = 0) {
   }
 }
 
-async function showProductGroup(ctx: AppCtx, categoryId: number): Promise<void> {
+function escapeHtmlLocal(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function showProductGroup(ctx: AppCtx, categoryId: number, page = 0): Promise<void> {
   const [categories, { rows: rawRows }] = await Promise.all([
     listCategories(),
     listActiveProducts(0, 10000),
   ]);
   const category = categories.find((c) => c.id === categoryId) ?? null;
-  const filtered = rawRows.filter((p) => p.category_id === categoryId);
+  const filtered = rawRows
+    .filter((p) => p.category_id === categoryId)
+    .filter((p) => p.unlimited_stock || p.stock > 0);
   if (!category || filtered.length === 0) {
-    await ctx.editMessageText(renderMdHtml(ctx.t('shop.empty_products')), { parse_mode: 'HTML' });
+    const empty = renderMdHtml(ctx.t('shop.empty_products'));
+    if (ctx.callbackQuery) {
+      await ctx.editMessageText(empty, { parse_mode: 'HTML' });
+    } else {
+      await ctx.reply(empty, { parse_mode: 'HTML' });
+    }
     return;
   }
   const rows = await applyUserPriceToProducts(ctx.user.telegram_id, filtered);
-  const titleEmoji = category.emoji ? `${category.emoji} ` : '';
-  const html = renderMdHtml(`*${titleEmoji}${category.name}*\n\nChoose a variant:`);
-  await ctx.editMessageText(html, {
+  const pageData = productVariantPage(rows, page);
+  const titleEmoji = category.emoji ? renderHtmlTemplate(category.emoji) + ' ' : '';
+  const html = `${titleEmoji}<b>${escapeHtmlLocal(category.name)}</b>\n\nChoose a variant:`;
+  const opts = {
     parse_mode: 'HTML',
-    reply_markup: productVariantKeyboard(ctx.lang, rows, ctx.user.currency ?? 'USDT'),
-  });
+    reply_markup: productVariantKeyboard(ctx.lang, pageData.rows, ctx.user.currency ?? 'USDT', {
+      categoryId,
+      page: pageData.page,
+      totalPages: pageData.totalPages,
+    }),
+  } as const;
+  if (ctx.callbackQuery) {
+    await ctx.editMessageText(html, opts);
+  } else {
+    await ctx.reply(html, opts);
+  }
 }
 
 const STORED_HTML_RX =
@@ -856,9 +882,9 @@ export function registerShop(bot: Composer<AppCtx>): void {
     await showShopHome(ctx, Number(ctx.match[1]));
   });
 
-  bot.callbackQuery(/^grp:(\d+)$/, async (ctx) => {
+  bot.callbackQuery(/^grp:(\d+)(?::(\d+))?$/, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await showProductGroup(ctx, Number(ctx.match[1]));
+    await showProductGroup(ctx, Number(ctx.match[1]), Number(ctx.match[2] ?? 0));
   });
 
   // Legacy category callbacks (`cat:<id>:<page>`) from older
@@ -866,7 +892,7 @@ export function registerShop(bot: Composer<AppCtx>): void {
   // all-products home so taps don't appear hung.
   bot.callbackQuery(/^cat:(\d+):(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await showProductGroup(ctx, Number(ctx.match[1]));
+    await showProductGroup(ctx, Number(ctx.match[1]), Number(ctx.match[2] ?? 0));
   });
 
   bot.callbackQuery(/^prod:(\d+)$/, async (ctx) => {
