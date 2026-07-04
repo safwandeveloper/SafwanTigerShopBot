@@ -597,6 +597,7 @@ async function finalizeOrderDelivery(args: {
       orderId: order.id,
       orderPublicId: publicId,
       qty,
+      startOnly: true,
     });
   } catch (err) {
     logger.warn(

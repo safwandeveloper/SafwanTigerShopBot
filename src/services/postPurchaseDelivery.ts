@@ -477,6 +477,7 @@ export async function maybeStartDeliveryFormForCtx(args: {
   qty: number;
   editMode?: boolean;
   prefill?: Record<string, string>;
+  startOnly?: boolean;
 }): Promise<boolean> {
   if (!productHasDeliveryForm(args.product)) return false;
   const ctx = args.ctx;
@@ -488,13 +489,24 @@ export async function maybeStartDeliveryFormForCtx(args: {
     instruction && instruction.length > 0
       ? instruction
       : ctx.t('shop.delivery.instruction.default');
+  const instructionKb = new InlineKeyboard();
+  if (args.startOnly === true) {
+    instructionKb.text(
+      btn(ctx.lang, 'delivery_edit').replace(/Edit Details/i, 'Add Details'),
+      `delivery:start:${args.orderId}`,
+    );
+    applyButtonChrome(instructionKb, 'delivery_edit');
+    instructionKb.style('primary');
+  }
   try {
     await ctx.api.sendMessage(chatId, renderMdHtml(instructionText), {
       parse_mode: 'HTML',
+      ...(args.startOnly === true ? { reply_markup: instructionKb } : {}),
     });
   } catch (err) {
     logger.warn({ err, chatId }, 'delivery: ctx instruction send failed');
   }
+  if (args.startOnly === true) return true;
   const promptMessageId = await pushPromptCard({
     api: ctx.api,
     chatId,

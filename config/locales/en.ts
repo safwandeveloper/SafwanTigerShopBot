@@ -404,12 +404,12 @@ export const en: Record<string, string> = {
   // "submission box" message that walks them through `delivery_fields`
   // one prompt at a time.
   'shop.delivery.instruction.default': [
-    '{delivery_box} *Action Required — Please Submit Your Details*',
+    '{delivery_box} *Instructions*',
     '',
-    '_The seller needs a few details from you to deliver this order. Fill in each field below — your answers go straight to our vendor desk and your account is set up within minutes._',
+    '_Please tap *Add Details* and send the required information. Your details go straight to the admin desk and you will be notified when setup is done._',
   ].join('\n'),
   'shop.delivery.box.header': [
-    '{delivery_box} *Submit Your Details — {product_name}*',
+    '{delivery_box} *Add Details — {product_name}*',
     '',
     '_Step {current}/{total}_',
   ].join('\n'),
