@@ -26,7 +26,7 @@ import { InlineKeyboard } from 'grammy';
 import { logger } from '../logger.js';
 import { env } from '../env.js';
 import { t as translate } from '../i18n/index.js';
-import { renderMdHtml } from './premium.js';
+import { renderHtmlTemplate, renderMdHtml } from './premium.js';
 import { getAdminContactUrlWithPrefill } from './settings.js';
 import {
   completeDeliverySubmission as markDeliverySubmissionComplete,
@@ -131,6 +131,23 @@ function renderFieldSummary(
     if (v && v.length > 0) parts.push(`${f.label.toLowerCase()} ${v}`);
   }
   return parts.length > 0 ? parts.join(' / ') : '(no details)';
+}
+
+function renderDeliveryRichHtml(template: string): string {
+  return /<\/?[a-z][\s\S]*>/i.test(template)
+    ? renderHtmlTemplate(template)
+    : renderMdHtml(template);
+}
+
+function replaceDeliveryTemplateVars(
+  template: string,
+  vars: Record<string, string>,
+): string {
+  let out = template;
+  for (const [key, value] of Object.entries(vars)) {
+    out = out.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+  }
+  return out;
 }
 
 function tFor(lang: Lang) {
@@ -367,15 +384,16 @@ async function finalizeSubmission(args: {
     .join('\n');
   const summaryHtml = `${summaryHeader}\n\n${renderMdHtml(summaryRows)}`;
   const configuredSuccess = args.product.delivery_success_message?.trim();
-  const successHtml = renderMdHtml(
+  const successHtml =
     configuredSuccess && configuredSuccess.length > 0
-      ? configuredSuccess
-      : t(
-          args.isResubmit
-            ? 'shop.delivery.success.resubmitted'
-            : 'shop.delivery.success.default',
-        ),
-  );
+      ? renderDeliveryRichHtml(configuredSuccess)
+      : renderMdHtml(
+          t(
+            args.isResubmit
+              ? 'shop.delivery.success.resubmitted'
+              : 'shop.delivery.success.default',
+          ),
+        );
   const kb = buildSuccessKeyboard({
     lang: args.lang,
     orderId: args.orderId,
@@ -441,6 +459,10 @@ export async function maybeStartDeliveryFormFromApi(args: {
     instruction && instruction.length > 0
       ? instruction
       : t('shop.delivery.instruction.default');
+  const instructionHtml =
+    instruction && instruction.length > 0
+      ? renderDeliveryRichHtml(instructionText)
+      : renderMdHtml(instructionText);
   const startKb = new InlineKeyboard();
   startKb.text(
     btn(args.buyerLang, 'delivery_edit').replace(/Edit Details/i, 'Add Details'),
@@ -451,7 +473,7 @@ export async function maybeStartDeliveryFormFromApi(args: {
   try {
     await args.api.sendMessage(
       args.buyerTelegramId,
-      renderMdHtml(instructionText),
+      instructionHtml,
       { parse_mode: 'HTML', reply_markup: startKb },
     );
   } catch (err) {
@@ -490,6 +512,10 @@ export async function maybeStartDeliveryFormForCtx(args: {
     instruction && instruction.length > 0
       ? instruction
       : ctx.t('shop.delivery.instruction.default');
+  const instructionHtml =
+    instruction && instruction.length > 0
+      ? renderDeliveryRichHtml(instructionText)
+      : renderMdHtml(instructionText);
   const instructionKb = new InlineKeyboard();
   if (args.startOnly === true) {
     instructionKb.text(
@@ -501,7 +527,7 @@ export async function maybeStartDeliveryFormForCtx(args: {
   }
   if (args.skipInstruction !== true) {
     try {
-      await ctx.api.sendMessage(chatId, renderMdHtml(instructionText), {
+      await ctx.api.sendMessage(chatId, instructionHtml, {
         parse_mode: 'HTML',
         ...(args.startOnly === true ? { reply_markup: instructionKb } : {}),
       });
@@ -797,10 +823,11 @@ export async function completeManualDelivery(args: {
         product_name: product.name,
         order_id: publicId,
       });
-  const body = template
-    .replace(/\{product_name\}/g, product.name)
-    .replace(/\{order_id\}/g, publicId);
-  await args.api.sendMessage(submission.user_id, renderMdHtml(body), {
+  const body = replaceDeliveryTemplateVars(template, {
+    product_name: product.name,
+    order_id: publicId,
+  });
+  await args.api.sendMessage(submission.user_id, renderDeliveryRichHtml(body), {
     parse_mode: 'HTML',
   });
   return {
@@ -819,7 +846,7 @@ export async function sendManualDeliveryMessage(args: {
   const submission = await getDeliverySubmissionById(args.submissionId);
   if (!submission) return { ok: false };
   const product = await getProduct(submission.product_id);
-  await args.api.sendMessage(submission.user_id, renderMdHtml(args.message), {
+  await args.api.sendMessage(submission.user_id, renderDeliveryRichHtml(args.message), {
     parse_mode: 'HTML',
   });
   return {
