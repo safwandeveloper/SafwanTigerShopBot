@@ -4,6 +4,7 @@ import { session, type Context, type SessionFlavor } from 'grammy';
 export type AdminFlow =
   | { type: 'add_category'; step: 'name'; data: { emoji?: string } }
   | { type: 'add_category'; step: 'emoji'; data: { name: string } }
+  | { type: 'delivery_manual_message'; step: 'text'; data: { submission_id: number } }
   | { type: 'add_product'; step: 'name'; data: { category_id: number } }
   | { type: 'add_product'; step: 'price'; data: { category_id: number; name: string } }
   | {

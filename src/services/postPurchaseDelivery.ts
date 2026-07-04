@@ -288,9 +288,16 @@ async function sendVendorMessage(args: {
   for (const target of targets) {
     const kb = new InlineKeyboard();
     if (target === env.ADMIN_USER_ID) {
-      kb.text('Mark Fulfilled', `adm:delivery:complete:${args.submission.id}`);
-      applyButtonChrome(kb, 'delivery_admin_help');
+      kb.text(btn(env.DEFAULT_LANG, 'delivery_done'), `adm:delivery:complete:${args.submission.id}`);
+      applyButtonChrome(kb, 'delivery_done');
       kb.style('success');
+      kb.row();
+      kb.text(
+        btn(env.DEFAULT_LANG, 'delivery_manual_message'),
+        `adm:delivery:msg:${args.submission.id}`,
+      );
+      applyButtonChrome(kb, 'delivery_manual_message');
+      kb.style('primary');
     }
     try {
       await args.api.sendMessage(target, renderMdHtml(body), {
@@ -435,7 +442,10 @@ export async function maybeStartDeliveryFormFromApi(args: {
       ? instruction
       : t('shop.delivery.instruction.default');
   const startKb = new InlineKeyboard();
-  startKb.text('Submit Details', `delivery:start:${args.orderId}`);
+  startKb.text(
+    btn(args.buyerLang, 'delivery_edit').replace(/Edit Details/i, 'Add Details'),
+    `delivery:start:${args.orderId}`,
+  );
   applyButtonChrome(startKb, 'delivery_edit');
   startKb.style('primary');
   try {
@@ -740,5 +750,23 @@ export async function completeManualDelivery(args: {
     alreadyCompleted: false,
     buyerId: submission.user_id,
     productName: product.name,
+  };
+}
+
+export async function sendManualDeliveryMessage(args: {
+  api: Api;
+  submissionId: number;
+  message: string;
+}): Promise<{ ok: boolean; buyerId?: number; productName?: string }> {
+  const submission = await getDeliverySubmissionById(args.submissionId);
+  if (!submission) return { ok: false };
+  const product = await getProduct(submission.product_id);
+  await args.api.sendMessage(submission.user_id, renderMdHtml(args.message), {
+    parse_mode: 'HTML',
+  });
+  return {
+    ok: true,
+    buyerId: submission.user_id,
+    productName: product?.name,
   };
 }

@@ -726,6 +726,7 @@ export async function updateProduct(
     category_id: number | null;
     price: number;
     stock: number;
+    sort_order: number;
     referral_required_count: number;
     warranty: string | null;
     description: string | null;

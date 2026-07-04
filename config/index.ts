@@ -265,6 +265,8 @@ export const BUTTON_KEYS = {
   //     `getAdminContactUrlWithPrefill`).
   delivery_edit: 'btn.delivery.edit',
   delivery_admin_help: 'btn.delivery.admin_help',
+  delivery_done: 'btn.delivery.done',
+  delivery_manual_message: 'btn.delivery.manual_message',
 } as const;
 
 /**
@@ -451,6 +453,8 @@ export const DEFAULT_BUTTON_COLORS: Record<keyof typeof BUTTON_KEYS, ColorMode> 
   // Post-purchase delivery form action buttons.
   delivery_edit: 'blue',
   delivery_admin_help: 'red',
+  delivery_done: 'green',
+  delivery_manual_message: 'blue',
 };
 
 /**
@@ -976,6 +980,8 @@ export const BUTTON_ICONS: Partial<Record<keyof typeof BUTTON_KEYS, string>> = {
   // delivery_field / delivery_help <unicode> <custom_emoji_id>`.
   delivery_edit: 'delivery_field',
   delivery_admin_help: 'delivery_help',
+  delivery_done: 'orders_received',
+  delivery_manual_message: 'orders_note',
 };
 
 /**

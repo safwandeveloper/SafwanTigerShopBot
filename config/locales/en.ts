@@ -454,6 +454,8 @@ export const en: Record<string, string> = {
   // Buttons that appear under the success card.
   'btn.delivery.edit': '{delivery_field} Edit Details',
   'btn.delivery.admin_help': '{delivery_help} Admin Help',
+  'btn.delivery.done': '✅ Done',
+  'btn.delivery.manual_message': '📝 Custom Message',
   // Shown when the Edit Details button is tapped but the bot can't
   // recover the original submission (deleted, product gone, …).
   'shop.delivery.edit_unavailable':

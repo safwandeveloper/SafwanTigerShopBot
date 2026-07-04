@@ -160,6 +160,7 @@ import { publicOrderId } from '../../services/orderId.js';
 import {
   completeManualDelivery,
   maybeStartDeliveryFormFromApi,
+  sendManualDeliveryMessage,
 } from '../../services/postPurchaseDelivery.js';
 import {
   apiBaseUrl,
@@ -187,7 +188,7 @@ import { BUTTON_KEYS, COLOR_PREFIX, EMOJI, colorModeToStyle } from '../../../con
 import type { AppCtx } from '../../middleware/user.js';
 import { logger } from '../../logger.js';
 import { env } from '../../env.js';
-import type { DBOrder, DBUser, DBPromo, DBSupplierApiSource, DBSupplierProductLink } from '../../types.js';
+import type { DBOrder, DBUser, DBPromo, DBProduct, DBSupplierApiSource, DBSupplierProductLink } from '../../types.js';
 
 export const adminBot = new Composer<AppCtx>();
 
@@ -2876,6 +2877,11 @@ async function showProductEditor(
     `adm:prod:color:${p.id}:${page}`,
   ).row();
   kb.text('🗂 Group / Category', `adm:prod:cat:${p.id}:${page}`).row();
+  if (p.category_id !== null && p.category_id !== undefined) {
+    kb.text('⬆️ Group Up', `adm:prod:catmove:${p.id}:${page}:up`)
+      .text('⬇️ Group Down', `adm:prod:catmove:${p.id}:${page}:down`)
+      .row();
+  }
   kb.text('💰 Edit Price', `adm:prod:price:set:${p.id}:${page}`)
     .text('🔢 Edit Stock', `adm:prod:stock:set:${p.id}:${page}`)
     .text('🅰️ Edit Name', `adm:prod:name:set:${p.id}:${page}`)
@@ -2988,6 +2994,67 @@ adminBot.callbackQuery(/^adm:prod:cat:set:(\d+):(\d+):(\d+)$/, async (ctx) => {
   cache.del('cats');
   await ctx.answerCallbackQuery({
     text: `Moved to ${cleanCategoryButtonText(category.name) || category.name}.`,
+  });
+  await showProductEditor(ctx, productId, page);
+});
+
+type ProductOrderUnit =
+  | { kind: 'group'; products: DBProduct[] }
+  | { kind: 'product'; product: DBProduct };
+
+async function moveProductCategoryBlock(
+  categoryId: number,
+  direction: 'up' | 'down',
+): Promise<boolean> {
+  const { rows } = await listAllProducts(0, 10000);
+  const groupProducts = rows.filter((p) => p.category_id === categoryId);
+  if (groupProducts.length === 0) return false;
+
+  const units: ProductOrderUnit[] = [];
+  let insertedGroup = false;
+  for (const product of rows) {
+    if (product.category_id === categoryId) {
+      if (!insertedGroup) {
+        units.push({ kind: 'group', products: groupProducts });
+        insertedGroup = true;
+      }
+      continue;
+    }
+    units.push({ kind: 'product', product });
+  }
+
+  const from = units.findIndex((u) => u.kind === 'group');
+  const to = direction === 'up' ? from - 1 : from + 1;
+  if (from < 0 || to < 0 || to >= units.length) return false;
+  [units[from], units[to]] = [units[to]!, units[from]!];
+
+  const flattened = units.flatMap((unit) =>
+    unit.kind === 'group' ? unit.products : [unit.product],
+  );
+  for (let index = 0; index < flattened.length; index += 1) {
+    await updateProduct(flattened[index]!.id, {
+      sort_order: index,
+      stashed_sort_order: null,
+    });
+  }
+  cache.del('cats');
+  return true;
+}
+
+adminBot.callbackQuery(/^adm:prod:catmove:(\d+):(\d+):(up|down)$/, async (ctx) => {
+  const productId = Number(ctx.match[1]);
+  const page = Number(ctx.match[2]);
+  const direction = ctx.match[3] as 'up' | 'down';
+  const product = await getProduct(productId);
+  if (!product?.category_id) {
+    await ctx.answerCallbackQuery({ text: 'This product is not inside a group.', show_alert: true });
+    return;
+  }
+  const moved = await moveProductCategoryBlock(product.category_id, direction);
+  await ctx.answerCallbackQuery({
+    text: moved
+      ? `Group moved ${direction}.`
+      : `Group is already at the ${direction === 'up' ? 'top' : 'bottom'}.`,
   });
   await showProductEditor(ctx, productId, page);
 });
@@ -3382,6 +3449,25 @@ adminBot.callbackQuery(/^adm:delivery:complete:(\d+)$/, async (ctx) => {
       { parse_mode: 'Markdown' },
     );
   }
+});
+
+adminBot.callbackQuery(/^adm:delivery:msg:(\d+)$/, async (ctx) => {
+  const submissionId = Number(ctx.match[1]);
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = {
+    type: 'delivery_manual_message',
+    step: 'text',
+    data: { submission_id: submissionId },
+  };
+  await ctx.reply(
+    [
+      '📝 *Send the custom buyer message now.*',
+      '',
+      'Premium emojis and Telegram formatting are preserved.',
+      'Send `/cancel` to abort.',
+    ].join('\n'),
+    { parse_mode: 'Markdown' },
+  );
 });
 
 adminBot.callbackQuery(/^adm:prod:del:fields:(\d+):(\d+)$/, async (ctx) => {
@@ -7980,6 +8066,21 @@ adminBot.on('message:text', async (ctx, next) => {
     }
 
     // -------- Per-product editor: text-based steps --------
+    if (flow.type === 'delivery_manual_message') {
+      const result = await sendManualDeliveryMessage({
+        api: ctx.api,
+        submissionId: flow.data.submission_id,
+        message: productRichText,
+      });
+      ctx.session.adminFlow = undefined;
+      await ctx.reply(
+        result.ok
+          ? `✅ Custom message sent to buyer${result.productName ? ` for *${escapeMd(result.productName)}*` : ''}.`
+          : '⚠️ Submission not found. It may have been removed.',
+        { parse_mode: 'Markdown' },
+      );
+      return;
+    }
     if (flow.type === 'edit_product_emoji') {
       // Premium emoji is sent as a `custom_emoji` entity attached to
       // a text message — the visible text is the unicode fallback,
@@ -8139,7 +8240,7 @@ adminBot.on('message:text', async (ctx, next) => {
     if (flow.type === 'edit_product_delivery_instruction') {
       const cleared = text.trim().toLowerCase() === 'clear';
       await updateProduct(flow.data.product_id, {
-        delivery_instruction: cleared ? null : text,
+        delivery_instruction: cleared ? null : productRichText,
       });
       ctx.session.adminFlow = undefined;
       await ctx.reply(cleared ? '✅ Instruction reset to default.' : '✅ Instruction saved.');
@@ -8149,7 +8250,7 @@ adminBot.on('message:text', async (ctx, next) => {
     if (flow.type === 'edit_product_delivery_success') {
       const cleared = text.trim().toLowerCase() === 'clear';
       await updateProduct(flow.data.product_id, {
-        delivery_success_message: cleared ? null : text,
+        delivery_success_message: cleared ? null : productRichText,
       });
       ctx.session.adminFlow = undefined;
       await ctx.reply(cleared ? '✅ Success card reset to default.' : '✅ Success card saved.');
@@ -8159,7 +8260,7 @@ adminBot.on('message:text', async (ctx, next) => {
     if (flow.type === 'edit_product_delivery_completion') {
       const cleared = text.trim().toLowerCase() === 'clear';
       await updateProduct(flow.data.product_id, {
-        delivery_completion_message: cleared ? null : text,
+        delivery_completion_message: cleared ? null : productRichText,
       });
       ctx.session.adminFlow = undefined;
       await ctx.reply(cleared ? '✅ Completed message reset.' : '✅ Completed message saved.');
