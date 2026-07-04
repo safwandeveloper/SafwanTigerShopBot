@@ -404,7 +404,7 @@ export const en: Record<string, string> = {
   // "submission box" message that walks them through `delivery_fields`
   // one prompt at a time.
   'shop.delivery.instruction.default': [
-    '{delivery_box} *Instructions*',
+    '{delivery_box} *Obtaining Details*',
     '',
     '_Please tap *Add Details* and send the required information. Your details go straight to the admin desk and you will be notified when setup is done._',
   ].join('\n'),
@@ -452,10 +452,10 @@ export const en: Record<string, string> = {
     'Order: {order_tag}',
   ].join('\n'),
   // Buttons that appear under the success card.
-  'btn.delivery.edit': '{delivery_field} Edit Details',
-  'btn.delivery.admin_help': '{delivery_help} Admin Help',
-  'btn.delivery.done': '✅ Done',
-  'btn.delivery.manual_message': '📝 Custom Message',
+  'btn.delivery.edit': 'Edit Details',
+  'btn.delivery.admin_help': 'Admin Help',
+  'btn.delivery.done': 'Done',
+  'btn.delivery.manual_message': 'Custom Message',
   // Shown when the Edit Details button is tapped but the bot can't
   // recover the original submission (deleted, product gone, …).
   'shop.delivery.edit_unavailable':

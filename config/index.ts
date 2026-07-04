@@ -727,12 +727,12 @@ export const EMOJI: Record<string, EmojiSpec> = {
   // for products where the admin enables `delivery_form_enabled`.
   // All four slots fall back to plain unicode until the bot owner
   // sets a `custom_emoji_id` via `/setemoji <key> <unicode> <id>`.
-  delivery_box: '📥',
-  delivery_field: '✏️',
-  delivery_check: '✅',
-  delivery_help: '🆘',
-  delivery_resubmit: '🔁',
-  delivery_vendor: '🤝',
+  delivery_box: { unicode: '📦', custom_emoji_id: '5069075201950483359' },
+  delivery_field: { unicode: '📝', custom_emoji_id: '5778299625370817409' },
+  delivery_check: { unicode: '✅', custom_emoji_id: '5096035317257864249' },
+  delivery_help: { unicode: '📞', custom_emoji_id: '5271619747891388291' },
+  delivery_resubmit: { unicode: '🔄', custom_emoji_id: '5346321684574003384' },
+  delivery_vendor: { unicode: '📞', custom_emoji_id: '5271619747891388291' },
   // Wallet credit / debit notifications shown to a user when an admin
   // adjusts their balance via /credit. Three slots so the admin can
   // swap each independently via `/setemoji credit_emoji / balance_emoji /

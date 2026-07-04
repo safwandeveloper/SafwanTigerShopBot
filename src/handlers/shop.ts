@@ -1132,6 +1132,7 @@ export function registerShop(bot: Composer<AppCtx>): void {
       orderId: order.id,
       orderPublicId: publicOrderId(order),
       qty: order.qty,
+      skipInstruction: true,
     });
   });
 

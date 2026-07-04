@@ -478,6 +478,7 @@ export async function maybeStartDeliveryFormForCtx(args: {
   editMode?: boolean;
   prefill?: Record<string, string>;
   startOnly?: boolean;
+  skipInstruction?: boolean;
 }): Promise<boolean> {
   if (!productHasDeliveryForm(args.product)) return false;
   const ctx = args.ctx;
@@ -498,13 +499,15 @@ export async function maybeStartDeliveryFormForCtx(args: {
     applyButtonChrome(instructionKb, 'delivery_edit');
     instructionKb.style('primary');
   }
-  try {
-    await ctx.api.sendMessage(chatId, renderMdHtml(instructionText), {
-      parse_mode: 'HTML',
-      ...(args.startOnly === true ? { reply_markup: instructionKb } : {}),
-    });
-  } catch (err) {
-    logger.warn({ err, chatId }, 'delivery: ctx instruction send failed');
+  if (args.skipInstruction !== true) {
+    try {
+      await ctx.api.sendMessage(chatId, renderMdHtml(instructionText), {
+        parse_mode: 'HTML',
+        ...(args.startOnly === true ? { reply_markup: instructionKb } : {}),
+      });
+    } catch (err) {
+      logger.warn({ err, chatId }, 'delivery: ctx instruction send failed');
+    }
   }
   if (args.startOnly === true) return true;
   const promptMessageId = await pushPromptCard({
