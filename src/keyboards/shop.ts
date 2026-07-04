@@ -191,9 +191,10 @@ export function productVariantKeyboard(
   lang: Lang,
   products: DBProduct[],
   currency = 'USDT',
-  opts: { categoryId?: number; page?: number; totalPages?: number } = {},
+  opts: { categoryId?: number; page?: number; totalPages?: number; icons?: boolean } = {},
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
+  const useIcons = opts.icons !== false;
   const defaultInStockIcon = premiumIconId('orders_product');
   const oosIcon = premiumIconId('gift_invalid');
   for (const p of products) {
@@ -204,7 +205,7 @@ export function productVariantKeyboard(
     const namePrefix = hasPremiumIcon ? '' : (productEmoji ? `${productEmoji} ` : '');
     kb.text(`${namePrefix}${p.name} - ${formatPriceWithCurrency(p.price, currency)} (Stock: ${stockLabel})`.trim(), `prod:${p.id}`);
     const iconId = inStock ? p.emoji_id ?? defaultInStockIcon : p.emoji_id ?? oosIcon;
-    if (iconId) kb.icon(iconId);
+    if (useIcons && iconId) kb.icon(iconId);
     const style = colorModeToStyle(inStock ? getStateColor('in_stock') : getStateColor('out_of_stock'));
     if (style !== undefined) kb.style(style);
     kb.row();

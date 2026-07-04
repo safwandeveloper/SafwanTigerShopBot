@@ -198,9 +198,8 @@ async function showProductGroup(ctx: AppCtx, categoryId: number, page = 0): Prom
     return (a.sort_order ?? a.id) - (b.sort_order ?? b.id);
   });
   const pageData = productVariantPage(rows, page);
-  const titleEmoji = category.emoji ? renderHtmlTemplate(category.emoji) + ' ' : '';
-  const html = `${titleEmoji}<b>${escapeHtmlLocal(category.name)}</b>\n\nChoose a variant:`;
-  const opts = {
+  const html = `<b>${escapeHtmlLocal(category.name)}</b>\n\nChoose a variant:`;
+  const premiumOpts = {
     parse_mode: 'HTML',
     reply_markup: productVariantKeyboard(ctx.lang, pageData.rows, ctx.user.currency ?? 'USDT', {
       categoryId,
@@ -208,10 +207,29 @@ async function showProductGroup(ctx: AppCtx, categoryId: number, page = 0): Prom
       totalPages: pageData.totalPages,
     }),
   } as const;
+  const plainOpts = {
+    parse_mode: 'HTML',
+    reply_markup: productVariantKeyboard(ctx.lang, pageData.rows, ctx.user.currency ?? 'USDT', {
+      categoryId,
+      page: pageData.page,
+      totalPages: pageData.totalPages,
+      icons: false,
+    }),
+  } as const;
   if (ctx.callbackQuery) {
-    await ctx.editMessageText(html, opts);
+    try {
+      await ctx.editMessageText(html, premiumOpts);
+    } catch (err) {
+      logger.warn({ err, categoryId }, 'grouped list premium keyboard failed; retrying plain');
+      await ctx.reply(html, plainOpts);
+    }
   } else {
-    await ctx.reply(html, opts);
+    try {
+      await ctx.reply(html, premiumOpts);
+    } catch (err) {
+      logger.warn({ err, categoryId }, 'grouped list premium keyboard reply failed; retrying plain');
+      await ctx.reply(html, plainOpts);
+    }
   }
 }
 
