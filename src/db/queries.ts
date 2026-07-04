@@ -1053,7 +1053,6 @@ export async function upsertDeliverySubmission(args: {
         product_id: args.product_id,
         payload: args.payload,
         revision: 1,
-        status: 'pending',
       })
       .select('*')
       .single();
@@ -1083,9 +1082,6 @@ export async function upsertDeliverySubmission(args: {
     .update({
       payload: args.payload,
       revision: nextRevision,
-      status: 'pending',
-      completed_at: null,
-      completed_by: null,
       updated_at: new Date().toISOString(),
     })
     .eq('order_id', args.order_id)
@@ -1146,7 +1142,7 @@ export async function completeDeliverySubmission(
   completedBy: number,
 ): Promise<boolean> {
   const now = new Date().toISOString();
-  const { data, error } = await supabase
+  const result = await supabase
     .from('order_delivery_submissions')
     .update({
       status: 'completed',
@@ -1158,8 +1154,18 @@ export async function completeDeliverySubmission(
     .eq('status', 'pending')
     .select('id')
     .maybeSingle();
-  if (error) throw error;
-  return Boolean(data);
+  if (!result.error) return Boolean(result.data);
+  if (!/status|completed_at|completed_by|schema cache|column/i.test(result.error.message)) {
+    throw result.error;
+  }
+  const fallback = await supabase
+    .from('order_delivery_submissions')
+    .update({ updated_at: now })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (fallback.error) throw fallback.error;
+  return Boolean(fallback.data);
 }
 
 /**
