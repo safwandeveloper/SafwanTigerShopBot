@@ -2760,9 +2760,12 @@ async function showProductEditor(
   }
   const p = await getProduct(product_id);
   if (!p) {
-    await ctx.editMessageText('⚠️ Product not found.', {
-      reply_markup: backRow(new InlineKeyboard()),
-    });
+    const opts = { reply_markup: backRow(new InlineKeyboard()) };
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText('⚠️ Product not found.', opts);
+    } else {
+      await ctx.reply('⚠️ Product not found.', opts);
+    }
     return;
   }
   const itemsCount = await countAvailableProductItems(product_id);
@@ -2924,10 +2927,15 @@ async function showProductEditor(
   }
   kb.text('🧾 View Buyers', `adm:ord:p:${p.id}:0`).row();
   kb.text('⬅️ Back to list', `adm:prod:list:${page}`);
-  await ctx.editMessageText(lines.join('\n'), {
+  const editorOptions = {
     parse_mode: 'Markdown',
     reply_markup: kb,
-  });
+  } as const;
+  if (ctx.callbackQuery?.message) {
+    await ctx.editMessageText(lines.join('\n'), editorOptions);
+  } else {
+    await ctx.reply(lines.join('\n'), editorOptions);
+  }
 }
 
 adminBot.callbackQuery(/^adm:prod:edit:(\d+):(\d+)$/, async (ctx) => {
