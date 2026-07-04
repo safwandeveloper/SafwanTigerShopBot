@@ -181,9 +181,7 @@ async function showProductGroup(ctx: AppCtx, categoryId: number, page = 0): Prom
     listActiveProducts(0, 10000),
   ]);
   const category = categories.find((c) => c.id === categoryId) ?? null;
-  const filtered = rawRows
-    .filter((p) => p.category_id === categoryId)
-    .filter((p) => p.unlimited_stock || p.stock > 0);
+  const filtered = rawRows.filter((p) => p.category_id === categoryId);
   if (!category || filtered.length === 0) {
     const empty = renderMdHtml(ctx.t('shop.empty_products'));
     if (ctx.callbackQuery) {
@@ -193,7 +191,12 @@ async function showProductGroup(ctx: AppCtx, categoryId: number, page = 0): Prom
     }
     return;
   }
-  const rows = await applyUserPriceToProducts(ctx.user.telegram_id, filtered);
+  const rows = (await applyUserPriceToProducts(ctx.user.telegram_id, filtered)).sort((a, b) => {
+    const aInStock = a.unlimited_stock || a.stock > 0;
+    const bInStock = b.unlimited_stock || b.stock > 0;
+    if (aInStock !== bInStock) return aInStock ? -1 : 1;
+    return (a.sort_order ?? a.id) - (b.sort_order ?? b.id);
+  });
   const pageData = productVariantPage(rows, page);
   const titleEmoji = category.emoji ? renderHtmlTemplate(category.emoji) + ' ' : '';
   const html = `${titleEmoji}<b>${escapeHtmlLocal(category.name)}</b>\n\nChoose a variant:`;
@@ -883,16 +886,26 @@ export function registerShop(bot: Composer<AppCtx>): void {
   });
 
   bot.callbackQuery(/^grp:(\d+)(?::(\d+))?$/, async (ctx) => {
-    await ctx.answerCallbackQuery();
-    await showProductGroup(ctx, Number(ctx.match[1]), Number(ctx.match[2] ?? 0));
+    await ctx.answerCallbackQuery().catch(() => undefined);
+    try {
+      await showProductGroup(ctx, Number(ctx.match[1]), Number(ctx.match[2] ?? 0));
+    } catch (err) {
+      logger.error({ err, categoryId: ctx.match[1] }, 'shop grouped list failed');
+      await ctx.reply('⚠️ Could not open this grouped list. Please tap Refresh and try again.').catch(() => undefined);
+    }
   });
 
   // Legacy category callbacks (`cat:<id>:<page>`) from older
   // messages still in users' chat histories — redirect to the new
   // all-products home so taps don't appear hung.
   bot.callbackQuery(/^cat:(\d+):(\d+)$/, async (ctx) => {
-    await ctx.answerCallbackQuery();
-    await showProductGroup(ctx, Number(ctx.match[1]), Number(ctx.match[2] ?? 0));
+    await ctx.answerCallbackQuery().catch(() => undefined);
+    try {
+      await showProductGroup(ctx, Number(ctx.match[1]), Number(ctx.match[2] ?? 0));
+    } catch (err) {
+      logger.error({ err, categoryId: ctx.match[1] }, 'legacy category grouped list failed');
+      await ctx.reply('⚠️ Could not open this grouped list. Please tap Refresh and try again.').catch(() => undefined);
+    }
   });
 
   bot.callbackQuery(/^prod:(\d+)$/, async (ctx) => {
