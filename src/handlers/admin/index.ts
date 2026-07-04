@@ -7634,6 +7634,24 @@ function telegramQuoteToMarkdown(
   return out.trim();
 }
 
+function captureTelegramRichText(
+  rawText: string,
+  entities: ReadonlyArray<MessageEntity> | undefined | null,
+  markerText: string,
+): string {
+  const entityList = entities ?? [];
+  const hasTelegramFormatting = entityList.some(
+    (entity) => FORMAT_ENTITY_TYPES.has(entity.type) || entity.type === 'custom_emoji',
+  );
+  if (!hasTelegramFormatting) return markerText;
+  try {
+    return entitiesToHtml(rawText, entityList).trim();
+  } catch (err) {
+    logger.warn({ err }, 'admin rich-text capture failed; falling back to custom emoji markers');
+    return markerText;
+  }
+}
+
 adminBot.on('message:text', async (ctx, next) => {
   const flow = ctx.session.adminFlow;
   if (!flow) return next();
@@ -7663,15 +7681,7 @@ adminBot.on('message:text', async (ctx, next) => {
     ctx.message.text,
     ctx.message.entities,
   ).trim();
-  const productRichText = (() => {
-    const entities = ctx.message.entities ?? [];
-    const hasTelegramFormatting = entities.some(
-      (entity) => FORMAT_ENTITY_TYPES.has(entity.type) || entity.type === 'custom_emoji',
-    );
-    return hasTelegramFormatting
-      ? entitiesToHtml(ctx.message.text, entities).trim()
-      : text;
-  })();
+  const productRichText = captureTelegramRichText(ctx.message.text, ctx.message.entities, text);
 
   if (text === '/cancel') {
     ctx.session.adminFlow = undefined;
