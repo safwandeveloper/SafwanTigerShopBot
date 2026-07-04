@@ -614,15 +614,12 @@ export async function handleDeliveryFormMessage(ctx: AppCtx): Promise<boolean> {
   if (field.per_unit || field.type === 'email') value = values.join('\n');
   flow.data.collected[field.key] = value;
   flow.data.cursor += 1;
-  // Auto-delete the user's typed answer so the chat stays clean —
-  // the in-place prompt card already shows their progress via
-  // step counter. Best-effort: passwords / keys shouldn't linger.
-  try {
-    await ctx.deleteMessage();
-  } catch {
-    // Ignored — message older than 48h or already gone.
-  }
   if (flow.data.cursor < flow.data.fields.length) {
+    try {
+      await ctx.deleteMessage();
+    } catch {
+      // Ignored - message older than 48h or already gone.
+    }
     const nextMsgId = await pushPromptCard({
       api: ctx.api,
       chatId: flow.data.prompt_chat_id,
@@ -636,31 +633,77 @@ export async function handleDeliveryFormMessage(ctx: AppCtx): Promise<boolean> {
     flow.data.prompt_message_id = nextMsgId;
     return true;
   }
-  // All fields collected — finalise.
   const product = await getProduct(flow.data.product_id);
   if (!product) {
-    // Should never happen — product can't disappear between order
-    // creation and form completion in practice. Clear the flow so
-    // the buyer isn't stuck and let admin handle manually.
     ctx.session.userFlow = undefined;
     return true;
   }
-  await finalizeSubmission({
-    api: ctx.api,
-    chatId: flow.data.prompt_chat_id,
-    lang: ctx.lang,
-    orderId: flow.data.order_id,
-    orderPublicId: flow.data.order_public_id,
-    product,
-    qty: flow.data.qty,
-    buyer: {
-      telegram_id: ctx.user.telegram_id,
-      first_name: ctx.user.first_name ?? null,
-      username: ctx.user.username ?? null,
-    },
-    payload: flow.data.collected,
-    isResubmit: flow.data.edit_mode,
-  });
+  try {
+    await finalizeSubmission({
+      api: ctx.api,
+      chatId: flow.data.prompt_chat_id,
+      lang: ctx.lang,
+      orderId: flow.data.order_id,
+      orderPublicId: flow.data.order_public_id,
+      product,
+      qty: flow.data.qty,
+      buyer: {
+        telegram_id: ctx.user.telegram_id,
+        first_name: ctx.user.first_name ?? null,
+        username: ctx.user.username ?? null,
+      },
+      payload: flow.data.collected,
+      isResubmit: flow.data.edit_mode,
+    });
+  } catch (err) {
+    logger.error(
+      {
+        err,
+        orderId: flow.data.order_id,
+        productId: flow.data.product_id,
+        userId: ctx.user.telegram_id,
+      },
+      'delivery: final submit failed',
+    );
+    const details = renderFieldSummary(flow.data.fields, flow.data.collected);
+    await ctx.api
+      .sendMessage(
+        env.ADMIN_USER_ID,
+        renderMdHtml(
+          [
+            '{delivery_vendor} *Delivery Form Fallback Alert*',
+            '',
+            `*Order:* ${buildOrderTag(flow.data.order_public_id)}`,
+            `*Product:* ${product.name}`,
+            `*Buyer:* ${ctx.user.username ? `@${ctx.user.username}` : ctx.user.first_name ?? ctx.user.telegram_id} (${ctx.user.telegram_id})`,
+            '',
+            '*Buyer Details:*',
+            details,
+            '',
+            `*Error:* \`${(err as Error)?.message ?? String(err)}\``,
+          ].join('\n'),
+        ),
+        { parse_mode: 'HTML' },
+      )
+      .catch((notifyErr) => {
+        logger.error({ err: notifyErr }, 'delivery: fallback admin alert failed');
+      });
+    await ctx.reply(
+      renderMdHtml(
+        [
+          '{delivery_check} *Your Details Has been Submitted Successfully*',
+          '',
+          '_Admin has received your details and will notify you after setup is done._',
+        ].join('\n'),
+      ),
+      { parse_mode: 'HTML' },
+    );
+  }
+  try {
+    await ctx.deleteMessage();
+  } catch {
+    // Ignored - final message may already be gone.
+  }
   ctx.session.userFlow = undefined;
   // Also clear the in-place prompt card — it's been replaced by
   // the summary + success card.
