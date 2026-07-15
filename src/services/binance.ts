@@ -210,14 +210,10 @@ export async function listPayTransactions(opts: {
     return { ok: false, reason: 'binance api credentials missing' };
   }
 
-  const params = new URLSearchParams();
-  if (opts.startTime !== undefined) params.set('startTime', String(opts.startTime));
-  if (opts.endTime !== undefined) params.set('endTime', String(opts.endTime));
-  if (opts.limit !== undefined) params.set('limit', String(opts.limit));
-  params.set('timestamp', String(Date.now()));
-  params.set('recvWindow', String(RECV_WINDOW_MS));
-  const query = params.toString();
-  const sig = signQuery(query, creds.apiSecret);
+  const staticParams = new URLSearchParams();
+  if (opts.startTime !== undefined) staticParams.set('startTime', String(opts.startTime));
+  if (opts.endTime !== undefined) staticParams.set('endTime', String(opts.endTime));
+  if (opts.limit !== undefined) staticParams.set('limit', String(opts.limit));
 
   const failures: AttemptFailure[] = [];
   const baseUrls = readBaseUrls();
@@ -234,6 +230,11 @@ export async function listPayTransactions(opts: {
         continue;
       }
 
+      const params = new URLSearchParams(staticParams);
+      params.set('timestamp', String(Date.now()));
+      params.set('recvWindow', String(RECV_WINDOW_MS));
+      const query = params.toString();
+      const sig = signQuery(query, creds.apiSecret);
       const url = `${baseUrl}${ENDPOINT}?${query}&signature=${sig}`;
       let resp: Response;
       try {
