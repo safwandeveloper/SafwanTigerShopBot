@@ -14,7 +14,12 @@ import { parsePublicOrderId, publicOrderId } from '../services/orderId.js';
 import { formatReceivedItemsBlock } from '../services/orderRender.js';
 import * as adminLog from '../services/adminLog.js';
 import { clearAiSession } from './support.js';
-import { inlineBtn } from '../keyboards/helpers.js';
+import {
+  disableButtonChrome,
+  inlineBtn,
+  isButtonChromeEnabled,
+  isButtonChromeError,
+} from '../keyboards/helpers.js';
 import { showProfile, showReferScreen } from './profile.js';
 import { showTopupMenu } from './topup.js';
 import {
@@ -22,6 +27,7 @@ import {
   isForceJoinSatisfied,
   sendForceJoinPrompt,
 } from '../middleware/forceJoin.js';
+import { logger } from '../logger.js';
 
 /**
  * Silently dismiss any leftover persistent reply keyboard from older
@@ -69,17 +75,38 @@ export async function showMainMenu(
   const html = buildWelcomeHtml(ctx);
   const reply_markup = mainMenuKeyboard(ctx.lang);
 
+  const isChromeFailure = (err: unknown): boolean => {
+    if (!isButtonChromeEnabled()) return false;
+    if (!isButtonChromeError(err)) return false;
+    disableButtonChrome();
+    logger.warn({ err }, 'main-menu: disabled button icon/style chrome after Telegram API failure');
+    return true;
+  };
+
   // If we got here via callback (e.g. "⬅️ Main Menu" button) edit in place.
   if (!opts.fresh && ctx.callbackQuery) {
     try {
       await ctx.editMessageText(html, { parse_mode: 'HTML', reply_markup });
       return;
-    } catch {
+    } catch (err) {
+      if (isChromeFailure(err)) {
+        try {
+          await ctx.editMessageText(html, { parse_mode: 'HTML', reply_markup: mainMenuKeyboard(ctx.lang) });
+          return;
+        } catch {
+          // fallback to send below
+        }
+      }
       // editing failed (e.g. message too old) → fall through to send
     }
   }
 
-  await ctx.reply(html, { parse_mode: 'HTML', reply_markup });
+  try {
+    await ctx.reply(html, { parse_mode: 'HTML', reply_markup });
+  } catch (err) {
+    if (!isChromeFailure(err)) throw err;
+    await ctx.reply(html, { parse_mode: 'HTML', reply_markup: mainMenuKeyboard(ctx.lang) });
+  }
 }
 
 async function maybeGateForceJoin(ctx: AppCtx): Promise<boolean> {

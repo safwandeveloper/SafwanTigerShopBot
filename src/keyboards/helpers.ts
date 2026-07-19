@@ -54,6 +54,7 @@ export function colored(
  */
 const LEADING_EMOJI = /^(?:[\u{1F1E6}-\u{1F1FF}]{2}|\p{Extended_Pictographic}(?:\u200D\p{Extended_Pictographic})*\uFE0F?)\s?/u;
 const TRAILING_EMOJI = /\s?(?:[\u{1F1E6}-\u{1F1FF}]{2}|\p{Extended_Pictographic}(?:\u200D\p{Extended_Pictographic})*\uFE0F?)$/u;
+let buttonChromeEnabled = true;
 
 function stripDecorativeEmoji(label: string): string {
   return label.replace(LEADING_EMOJI, '').replace(TRAILING_EMOJI, '');
@@ -105,6 +106,25 @@ export function resolveStyle(
   return colorModeToStyle(override ?? getButtonColor(key));
 }
 
+export function disableButtonChrome(): void {
+  buttonChromeEnabled = false;
+}
+
+export function isButtonChromeEnabled(): boolean {
+  return buttonChromeEnabled;
+}
+
+export function isButtonChromeError(err: unknown): boolean {
+  const description =
+    (err as { description?: string } | undefined)?.description ??
+    (err as { error?: { description?: string } } | undefined)?.error?.description ??
+    (err as { message?: string } | undefined)?.message ??
+    '';
+  return /icon_custom_emoji_id|custom emoji|button style|can't parse inline keyboard button/i.test(
+    description,
+  );
+}
+
 /**
  * Apply the configured premium icon (`icon_custom_emoji_id`) and
  * Bot API 9.4 `style` to the LAST added button on the inline
@@ -116,6 +136,7 @@ export function applyButtonChrome(
   key: keyof typeof BUTTON_KEYS,
   override?: ColorMode,
 ): InlineKeyboard {
+  if (!buttonChromeEnabled) return kb;
   const iconId = resolveIconId(key);
   if (iconId !== undefined) kb.icon(iconId);
   const style = resolveStyle(key, override);
