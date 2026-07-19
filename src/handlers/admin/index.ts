@@ -7698,7 +7698,13 @@ adminBot.on('message:text', async (ctx, next) => {
   }
 
   if (text.startsWith('/')) {
-    // Don't capture other commands; let them through
+    // Allow global navigation commands to explicitly break out of any
+    // in-flight admin text flow before passing control onward.
+    const cmd = text.split(/\s+/, 1)[0]?.toLowerCase() ?? '';
+    if (/^\/(?:start|menu|admin)(?:@\S+)?$/.test(cmd)) {
+      ctx.session.adminFlow = undefined;
+    }
+    // Don't capture other commands; let them through.
     return next();
   }
 
