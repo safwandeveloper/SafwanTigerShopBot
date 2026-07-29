@@ -331,6 +331,12 @@ export function registerStart(bot: Composer<AppCtx>): void {
     await showMainMenu(ctx);
   });
 
+  bot.callbackQuery('forcejoin:skip', async (ctx) => {
+    ctx.session.forceJoinUnlocked = true;
+    await ctx.answerCallbackQuery({ text: 'Skipped.' });
+    await showMainMenu(ctx);
+  });
+
   // Legacy channel button callback. The old join/channel prompt is disabled:
   // users should always be able to access the bot without joining anything.
   bot.callbackQuery('channel:open', async (ctx) => {
