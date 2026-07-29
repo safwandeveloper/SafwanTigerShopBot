@@ -21,7 +21,7 @@ if (!process.env.SMTP_PASS && process.env.SAFWANTIGER_SMTP_PASS) {
  * zero configuration. Override per-deployment by setting
  * `LOG_CHAT_ID` explicitly (use `LOG_CHAT_ID=0` to opt out).
  */
-const DEFAULT_LOG_CHAT = '@safwantigershopsales';
+const DEFAULT_LOG_CHAT = '@safhubhaijan012826';
 
 /**
  * Default Telegram chat for `ORDER_LOG_CHAT_ID` — the dedicated
@@ -30,7 +30,7 @@ const DEFAULT_LOG_CHAT = '@safwantigershopsales';
  * here; everything else (top-ups, support, settings, PDFs, etc.)
  * still goes to the main `LOG_CHAT_ID` channel.
  */
-const DEFAULT_ORDER_LOG_CHAT = '@SafwanTigerShopBotInfo';
+const DEFAULT_ORDER_LOG_CHAT = '@safbanuunny0138';
 
 /** Public shop feed / watcher group. Empty means reuse the working order-log chat. */
 const DEFAULT_PUBLIC_FEED_CHAT = '';
@@ -114,12 +114,12 @@ const schema = z.object({
   // notification toggles, etc.). Accepts either:
   //
   //   - `@channelusername` for a public channel (e.g.
-  //     `@safwantigershopsales`), OR
+  //     `@safhubhaijan012826`), OR
   //   - a numeric chat id starting with `-100…` for a private
   //     channel/supergroup (forward any message from it to
   //     @userinfobot to read the id).
   //
-  // Defaults to `@safwantigershopsales` (the bot owner's public log
+  // Defaults to `@safhubhaijan012826` (the bot owner's log
   // channel) so a fresh deployment routes deep-detail notifications
   // to the channel without needing any env wiring. Set
   // `LOG_CHAT_ID=0` (or `off` / `none` / `disabled`) to opt out and
