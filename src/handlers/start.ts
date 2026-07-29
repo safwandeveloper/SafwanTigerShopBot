@@ -73,7 +73,9 @@ export async function showMainMenu(
   opts: { fresh?: boolean } = {},
 ): Promise<void> {
   const html = buildWelcomeHtml(ctx);
-  const reply_markup = mainMenuKeyboard(ctx.lang);
+  const plainText = [ctx.t('welcome.title'), '', ctx.t('welcome.balance', { balance: Number(ctx.user.balance).toFixed(2) })].join(
+    '\\n',
+  );
 
   const isChromeFailure = (err: unknown): boolean => {
     if (!isButtonChromeEnabled()) return false;
@@ -83,29 +85,54 @@ export async function showMainMenu(
     return true;
   };
 
+  const sendPlainFallback = async (): Promise<void> => {
+    await ctx.reply(plainText);
+  };
+
   // If we got here via callback (e.g. "⬅️ Main Menu" button) edit in place.
   if (!opts.fresh && ctx.callbackQuery) {
     try {
-      await ctx.editMessageText(html, { parse_mode: 'HTML', reply_markup });
+      await ctx.editMessageText(html, {
+        parse_mode: 'HTML',
+        reply_markup: mainMenuKeyboard(ctx.lang),
+      });
       return;
     } catch (err) {
       if (isChromeFailure(err)) {
         try {
-          await ctx.editMessageText(html, { parse_mode: 'HTML', reply_markup: mainMenuKeyboard(ctx.lang) });
+          await ctx.editMessageText(html, {
+            parse_mode: 'HTML',
+            reply_markup: mainMenuKeyboard(ctx.lang),
+          });
           return;
         } catch {
           // fallback to send below
         }
       }
-      // editing failed (e.g. message too old) → fall through to send
+      // editing failed (e.g. message too old or Telegram rejected HTML) → fall through to send
     }
   }
 
   try {
-    await ctx.reply(html, { parse_mode: 'HTML', reply_markup });
+    await ctx.reply(html, {
+      parse_mode: 'HTML',
+      reply_markup: mainMenuKeyboard(ctx.lang),
+    });
+    return;
   } catch (err) {
-    if (!isChromeFailure(err)) throw err;
-    await ctx.reply(html, { parse_mode: 'HTML', reply_markup: mainMenuKeyboard(ctx.lang) });
+    if (isChromeFailure(err)) {
+      try {
+        await ctx.reply(html, {
+          parse_mode: 'HTML',
+          reply_markup: mainMenuKeyboard(ctx.lang),
+        });
+        return;
+      } catch {
+        // Continue to the no-formatting fallback below.
+      }
+    }
+    logger.error({ err }, 'main-menu: formatted response failed; sending plain fallback');
+    await sendPlainFallback();
   }
 }
 
