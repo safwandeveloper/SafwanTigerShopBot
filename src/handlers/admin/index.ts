@@ -181,6 +181,7 @@ import {
   supplierSellPrice,
   syncSupplierProductLink,
   testSupplierConnection,
+  vexResellerSupplierConfig,
   type SupplierCatalogProduct,
 } from '../../services/supplierApi.js';
 import type { ColorMode } from '../../../config/index.js';
@@ -1229,6 +1230,9 @@ function supplierListKeyboard(
   const kb = new InlineKeyboard();
   kb.text('Add Reseller API', 'adm:api:supplier:add:reseller');
   apiPremiumButton(kb, 'api_key', 'primary');
+  kb.text('Add VEX Reseller', 'adm:api:supplier:add:vex');
+  apiPremiumButton(kb, 'api_key', 'primary');
+  kb.row();
   kb.text('Add Canboso', 'adm:api:supplier:add:canboso');
   apiPremiumButton(kb, 'api_key', 'primary');
   kb.row();
@@ -1673,6 +1677,36 @@ adminBot.callbackQuery('adm:api:supplier:add:reseller', async (ctx) => {
       '',
       'Example:',
       '`rsk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`',
+      '',
+      'After saving, open *Browse Products* and import products by button.',
+      '',
+      'Send `/cancel` to abort.',
+    ].join('\n'),
+    {
+      parse_mode: 'Markdown',
+      reply_markup: backRow(new InlineKeyboard()),
+      link_preview_options: { is_disabled: true },
+    },
+  );
+});
+
+adminBot.callbackQuery('adm:api:supplier:add:vex', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = { type: 'supplier_vex_add', step: 'key', data: {} };
+  await ctx.editMessageText(
+    [
+      '*Add VEX Reseller API Supplier*',
+      '',
+      'Send the VEX reseller API key only. This preset already knows:',
+      '`https://eismrrkygprctnwxmkbw.supabase.co/functions/v1/reseller-api`',
+      '',
+      'Auth: `Authorization: Bearer YOUR_API_KEY`',
+      'Products: `?action=products`',
+      'Balance: `?action=balance`',
+      'Order: `?action=order`',
+      '',
+      'Example:',
+      '`vex_sk_e44171d3e4501be3dc1d1270ac72b0e8a9086037...`',
       '',
       'After saving, open *Browse Products* and import products by button.',
       '',
@@ -7884,6 +7918,39 @@ adminBot.on('message:text', async (ctx, next) => {
       }
       await ctx.reply(
         `✅ Canboso supplier saved: *${escapeMd(source.name)}* (#${source.id})\n\n${escapeMd(testLine)}\n\nTap *Browse Products* to import by button.`,
+        { parse_mode: 'Markdown' },
+      );
+      await showSupplierDetail(ctx, source.id);
+      return;
+    }
+
+    if (flow.type === 'supplier_vex_add') {
+      const rawKey = ctx.message.text.trim();
+      const key =
+        rawKey.match(/\b(vex_sk_[a-zA-Z0-9_-]{24,})\b/)?.[1] ??
+        rawKey.match(/\b(rsk_live_[a-zA-Z0-9_-]{24,})\b/)?.[1] ??
+        rawKey.match(/\b(stapi_[a-zA-Z0-9_-]{24,})\b/)?.[1] ??
+        rawKey.match(/bearer\s+([a-zA-Z0-9_-]{24,})/i)?.[1] ??
+        rawKey;
+      if (key.length < 24) {
+        await ctx.reply('❌ Send the full VEX reseller API key, or `/cancel`.', {
+          parse_mode: 'Markdown',
+        });
+        return;
+      }
+      const source = await createSupplierApiSource(vexResellerSupplierConfig(key));
+      ctx.session.adminFlow = undefined;
+      let testLine = 'Saved. Tap Test Connection if you want to retry the live check.';
+      try {
+        const test = await testSupplierConnection(source);
+        testLine = test.ok
+          ? `Live test OK: ${test.balance === null ? 'balance unknown' : `balance ${apiMoney(test.balance)}`} · ${test.productsSeen} products`
+          : `Saved, but live test needs attention: ${test.error ?? 'unknown error'}`;
+      } catch (err) {
+        testLine = `Saved, but live test failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      await ctx.reply(
+        `✅ VEX Reseller API supplier saved: *${escapeMd(source.name)}* (#${source.id})\n\n${escapeMd(testLine)}\n\nTap *Browse Products* to import by button.`,
         { parse_mode: 'Markdown' },
       );
       await showSupplierDetail(ctx, source.id);
