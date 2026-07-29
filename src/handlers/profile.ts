@@ -11,6 +11,8 @@ import {
   getGiftCode,
   getOrder,
   getReferralBalance,
+  convertReferralBalance,
+  InsufficientReferralBalanceError,
   getUserStats,
   listAllProducts,
   listActivePromos,
@@ -144,6 +146,11 @@ function formatShortDate(iso: string, timezone: string | null): string {
  * removed by the user.
  */
 const EMAIL_AUTODELETE_MS = 5_000;
+const REFERRAL_USDT_PER_REF = 0.05;
+const REFERRAL_MIN_CONVERT_USDT = 0.70;
+const REFERRAL_MIN_CONVERT_REFS = Math.ceil(
+  REFERRAL_MIN_CONVERT_USDT / REFERRAL_USDT_PER_REF,
+);
 function autoDeleteMessage(ctx: AppCtx, message_id: number): void {
   setTimeout(() => {
     void ctx.api.deleteMessage(ctx.chat!.id, message_id).catch(() => {
@@ -594,6 +601,8 @@ export async function showReferScreen(
     countReferralsSince(ctx.user.telegram_id, DAY),
     countReferralsSince(ctx.user.telegram_id, 7 * DAY),
   ]);
+  const available = refBalance.available;
+  const earned = (available * REFERRAL_USDT_PER_REF).toFixed(2);
   const body = ctx.t('profile.refer.body', {
     link,
     ref24h,
@@ -601,18 +610,22 @@ export async function showReferScreen(
     left: 0,
     refTotal: refBalance.total,
     refSpent: 0,
-    refAvailable: refBalance.total,
+    refAvailable: refBalance.available,
     clicks: 0,
     pending: 0,
     active: refBalance.total,
-    earnedTotal: '0',
-    available: '0',
+    earnedTotal: earned,
+    earned,
+    available,
     transferred: '0',
     withdrawn: '0',
   });
   const referText = `${ctx.t('profile.refer.title')}\n\n${body}`;
   const html = renderMdHtml(referText);
-  const reply_markup = referKeyboard(ctx.lang, link, options);
+  const reply_markup = referKeyboard(ctx.lang, link, {
+    ...options,
+    canConvert: available >= REFERRAL_MIN_CONVERT_REFS,
+  });
   if (ctx.callbackQuery && !options.forceReply) {
     await ctx.editMessageText(renderMdHtml(referText), {
       parse_mode: 'HTML',
@@ -1029,10 +1042,40 @@ export function registerProfile(bot: Composer<AppCtx>): void {
   });
 
   bot.callbackQuery('profile:refer:convert', async (ctx) => {
-    await ctx.answerCallbackQuery({
-      text: 'Referral wallet conversion is disabled.',
-      show_alert: true,
-    });
+    const balance = await getReferralBalance(ctx.user.telegram_id);
+    const available = balance.available;
+    if (available < REFERRAL_MIN_CONVERT_REFS) {
+      await ctx.answerCallbackQuery({
+        text: ctx.t('profile.refer.convert_low', { available }),
+        show_alert: true,
+      });
+      return;
+    }
+    const amount = Number((available * REFERRAL_USDT_PER_REF).toFixed(2));
+    try {
+      const res = await convertReferralBalance({
+        user_id: ctx.user.telegram_id,
+        referral_cost: available,
+        amount,
+      });
+      await ctx.answerCallbackQuery({
+        text: ctx.t('profile.refer.convert_success', {
+          refs: available,
+          amount: amount.toFixed(2),
+          balance: res.newBalance.toFixed(2),
+        }),
+        show_alert: true,
+      });
+      await showReferScreen(ctx);
+    } catch (err) {
+      if (!(err instanceof InsufficientReferralBalanceError)) {
+        logger.warn({ err, telegram_id: ctx.user.telegram_id }, 'referral conversion failed');
+      }
+      await ctx.answerCallbackQuery({
+        text: ctx.t('profile.refer.convert_error'),
+        show_alert: true,
+      });
+    }
   });
 
   // ---- Notifications submenu ----

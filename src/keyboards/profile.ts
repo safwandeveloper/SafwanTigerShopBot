@@ -279,9 +279,13 @@ export function backToMainKeyboard(lang: Lang): InlineKeyboard {
 export function referKeyboard(
   lang: Lang,
   link: string,
-  options: { refreshCallback?: string; backCallback?: string } = {},
+  options: { refreshCallback?: string; backCallback?: string; canConvert?: boolean } = {},
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
+  if (options.canConvert) {
+    inlineBtn(kb, lang, 'refer_convert', 'profile:refer:convert');
+    kb.row();
+  }
   inlineCopyText(kb, lang, 'copy_link', link);
   kb.row();
   inlineUrl(kb, lang, 'live_refers', 'https://t.me/TigerStockChat');

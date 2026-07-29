@@ -755,16 +755,18 @@ export const en: Record<string, string> = {
     '{refer_pending} *Pending:* {pending}\n' +
     '{refer_active} *Active:* {active}\n' +
     '{refer_total} *Referred (Total):* {refTotal}\n' +
+    '{refer_active} *Referral Earnings:* ${earned} ({available} refs × $0.05)\n' +
     '\n' +
     '*Your Referral Link:*\n`{link}`',
   'profile.refer.convert_success':
     '💱 Converted *{refs} refs* into *{amount} USDT*.\n\n💳 Wallet Balance: *{balance} USDT*',
   'profile.refer.convert_low':
-    '⚠️ Not enough refs to convert.\n\nYou need *20 active refs* to convert into *1 USDT*.\nCurrent Referral Pay Balance: *{available} refs*',
+    '⚠️ Not enough referrals to convert yet.\n\nYou need *$0.70* (14 referrals × $0.05) to convert into your wallet.\nCurrent balance: *{available} referrals*.',
   'profile.refer.convert_error':
     '⚠️ Could not convert refs right now. Please try again.',
   'btn.copy_link': '📋 Copy Link',
   'btn.live_refers': '🔵 See Your Live Refers',
+  'btn.refer_convert': '💱 Convert to Wallet',
   'btn.currency': '💱 Currency',
   'btn.shop_view': '🛍 Shop View',
   'btn.shop_grouping': '🎁 Shop Grouping',

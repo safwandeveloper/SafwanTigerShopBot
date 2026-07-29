@@ -175,7 +175,7 @@ export async function fulfilOrderForDeposit(args: {
           intent.qty,
           order.id,
         );
-  // Match the wallet-pay layout: split the items into 7-per-chunk
+  // Match the wallet-pay layout: split the items into 10-per-chunk
   // messages so the Order Delivered card never blows past Telegram's
   // 4096-char limit on bulk orders. The first chunk goes inside the
   // header card; subsequent chunks are sent as plain blockquote
@@ -230,7 +230,7 @@ export async function fulfilOrderForDeposit(args: {
     );
   }
 
-  // Step 2b: send any remaining 7-link chunks as plain blockquote
+  // Step 2b: send any remaining 10-link chunks as plain blockquote
   // follow-up messages. We push on through individual failures so a
   // single bad link doesn't keep the buyer from receiving the rest.
   for (let i = 1; !manualForm && i < deliveredChunks.length; i++) {
