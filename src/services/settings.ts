@@ -236,6 +236,7 @@ export async function clearChannelUrl(updated_by?: number): Promise<void> {
 
 export function getForceJoinEnabled(): boolean {
   const v = cache.get('force_join.enabled');
+  if (v === undefined) return true;
   return v === true || v === 'true';
 }
 

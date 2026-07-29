@@ -3,11 +3,9 @@ import type { AppCtx } from './user.js';
 import { logger } from '../logger.js';
 import { getChannelUrl, getForceJoinEnabled } from '../services/settings.js';
 
-const DEFAULT_FORCE_JOIN_CHANNEL = '@safwantigerstore';
+const DEFAULT_FORCE_JOIN_CHANNEL = '@SafwanTigerStore';
 const BELL_EMOJI_ID = '5798670723975221399';
-const JOIN_BUTTON_EMOJI_ID = '5041888071851705019';
 const DONE_EMOJI_ID = '6170055790146098906';
-const SKIP_BUTTON_EMOJI_ID = '6170055790146098906';
 
 export type ForceJoinStatus = 'disabled' | 'joined' | 'not_joined' | 'unknown';
 
@@ -43,14 +41,9 @@ async function checkChannelMembership(ctx: AppCtx, channelUrl: string): Promise<
 
 async function showForceJoinPrompt(ctx: AppCtx, channelUrl: string): Promise<void> {
   const kb = new InlineKeyboard()
-    .url('Join Channel', forceJoinUrl(channelUrl))
-    .icon(JOIN_BUTTON_EMOJI_ID)
+    .url('📢 Join Channel', forceJoinUrl(channelUrl))
     .row()
-    .text('Done', 'forcejoin:done')
-    .icon(DONE_EMOJI_ID)
-    .row()
-    .text('Skip', 'forcejoin:skip')
-    .icon(SKIP_BUTTON_EMOJI_ID);
+    .text('✅ Done', 'forcejoin:done');
   const text = [
     `<tg-emoji emoji-id="${BELL_EMOJI_ID}">🔔</tg-emoji> <b>Please join our Channel to continue using this bot.</b>`,
     '',
@@ -82,7 +75,6 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   if (!ctx.from) return next();
   if (!getForceJoinEnabled()) return next();
   if (ctx.callbackQuery?.data === 'forcejoin:done') return next();
-  if (ctx.callbackQuery?.data === 'forcejoin:skip') return next();
   if (ctx.from.id === Number(process.env.ADMIN_USER_ID || 0)) return next();
   if (!(ctx.user as typeof ctx.user & { __just_created?: boolean }).__just_created) {
     return next();
