@@ -161,7 +161,7 @@ export function buildOrderDeliveredItemsBlock(
  * gets the inline keyboard, so the buyer scrolls down to the bottom
  * and finds Using Method there.
  */
-export const ORDER_DELIVERED_CHUNK_SIZE = 7;
+export const ORDER_DELIVERED_CHUNK_SIZE = 10;
 
 export type DeliveredChunk = {
   /** Markdown blockquote ready for `renderMdHtml`. */

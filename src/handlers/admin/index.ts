@@ -9063,7 +9063,7 @@ adminBot.on('message:text', async (ctx, next) => {
         ctx.session.adminFlow = {
           type: 'announce',
           step: 'confirm',
-          data: { text: body, format },
+          data: { text: body, format, share_sales: true },
         };
         await showAnnounceConfirm(ctx);
         return;

@@ -243,6 +243,7 @@ export const ar: Record<string, string> = {
     '{refer_active} *النشط:* {active}\n' +
     '{refer_left} *المتبقي:* {left}\n' +
     '{refer_total} *الإحالات (الإجمالي):* {refTotal}\n' +
+    '{refer_active} *أرباح الإحالة:* ${earned} ({available} إحالات × $0.05)\n' +
     '{refer_coin} *إجمالي الأرباح:* {earnedTotal} USDT\n' +
     '{refer_withdrawn} *المسحوب:* {withdrawn} USDT\n\n' +
     '{prod_referral} *رصيد دفع الإحالات:* {refAvailable} إحالات\n' +
@@ -252,10 +253,11 @@ export const ar: Record<string, string> = {
   'profile.refer.convert_success':
     '💱 تم تحويل *{refs} إحالة* إلى *{amount} USDT*.\n\n💳 رصيد المحفظة: *{balance}*',
   'profile.refer.convert_low':
-    '⚠️ لا يوجد رصيد إحالات كافٍ للتحويل.\n\nتحتاج *20 إحالة نشطة* للتحويل إلى *1 USDT*.\nرصيد Referral Pay الحالي: *{available} إحالة*',
+    '⚠️ لا يوجد رصيد إحالات كافٍ للتحويل بعد.\n\nتحتاج *$0.70* (14 إحالة × $0.05) للتحويل إلى محفظتك.\nالرصيد الحالي: *{available} إحالة*.',
   'profile.refer.convert_error':
     '⚠️ تعذر تحويل الإحالات الآن. حاول مرة أخرى.',
   'btn.live_refers': '🔵 See Your Live Refers',
+  'btn.refer_convert': '💱 تحويل إلى المحفظة',
   'btn.currency': '💱 Currency',
   'btn.shop_view': '🛍 Shop View',
   'btn.shop_grouping': '🎁 Shop Grouping',

@@ -148,6 +148,7 @@ export const BUTTON_KEYS = {
   // ---- Refer screen --------------------------------------------
   copy_link: 'btn.copy_link',
   live_refers: 'btn.live_refers',
+  refer_convert: 'btn.refer_convert',
 
   // ---- Redeem Gift Code ---------------------------------------
   redeem: 'btn.redeem',
@@ -304,6 +305,7 @@ export const DEFAULT_BUTTON_COLORS: Record<keyof typeof BUTTON_KEYS, ColorMode> 
   out_of_stock: 'red',
   my_orders: 'none',
   refer: 'green',
+  refer_convert: 'green',
   notifications: 'none',
   toggle_stock: 'none',
   toggle_announcements: 'none',

@@ -246,6 +246,7 @@ export const vi: Record<string, string> = {
     '{refer_active} *Active:* {active}\n' +
     '{refer_left} *Left:* {left}\n' +
     '{refer_total} *Giới thiệu (Tổng):* {refTotal}\n' +
+    '{refer_active} *Thu nhập giới thiệu:* ${earned} ({available} lượt × $0.05)\n' +
     '{refer_coin} *Tổng đã kiếm:* {earnedTotal} USDT\n' +
     '{refer_withdrawn} *Đã rút:* {withdrawn} USDT\n\n' +
     '{prod_referral} *Số dư Referral Pay:* {refAvailable} lượt\n' +
@@ -255,10 +256,11 @@ export const vi: Record<string, string> = {
   'profile.refer.convert_success':
     '💱 Đã đổi *{refs} refs* thành *{amount} USDT*.\n\n💳 Số dư ví: *{balance}*',
   'profile.refer.convert_low':
-    '⚠️ Không đủ refs để đổi.\n\nBạn cần *20 refs hoạt động* để đổi thành *1 USDT*.\nSố dư Referral Pay hiện tại: *{available} refs*',
+    '⚠️ Chưa đủ lượt giới thiệu để đổi.\n\nBạn cần *$0.70* (14 lượt × $0.05) để chuyển vào ví.\nSố dư hiện tại: *{available} lượt*.',
   'profile.refer.convert_error':
     '⚠️ Không thể đổi refs lúc này. Vui lòng thử lại.',
   'btn.live_refers': '🔵 See Your Live Refers',
+  'btn.refer_convert': '💱 Đổi sang ví',
   'btn.currency': '💱 Currency',
   'btn.shop_view': '🛍 Shop View',
   'btn.shop_grouping': '🎁 Shop Grouping',
