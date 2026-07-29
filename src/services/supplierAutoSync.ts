@@ -118,12 +118,16 @@ export function startSupplierStockSyncLoop(api: Api): void {
   if (timer) return;
   const ms = intervalMs();
   timer = setInterval(() => {
-    void syncSupplierStocksOnce(api);
+    void syncSupplierStocksOnce(api).catch((err) => {
+      logger.error({ err }, 'supplier auto sync run failed');
+    });
   }, ms);
   timer.unref?.();
 
   const firstRun = setTimeout(() => {
-    void syncSupplierStocksOnce(api);
+    void syncSupplierStocksOnce(api).catch((err) => {
+      logger.error({ err }, 'supplier auto sync initial run failed');
+    });
   }, 30_000);
   firstRun.unref?.();
 
