@@ -514,11 +514,17 @@ adminBot.callbackQuery('adm:ai', async (ctx) => {
     [
       '🤖 *AI Setup*',
       '',
-      'Configure the assistant used by the AI Support flow.',
+      'Configure *Kiwi*, the assistant used by the AI Support flow.',
+      'Kiwi is automatically trained on your live store — products,',
+      'prices, stock and payment methods — so it answers from real data.',
+      '',
+      '✅ *Free option (recommended):* Google Gemini.',
+      'Get a free key at https://aistudio.google.com/apikey — no billing',
+      'required — then tap 🔑 Set AI API Key and paste it.',
       '',
       'Provider is auto-detected from the API-key shape:',
-      '• `AIza…` → Google AI Studio (Gemini)',
-      '• `sk-…`  → OpenAI Chat Completions',
+      '• `AIza…` → Google AI Studio (Gemini) — *free tier*',
+      '• `sk-…`  → OpenAI Chat Completions — *paid*',
       '',
       '_The key you paste here overrides `OPENAI_API_KEY` from the deployment env._',
     ].join('\n'),
@@ -5463,7 +5469,7 @@ adminBot.callbackQuery(/^adm:ann:buy:set:(\d+)$/, async (ctx) => {
   // icon) when the admin swaps to a different product. Defaults are
   // only applied on the very first product pick (no prior `buy`).
   const prior = (flow.data as { buy?: AnnounceBuy }).buy;
-  const defaultIconId = '5312361253610475399';
+  const defaultIconId = '5440841102871517055';
   const defaultIconUnicode = undefined;
   const buy: AnnounceBuy = prior
     ? { ...prior, product_id: product.id, product_name: product.name }
@@ -5471,7 +5477,7 @@ adminBot.callbackQuery(/^adm:ann:buy:set:(\d+)$/, async (ctx) => {
         product_id: product.id,
         product_name: product.name,
         label: 'Buy Now',
-        color: 'green',
+        color: 'blue',
         icon_custom_emoji_id: defaultIconId,
         icon_unicode: defaultIconUnicode,
       };
