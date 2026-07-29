@@ -93,7 +93,7 @@ live in the `settings` table and take precedence over the file values.
 
 ## 2. Prerequisites
 
-- **Node.js ≥ 20**, npm ≥ 10
+- **Node.js 22.19–24.x**, npm ≥ 10
 - A **Supabase** project (Free tier works) — https://supabase.com
 - A **Telegram bot token** from [@BotFather](https://t.me/BotFather)
 - A **Railway** account (or any platform that runs Node) — https://railway.app
@@ -214,7 +214,7 @@ npm run lint
 1. Push this repo to GitHub.
 2. In Railway: **New Project → Deploy from GitHub** → pick this repo.
 3. Railway auto-detects Node and runs `npm ci && npm run build`,
-   then `node dist/index.js` (see `railway.toml`).
+   then `node dist/src/index.js` (see `railway.toml`).
 4. **Variables** tab — add every value from `.env.example`. At minimum:
 
    | Variable                       | Value                                          |
@@ -403,12 +403,12 @@ curl -I https://api1.binance.com
 
 ### Alternative platforms
 
-The bot has no platform-specific code. Anywhere that runs `node dist/index.js`
+The bot has no platform-specific code. Anywhere that runs `node dist/src/index.js`
 will work: **Fly.io**, **Render**, **VPS + pm2**, or **Docker**:
 
 ```dockerfile
 # Dockerfile (sample)
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev

@@ -36,12 +36,38 @@ export async function buildBot(): Promise<Bot<AppCtx>> {
   registerPublicGroup(bot);
   bot.use(adminBot);
 
-  bot.catch((err) => {
+  bot.catch(async (err) => {
     // "message is not modified" fires whenever the user taps a button
     // that re-renders the exact same screen — purely cosmetic and harmless.
     const msg = (err.error as { description?: string } | undefined)?.description ?? '';
     if (msg.includes('message is not modified')) return;
-    logger.error({ err: err.error }, 'Unhandled bot error');
+    logger.error(
+      {
+        err: err.error,
+        updateId: err.ctx.update.update_id,
+        userId: err.ctx.from?.id,
+      },
+      'Unhandled bot error',
+    );
+
+    // Middleware failures (most commonly a transient database error) used
+    // to make commands look completely ignored. Always acknowledge private
+    // chats with a plain, dependency-free response so /start and /admin can
+    // never fail silently again.
+    try {
+      if (err.ctx.callbackQuery) {
+        await err.ctx.answerCallbackQuery({
+          text: 'Temporary error. Please try again in a few seconds.',
+          show_alert: true,
+        });
+      } else if (err.ctx.chat?.type === 'private') {
+        await err.ctx.reply(
+          '⚠️ The bot hit a temporary error. Please try /start again in a few seconds.',
+        );
+      }
+    } catch (replyErr) {
+      logger.error({ err: replyErr }, 'Failed to send bot error fallback');
+    }
   });
 
   // Pre-load admin-editable settings into memory.
