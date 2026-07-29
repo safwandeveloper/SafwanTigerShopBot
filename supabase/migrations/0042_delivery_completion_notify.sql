@@ -1,5 +1,5 @@
 -- =====================================================================
--- 0041_delivery_completion_notify.sql
+-- 0042_delivery_completion_notify.sql
 --
 -- Adds admin completion notification for delivery form orders:
 -- - admin_completed_at: timestamp when admin marked order as complete

@@ -1,5 +1,5 @@
 -- =====================================================================
--- 0040_referral_fraud_flag.sql
+-- 0041_referral_fraud_flag.sql
 -- Add referral_fraud_suspected flag to users table.
 -- This flag is used to block users suspected of referral fraud from
 -- converting referrals to wallet or buying products with referrals.
