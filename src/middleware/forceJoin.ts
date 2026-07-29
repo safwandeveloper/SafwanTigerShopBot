@@ -6,6 +6,8 @@ import { getChannelUrl, getForceJoinEnabled } from '../services/settings.js';
 const DEFAULT_FORCE_JOIN_CHANNEL = '@SafwanTigerStore';
 const BELL_EMOJI_ID = '5798670723975221399';
 const DONE_EMOJI_ID = '6170055790146098906';
+const SKIP_EMOJI_ID = '5436044822697750252';
+const JOIN_EMOJI_ID = '5424818078833715060';
 
 export type ForceJoinStatus = 'disabled' | 'joined' | 'not_joined' | 'unknown';
 
@@ -41,11 +43,14 @@ async function checkChannelMembership(ctx: AppCtx, channelUrl: string): Promise<
 
 async function showForceJoinPrompt(ctx: AppCtx, channelUrl: string): Promise<void> {
   const kb = new InlineKeyboard()
-    .url('📢 Join Channel', forceJoinUrl(channelUrl))
+    .url('Join Channel', forceJoinUrl(channelUrl))
+    .icon(JOIN_EMOJI_ID)
     .row()
-    .text('✅ Done', 'forcejoin:done')
+    .text('Done', 'forcejoin:done')
+    .icon(DONE_EMOJI_ID)
     .row()
-    .text('⏭ Skip', 'forcejoin:skip');
+    .text('Skip', 'forcejoin:skip')
+    .icon(SKIP_EMOJI_ID);
   const text = [
     `<tg-emoji emoji-id="${BELL_EMOJI_ID}">🔔</tg-emoji> <b>Please join our Channel to continue using this bot.</b>`,
     '',
