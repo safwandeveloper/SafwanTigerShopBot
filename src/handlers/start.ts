@@ -74,7 +74,7 @@ export async function showMainMenu(
 ): Promise<void> {
   const html = buildWelcomeHtml(ctx);
   const plainText = [ctx.t('welcome.title'), '', ctx.t('welcome.balance', { balance: Number(ctx.user.balance).toFixed(2) })].join(
-    '\\n',
+    '\n',
   );
 
   const isChromeFailure = (err: unknown): boolean => {

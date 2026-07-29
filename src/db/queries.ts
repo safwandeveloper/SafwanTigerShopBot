@@ -26,6 +26,7 @@ import type {
   SupplierOrderMethod,
 } from '../types.js';
 import type { Lang } from '../../config/index.js';
+import { env } from '../env.js';
 import { logger } from '../logger.js';
 
 // ---------- Users ----------
@@ -92,11 +93,19 @@ export async function getOrCreateUser(args: {
   language: Lang;
   referred_by?: number | null;
 }): Promise<DBUser> {
-  const { data: existing } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from('users')
     .select('*')
     .eq('telegram_id', args.telegram_id)
     .maybeSingle();
+
+  if (lookupError) {
+    logger.error(
+      { err: lookupError, telegram_id: args.telegram_id },
+      'getOrCreateUser lookup failed',
+    );
+    throw lookupError;
+  }
 
   if (existing) {
     // Touch last_seen_at and refresh username/first_name in case it changed.
@@ -620,11 +629,21 @@ export async function getReferralEarnings(
 // ---------- Admins ----------
 
 export async function isAdmin(telegram_id: number): Promise<boolean> {
-  const { data } = await supabase
+  // The configured owner must always retain recovery access even if
+  // the admins seed migration was missed or the database is briefly
+  // unavailable. ADMIN_USER_ID is a trusted deployment secret and is
+  // already the source of truth for live-support and admin notifications.
+  if (telegram_id === env.ADMIN_USER_ID) return true;
+
+  const { data, error } = await supabase
     .from('admins')
     .select('telegram_id')
     .eq('telegram_id', telegram_id)
     .maybeSingle();
+  if (error) {
+    logger.warn({ err: error, telegram_id }, 'admin lookup failed');
+    return false;
+  }
   return Boolean(data);
 }
 
