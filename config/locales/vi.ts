@@ -240,23 +240,22 @@ export const vi: Record<string, string> = {
   // Màn hình Giới thiệu & Kiếm.
   'profile.refer.title': '{refer_title} *Giới thiệu & Kiếm*',
   'profile.refer.body':
-    '{refer_prize_l} *Giới thiệu 10 người và thắng $0.50* {refer_prize_r}\n\n' +
+    '{refer_prize_l} *Giới thiệu 5 người và nhận $0.10* {refer_prize_r}\n\n' +
     '{refer_clicks} *Clicks:* {clicks}\n' +
     '{refer_pending} *Pending:* {pending}\n' +
     '{refer_active} *Active:* {active}\n' +
     '{refer_left} *Left:* {left}\n' +
     '{refer_total} *Giới thiệu (Tổng):* {refTotal}\n' +
-    '{refer_active} *Thu nhập giới thiệu:* ${earned} ({available} lượt × $0.05)\n' +
     '{refer_coin} *Tổng đã kiếm:* {earnedTotal} USDT\n' +
     '{refer_withdrawn} *Đã rút:* {withdrawn} USDT\n\n' +
-    '{prod_referral} *Số dư Referral Pay:* {refAvailable} lượt\n' +
-    '{refer_spent} *Đã dùng mua hàng:* {refSpent} lượt\n\n' +
-    '> Chuyển lợi nhuận vào ví bất kỳ lúc nào. Rút tiền mặt liên hệ hỗ trợ (tối thiểu $1.00).\n\n' +
+    '{refer_paybalance} *Số dư Referral Pay:* {refAvailable} lượt\n' +
+    '{refer_spent} *Đã chuyển thành USDT:* {converted} lượt\n\n' +
+    '_Chuyển tiền vào ví khi đạt $0.50. Để rút tiền mặt, liên hệ hỗ trợ._\n\n' +
     '*Liên kết giới thiệu của bạn:*\n`{link}`',
   'profile.refer.convert_success':
     '💱 Đã đổi *{refs} refs* thành *{amount} USDT*.\n\n💳 Số dư ví: *{balance}*',
   'profile.refer.convert_low':
-    '⚠️ Chưa đủ lượt giới thiệu để đổi.\n\nBạn cần *$0.70* (14 lượt × $0.05) để chuyển vào ví.\nSố dư hiện tại: *{available} lượt*.',
+    '⚠️ Chưa đủ lượt giới thiệu để đổi.\n\nChuyển vào ví cần giá trị giới thiệu là *${min}*.\nSố dư hiện tại: *{available} lượt* (≈ ${earned}).',
   'profile.refer.convert_error':
     '⚠️ Không thể đổi refs lúc này. Vui lòng thử lại.',
   'btn.live_refers': '🔵 See Your Live Refers',
