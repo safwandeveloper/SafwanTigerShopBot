@@ -1502,9 +1502,59 @@ function resolveAiConfig(): { key: string; prompt: string } | null {
  * sees recent prices / stock / payment methods without hammering
  * the DB on every keystroke.
  */
+type StoreKnowledge = {
+  products: {
+    id: number;
+    name: string;
+    price: number;
+    stock: number;
+    category: string;
+    description: string;
+  }[];
+  categories: { id: number; name: string }[];
+  payments: string[];
+};
+type StoreKnowledgeCache = { value: StoreKnowledge; expiresAt: number };
 type StoreSnapshot = { text: string; expiresAt: number };
+let storeKnowledgeCache: StoreKnowledgeCache | null = null;
 let storeSnapshotCache: StoreSnapshot | null = null;
 const STORE_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+
+async function getStoreKnowledge(): Promise<StoreKnowledge> {
+  if (storeKnowledgeCache && storeKnowledgeCache.expiresAt > Date.now()) {
+    return storeKnowledgeCache.value;
+  }
+  try {
+    const [categories, productsPage, payments] = await Promise.all([
+      listCategories(),
+      listActiveProducts(0, 200),
+      listPaymentMethods(),
+    ]);
+    const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
+    const value: StoreKnowledge = {
+      categories: categories.map((category) => ({ id: category.id, name: category.name })),
+      products: productsPage.rows.map((product) => ({
+        id: product.id,
+        name: product.name,
+        price: Number(product.price),
+        stock: Number(product.stock),
+        category:
+          product.category_id != null
+            ? (categoryNames.get(product.category_id) ?? 'Other')
+            : 'Other',
+        description: product.description ?? '',
+      })),
+      payments: payments.map((payment) => payment.name),
+    };
+    storeKnowledgeCache = { value, expiresAt: Date.now() + STORE_SNAPSHOT_TTL_MS };
+    return value;
+  } catch (err) {
+    logger.warn({ err }, 'AI: failed to load store knowledge, using empty data');
+    const value: StoreKnowledge = { products: [], categories: [], payments: [] };
+    storeKnowledgeCache = { value, expiresAt: Date.now() + STORE_SNAPSHOT_TTL_MS };
+    return value;
+  }
+}
 
 /**
  * Build a compact, model-friendly snapshot of the current shop state:
@@ -1518,18 +1568,10 @@ async function buildStoreContextBlock(): Promise<string> {
     return storeSnapshotCache.text;
   }
   try {
-    const [categories, productsPage, payments] = await Promise.all([
-      listCategories(),
-      // Cap at 200 active products so the prompt stays well under
-      // model context limits even for very large catalogs.
-      listActiveProducts(0, 200),
-      listPaymentMethods(),
-    ]);
-    const catName = new Map(categories.map((c) => [c.id, c.name]));
-    const grouped = new Map<string, typeof productsPage.rows>();
-    for (const p of productsPage.rows) {
-      const key =
-        p.category_id != null ? (catName.get(p.category_id) ?? 'Other') : 'Other';
+    const knowledge = await getStoreKnowledge();
+    const grouped = new Map<string, StoreKnowledge['products']>();
+    for (const p of knowledge.products) {
+      const key = p.category;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(p);
     }
@@ -1559,11 +1601,11 @@ async function buildStoreContextBlock(): Promise<string> {
       }
     }
     lines.push('Payment methods (used in Topup):');
-    if (payments.length === 0) {
+    if (knowledge.payments.length === 0) {
       lines.push('  • No payment methods configured yet.');
     } else {
-      for (const m of payments) {
-        lines.push(`  - ${m.name}`);
+      for (const payment of knowledge.payments) {
+        lines.push(`  - ${payment}`);
       }
     }
     lines.push('');
@@ -1746,13 +1788,109 @@ async function callGemini(
   return text;
 }
 
+function normalizeAiQuestion(question: string): string {
+  return question.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function hasAiKeyword(question: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => question.includes(keyword));
+}
+
 /**
- * User-facing error string shown whenever the upstream AI provider
- * is unavailable (rate-limited, 4xx/5xx, network blip, missing key,
- * bad model id, etc.). Kept short and identical across every
- * failure mode so the user always knows to just retry.
+ * Whole-word variant used for short/ambiguous keywords (e.g. the
+ * greeting words) so "hi" doesn't match inside "which" / "this".
  */
-const AI_ERROR_RETRY_MESSAGE = '🥝 Kiwi 404 Please Send again message';
+function hasAiWord(question: string, words: string[]): boolean {
+  return words.some((word) =>
+    new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(question),
+  );
+}
+
+async function answerLocal(question: string): Promise<string> {
+  const normalized = normalizeAiQuestion(question);
+  const knowledge = await getStoreKnowledge();
+  const products = knowledge.products.filter((product) => {
+    const name = normalizeAiQuestion(product.name);
+    return name.length >= 3 && normalized.includes(name);
+  });
+  const matchedProducts = products.slice(0, 3);
+  const stockLabel = (stock: number): string => (stock > 0 ? `${stock} in stock` : 'out of stock');
+  const productLines = (field: 'price' | 'stock'): string =>
+    matchedProducts
+      .map((product) =>
+        field === 'price'
+          ? `${product.name} — ${product.price.toFixed(2)} USDT — ${stockLabel(product.stock)}`
+          : `${product.name} — ${stockLabel(product.stock)}`,
+      )
+      .join('\n');
+
+  if (hasAiKeyword(normalized, ['thank', 'thanks'])) {
+    return "You're welcome!";
+  }
+  if (
+    hasAiKeyword(normalized, [
+      'human',
+      'agent',
+      'real person',
+      'talk to someone',
+      'live support',
+    ])
+  ) {
+    return 'Please tap *💬 Support → 🟢 Live Support* to talk to a human.';
+  }
+  if (hasAiKeyword(normalized, ['refer', 'referral', 'invite', 'earn'])) {
+    return 'Refer 5 users to get $0.10 ($0.02 each). Transfer earnings to your wallet once they reach $0.50. Your link is in *Settings → Refer & Earn*.';
+  }
+  if (hasAiKeyword(normalized, ['coupon', 'gift code', 'redeem', 'promo code'])) {
+    return 'Redeem a coupon or gift code in *Settings → Redeem Code*.';
+  }
+  if (hasAiKeyword(normalized, ['order status', 'my order', 'where is my order', 'order'])) {
+    return 'Check your order in *Settings → My Orders*. If there is still an issue, tap *💬 Support → 🟢 Live Support*.';
+  }
+  if (hasAiKeyword(normalized, ['delivery', 'receive', 'how do i get'])) {
+    return 'Digital goods are delivered instantly in chat after purchase. Check *Settings → My Orders* if needed.';
+  }
+  if (hasAiKeyword(normalized, ['topup', 'top up', 'deposit', 'recharge', 'add money', 'add funds', 'wallet'])) {
+    const methods =
+      knowledge.payments.length > 0 ? knowledge.payments.join(', ') : 'no payment methods configured yet';
+    return `The *Topup* menu adds USDT to your wallet. Available payment methods: ${methods}.`;
+  }
+  if (hasAiKeyword(normalized, ['payment methods', 'how to pay', 'how can i pay'])) {
+    const methods =
+      knowledge.payments.length > 0 ? knowledge.payments.join(', ') : 'No payment methods configured yet.';
+    return `Configured payment methods: ${methods}`;
+  }
+  if (hasAiKeyword(normalized, ['language'])) {
+    return 'Change your language in *Settings → Language*.';
+  }
+  if (hasAiKeyword(normalized, ['account', 'email', 'login'])) {
+    return 'Manage your account and email from *Settings*.';
+  }
+  if (hasAiKeyword(normalized, ['catalog', 'what do you sell', 'products', 'product list', 'list'])) {
+    const categories = knowledge.categories.map((category) => category.name).join(', ');
+    const examples = knowledge.products
+      .slice(0, 5)
+      .map((product) => `${product.name} — ${product.price.toFixed(2)} USDT`)
+      .join('\n');
+    if (!examples) return 'The catalog is currently empty. Please open *Shop* to browse.';
+    return `Categories: ${categories || 'Other'}.\n${examples}`;
+  }
+  if (hasAiKeyword(normalized, ['stock', 'available', 'in stock'])) {
+    if (matchedProducts.length > 0) return productLines('stock');
+    return 'Please open *Shop* to browse product availability.';
+  }
+  if (hasAiKeyword(normalized, ['price', 'cost', 'how much', 'rate'])) {
+    if (matchedProducts.length > 0) return productLines('price');
+    return 'Please open *Shop* to browse current prices.';
+  }
+  if (hasAiKeyword(normalized, ['what can you do', 'help'])) {
+    return 'I can help with products, prices, stock, topup, orders, delivery, referrals, settings and gift codes.';
+  }
+  if (hasAiWord(normalized, ['hi', 'hello', 'hey', 'salam', 'start'])) {
+    return 'Hi! 🥝 I can help with products, prices, stock, topup, orders and referrals.';
+  }
+  return 'I can help with products, prices, stock, topup, orders and referrals. For anything else, tap *💬 Support → 🟢 Live Support*.';
+}
 
 async function answerAI(
   api: import('grammy').Api,
@@ -1761,16 +1899,7 @@ async function answerAI(
 ): Promise<string> {
   const cfg = resolveAiConfig();
   if (!cfg) {
-    void adminLog.logAiError(api, {
-      user,
-      provider: 'unconfigured',
-      model: env.OPENAI_MODEL,
-      status: 'no-key',
-      errorMessage:
-        'No AI API key configured. Paste one via 🤖 AI Setup → 🔑 Set AI API Key.',
-      question,
-    });
-    return AI_ERROR_RETRY_MESSAGE;
+    return answerLocal(question);
   }
   try {
     const context = await buildStoreContextBlock();
@@ -1800,6 +1929,6 @@ async function answerAI(
         question,
       });
     }
-    return AI_ERROR_RETRY_MESSAGE;
+    return answerLocal(question);
   }
 }
