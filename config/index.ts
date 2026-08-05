@@ -561,6 +561,7 @@ export const EMOJI: Record<string, EmojiSpec> = {
   refer_transferred: { unicode: '🔁', custom_emoji_id: '5832493956503442338' },
   refer_withdrawn: { unicode: '💵', custom_emoji_id: '5201873447554145566' },
   refer_spent: { unicode: '🧾', custom_emoji_id: '6276009124350138166' },
+  refer_paybalance: { unicode: '🎫', custom_emoji_id: '4958699241137505132' },
 
   // ---- Public group feed ---------------------------------------
   feed_title: { unicode: '🎉', custom_emoji_id: '6181381563071077485' },

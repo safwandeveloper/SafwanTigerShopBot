@@ -4,7 +4,6 @@ import { type Lang } from '../../config/index.js';
 import { POPULAR_REGIONS, formatLocalTime, getRegion } from '../../config/regions.js';
 import {
   adjustBalance,
-  countReferralsSince,
   countGiftCodeRedemptions,
   countGiftCodeRedemptionsByUser,
   findUserByEmail,
@@ -146,11 +145,8 @@ function formatShortDate(iso: string, timezone: string | null): string {
  * removed by the user.
  */
 const EMAIL_AUTODELETE_MS = 5_000;
-const REFERRAL_USDT_PER_REF = 0.05;
-const REFERRAL_MIN_CONVERT_USDT = 0.70;
-const REFERRAL_MIN_CONVERT_REFS = Math.ceil(
-  REFERRAL_MIN_CONVERT_USDT / REFERRAL_USDT_PER_REF,
-);
+const REFERRAL_USDT_PER_REF = 0.02;
+const REFERRAL_MIN_CONVERT_USDT = 0.5;
 function autoDeleteMessage(ctx: AppCtx, message_id: number): void {
   setTimeout(() => {
     void ctx.api.deleteMessage(ctx.chat!.id, message_id).catch(() => {
@@ -595,36 +591,32 @@ export async function showReferScreen(
 ): Promise<void> {
   const code = ctx.user.ref_code ?? `R${ctx.user.telegram_id.toString(36).toUpperCase()}`;
   const link = `https://t.me/${env.BOT_USERNAME}?start=${code}`;
-  const DAY = 24 * 60 * 60 * 1000;
-  const [refBalance, ref24h, ref7d] = await Promise.all([
-    getReferralBalance(ctx.user.telegram_id),
-    countReferralsSince(ctx.user.telegram_id, DAY),
-    countReferralsSince(ctx.user.telegram_id, 7 * DAY),
-  ]);
+  const refBalance = await getReferralBalance(ctx.user.telegram_id);
+  const total = refBalance.total;
   const available = refBalance.available;
-  const earned = (available * REFERRAL_USDT_PER_REF).toFixed(2);
+  const converted = refBalance.converted;
+  const active = total;
+  const left = 5 - (active % 5);
+  const earnedTotal = (total * REFERRAL_USDT_PER_REF).toFixed(2);
+  const withdrawn = (converted * REFERRAL_USDT_PER_REF).toFixed(2);
+  const availableEarnings = available * REFERRAL_USDT_PER_REF;
   const body = ctx.t('profile.refer.body', {
     link,
-    ref24h,
-    ref7d,
-    left: 0,
-    refTotal: refBalance.total,
-    refSpent: 0,
-    refAvailable: refBalance.available,
     clicks: 0,
     pending: 0,
-    active: refBalance.total,
-    earnedTotal: earned,
-    earned,
-    available,
-    transferred: '0',
-    withdrawn: '0',
+    active,
+    left,
+    refTotal: total,
+    earnedTotal,
+    withdrawn,
+    refAvailable: available,
+    converted,
   });
   const referText = `${ctx.t('profile.refer.title')}\n\n${body}`;
   const html = renderMdHtml(referText);
   const reply_markup = referKeyboard(ctx.lang, link, {
     ...options,
-    canConvert: available >= REFERRAL_MIN_CONVERT_REFS,
+    canConvert: availableEarnings >= REFERRAL_MIN_CONVERT_USDT,
   });
   if (ctx.callbackQuery && !options.forceReply) {
     await ctx.editMessageText(renderMdHtml(referText), {
@@ -1044,9 +1036,14 @@ export function registerProfile(bot: Composer<AppCtx>): void {
   bot.callbackQuery('profile:refer:convert', async (ctx) => {
     const balance = await getReferralBalance(ctx.user.telegram_id);
     const available = balance.available;
-    if (available < REFERRAL_MIN_CONVERT_REFS) {
+    const earnings = available * REFERRAL_USDT_PER_REF;
+    if (earnings < REFERRAL_MIN_CONVERT_USDT) {
       await ctx.answerCallbackQuery({
-        text: ctx.t('profile.refer.convert_low', { available }),
+        text: ctx.t('profile.refer.convert_low', {
+          min: REFERRAL_MIN_CONVERT_USDT.toFixed(2),
+          available,
+          earned: earnings.toFixed(2),
+        }),
         show_alert: true,
       });
       return;

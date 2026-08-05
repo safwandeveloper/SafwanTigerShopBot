@@ -336,6 +336,7 @@ export type ReferralBalance = {
   total: number;
   spent: number;
   available: number;
+  converted: number;
 };
 
 export type ReferralConversionResult = ReferralBalance & {
@@ -403,6 +404,7 @@ export async function getReferralBalance(user_id: number): Promise<ReferralBalan
     total: adjustedTotal,
     spent,
     available: Math.max(0, adjustedTotal - spent),
+    converted: convertedSpent,
   };
 }
 
@@ -421,7 +423,7 @@ export async function listReferralAdminRows(
       user,
       balance: await getReferralBalance(user.telegram_id).catch((err) => {
         logger.warn({ err, telegram_id: user.telegram_id }, 'listReferralAdminRows balance failed');
-        return { total: 0, spent: 0, available: 0 };
+        return { total: 0, spent: 0, available: 0, converted: 0 };
       }),
     })),
   );
@@ -489,7 +491,7 @@ export async function spendReferralBalance(args: {
   order_id: number;
   referral_cost: number;
 }): Promise<ReferralBalance> {
-  const { data, error } = await supabase.rpc('spend_referral_balance', {
+  const { error } = await supabase.rpc('spend_referral_balance', {
     p_user_id: args.user_id,
     p_product_id: args.product_id,
     p_order_id: args.order_id,
@@ -502,18 +504,7 @@ export async function spendReferralBalance(args: {
     logger.error({ err: error, args }, 'spendReferralBalance failed');
     throw error;
   }
-  const result = (Array.isArray(data) ? data[0] : data) as
-    | {
-        total_referrals?: number;
-        spent_referrals?: number;
-        available_referrals?: number;
-      }
-    | null;
-  return {
-    total: Number(result?.total_referrals ?? 0),
-    spent: Number(result?.spent_referrals ?? 0),
-    available: Number(result?.available_referrals ?? 0),
-  };
+  return getReferralBalance(args.user_id);
 }
 
 export async function convertReferralBalance(args: {
@@ -542,10 +533,9 @@ export async function convertReferralBalance(args: {
         new_balance?: number;
       }
     | null;
+  const balance = await getReferralBalance(args.user_id);
   return {
-    total: Number(result?.total_referrals ?? 0),
-    spent: Number(result?.spent_referrals ?? 0),
-    available: Number(result?.available_referrals ?? 0),
+    ...balance,
     convertedAmount: Number(result?.converted_amount ?? 0),
     newBalance: Number(result?.new_balance ?? 0),
   };
