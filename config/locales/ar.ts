@@ -237,23 +237,22 @@ export const ar: Record<string, string> = {
   // شاشة الإحالة والتربح.
   'profile.refer.title': '{refer_title} *إحالة وتربح*',
   'profile.refer.body':
-    '{refer_prize_l} *ادعُ 10 مستخدمين واربح $0.50* {refer_prize_r}\n\n' +
+    '{refer_prize_l} *ادعُ 5 مستخدمين واربح $0.10* {refer_prize_r}\n\n' +
     '{refer_clicks} *النقرات:* {clicks}\n' +
     '{refer_pending} *المعلق:* {pending}\n' +
     '{refer_active} *النشط:* {active}\n' +
     '{refer_left} *المتبقي:* {left}\n' +
     '{refer_total} *الإحالات (الإجمالي):* {refTotal}\n' +
-    '{refer_active} *أرباح الإحالة:* ${earned} ({available} إحالات × $0.05)\n' +
     '{refer_coin} *إجمالي الأرباح:* {earnedTotal} USDT\n' +
     '{refer_withdrawn} *المسحوب:* {withdrawn} USDT\n\n' +
-    '{prod_referral} *رصيد دفع الإحالات:* {refAvailable} إحالات\n' +
-    '{refer_spent} *المستخدم للمشتريات:* {refSpent} إحالات\n\n' +
-    '> حوّل الأرباح إلى المحفظة في أي وقت. للسحب النقدي تواصل مع الدعم (الحد الأدنى 1$).\n\n' +
+    '{refer_paybalance} *رصيد دفع الإحالات:* {refAvailable} إحالات\n' +
+    '{refer_spent} *تم تحويلها إلى USDT:* {converted} إحالات\n\n' +
+    '_حوّل الأرباح إلى المحفظة عندما تصل إلى $0.50. للسحب النقدي تواصل مع الدعم._\n\n' +
     '*رابط الإحالة الخاص بك:*\n`{link}`',
   'profile.refer.convert_success':
     '💱 تم تحويل *{refs} إحالة* إلى *{amount} USDT*.\n\n💳 رصيد المحفظة: *{balance}*',
   'profile.refer.convert_low':
-    '⚠️ لا يوجد رصيد إحالات كافٍ للتحويل بعد.\n\nتحتاج *$0.70* (14 إحالة × $0.05) للتحويل إلى محفظتك.\nالرصيد الحالي: *{available} إحالة*.',
+    '⚠️ لا يوجد رصيد إحالات كافٍ للتحويل بعد.\n\nالتحويل إلى محفظتك يحتاج رصيدًا بقيمة *${min}*.\nالرصيد الحالي: *{available} إحالة* (≈ ${earned}).',
   'profile.refer.convert_error':
     '⚠️ تعذر تحويل الإحالات الآن. حاول مرة أخرى.',
   'btn.live_refers': '🔵 See Your Live Refers',

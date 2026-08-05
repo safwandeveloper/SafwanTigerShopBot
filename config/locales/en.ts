@@ -751,17 +751,26 @@ export const en: Record<string, string> = {
   // Refer & Earn screen.
   'profile.refer.title': '{refer_title} *Refer & Earn*',
   'profile.refer.body':
+    '{refer_prize_l} *Refer 5 users and win $0.10* {refer_prize_r}\n' +
+    '\n' +
     '{refer_clicks} *Clicks:* {clicks}\n' +
     '{refer_pending} *Pending:* {pending}\n' +
     '{refer_active} *Active:* {active}\n' +
+    '{refer_left} *Left:* {left}\n' +
     '{refer_total} *Referred (Total):* {refTotal}\n' +
-    '{refer_active} *Referral Earnings:* ${earned} ({available} refs × $0.05)\n' +
+    '{refer_coin} *Total Earned:* {earnedTotal} USDT\n' +
+    '{refer_withdrawn} *Withdrawn:* {withdrawn} USDT\n' +
+    '\n' +
+    '{refer_paybalance} *Referral Pay Balance:* {refAvailable} refs\n' +
+    '{refer_spent} *Converted To Usdt:* {converted} refs\n' +
+    '\n' +
+    '_Transfer earnings to your wallet once they reach $0.50. For cash withdrawal, contact support._\n' +
     '\n' +
     '*Your Referral Link:*\n`{link}`',
   'profile.refer.convert_success':
     '💱 Converted *{refs} refs* into *{amount} USDT*.\n\n💳 Wallet Balance: *{balance} USDT*',
   'profile.refer.convert_low':
-    '⚠️ Not enough referrals to convert yet.\n\nYou need *$0.70* (14 referrals × $0.05) to convert into your wallet.\nCurrent balance: *{available} referrals*.',
+    '⚠️ Not enough referrals to convert yet.\n\nConverting into your wallet needs *${min}* worth of referrals.\nCurrent balance: *{available} refs* (≈ ${earned}).',
   'profile.refer.convert_error':
     '⚠️ Could not convert refs right now. Please try again.',
   'btn.copy_link': '📋 Copy Link',
