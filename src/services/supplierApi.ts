@@ -114,9 +114,9 @@ export function canbosoSupplierConfig(apiKey: string): SupplierSourceConfig {
     api_key: apiKey.trim(),
     auth_mode: 'query',
     key_query_param: 'key',
-    products_path: '/api/telegram-buyer/products',
-    balance_path: '/api/telegram-buyer/balance',
-    order_path: '/api/telegram-buyer/purchase',
+    products_path: '/api/v2/telegram-buyer/products',
+    balance_path: '/api/v2/telegram-buyer/balance',
+    order_path: '/api/v2/telegram-buyer/purchase',
     order_method: 'POST',
     products_json_path: 'products',
     balance_json_path: 'balanceUsd',
@@ -127,9 +127,9 @@ export function canbosoSupplierConfig(apiKey: string): SupplierSourceConfig {
     order_items_json_path: 'deliveredAccounts',
     order_status_json_path: 'success',
     order_request_template: {
+      key: '{{api_key}}',
       product_id: '{{supplier_product_id}}',
       quantity: '{{qty}}',
-      request_id: '{{request_id}}',
     },
     markup_percent: 25,
     fixed_markup: 0,
@@ -137,7 +137,7 @@ export function canbosoSupplierConfig(apiKey: string): SupplierSourceConfig {
     auto_import_new_products: false,
     auto_import_active: false,
     import_category_name: 'Canboso Supplier',
-    notes: 'One-click Canboso supplier connector.',
+    notes: 'One-click Canboso v2 telegram-buyer supplier connector.',
   };
 }
 
@@ -346,6 +346,7 @@ async function supplierFetch(
   path: string,
   method: SupplierOrderMethod = 'GET',
   payload?: Record<string, unknown>,
+  extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
   const url = joinUrl(source.base_url, path);
   if (source.auth_mode === 'query' && source.api_key.trim()) {
@@ -362,7 +363,7 @@ async function supplierFetch(
   try {
     const res = await fetch(url, {
       method,
-      headers: authHeaders(source),
+      headers: { ...authHeaders(source), ...extraHeaders },
       body: method === 'POST' ? JSON.stringify(payload ?? {}) : undefined,
       signal: controller.signal,
     });
@@ -680,6 +681,25 @@ function normalizeItems(source: DBSupplierApiSource, json: Record<string, unknow
   return [];
 }
 
+/**
+ * Strip the supplier API key out of an order payload before it is
+ * persisted to `supplier_order_logs`. Matches both well-known
+ * credential field names and any value equal to the live key.
+ */
+function redactSupplierSecrets(
+  payload: Record<string, unknown>,
+  apiKey: string,
+): Record<string, unknown> {
+  const secretKeys = new Set(['key', 'api_key', 'apikey', 'token', 'secret', 'authorization']);
+  const out: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(payload)) {
+    const isSecretField = secretKeys.has(field.toLowerCase());
+    const isSecretValue = apiKey.length > 0 && value === apiKey;
+    out[field] = isSecretField || isSecretValue ? '***' : value;
+  }
+  return out;
+}
+
 export async function placeSupplierOrder(args: {
   source: DBSupplierApiSource;
   link: DBSupplierProductLink;
@@ -689,6 +709,7 @@ export async function placeSupplierOrder(args: {
 }): Promise<SupplierOrderResult> {
   const requestId = args.requestId ?? `ord_${args.localOrderId}_${Date.now()}`;
   const vars = {
+    api_key: args.source.api_key.trim(),
     supplier_product_id: args.link.supplier_product_id,
     local_product_id: args.link.local_product_id,
     qty: args.qty,
@@ -697,12 +718,16 @@ export async function placeSupplierOrder(args: {
     request_id: requestId,
   };
   const payload = asRecord(replaceTemplate(args.source.order_request_template, vars));
+  // Order templates may inject the supplier credential into the body
+  // (e.g. Canboso's `key`). Never persist it in the order log.
+  const loggedPayload = redactSupplierSecrets(payload, args.source.api_key.trim());
   try {
     const rawJson = await supplierFetch(
       args.source,
       cleanPath(args.source.order_path, '/order'),
       args.source.order_method,
       payload,
+      { 'Idempotency-Key': requestId },
     );
     const json = asRecord(rawJson);
     const statusValue =
@@ -743,7 +768,7 @@ export async function placeSupplierOrder(args: {
       local_product_id: args.link.local_product_id,
       supplier_product_id: args.link.supplier_product_id,
       status: failed ? 'failed' : 'success',
-      request_payload: payload,
+      request_payload: loggedPayload,
       response_payload: Array.isArray(rawJson) ? { data: rawJson } : json,
       error,
     });
@@ -756,7 +781,7 @@ export async function placeSupplierOrder(args: {
       local_product_id: args.link.local_product_id,
       supplier_product_id: args.link.supplier_product_id,
       status: 'failed',
-      request_payload: payload,
+      request_payload: loggedPayload,
       response_payload: {},
       error: msg,
     }).catch((logErr) => logger.warn({ err: logErr }, 'supplier order failure log failed'));

@@ -1645,7 +1645,11 @@ adminBot.callbackQuery('adm:api:supplier:add:canboso', async (ctx) => {
     [
       '🔑 *Add Canboso Supplier*',
       '',
-      'Send the Canboso API key only.',
+      'This preset uses the live Canboso v2 telegram-buyer API:',
+      'GET `/api/v2/telegram-buyer/products`',
+      'GET `/api/v2/telegram-buyer/balance`',
+      'POST `/api/v2/telegram-buyer/purchase`',
+      'Your key is sent as `?key=` for GET and as `key` in the purchase body.',
       '',
       'Example:',
       '`tgb_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`',
