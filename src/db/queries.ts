@@ -637,6 +637,17 @@ export async function isAdmin(telegram_id: number): Promise<boolean> {
   return Boolean(data);
 }
 
+export async function listAdminTelegramIds(): Promise<number[]> {
+  const { data, error } = await supabase.from('admins').select('telegram_id');
+  if (error) {
+    logger.warn({ err: error }, 'admin id list lookup failed');
+    return [];
+  }
+  return (data ?? [])
+    .map((row) => Number((row as { telegram_id?: unknown }).telegram_id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+}
+
 // ---------- Categories ----------
 
 export async function listCategories(): Promise<DBCategory[]> {
