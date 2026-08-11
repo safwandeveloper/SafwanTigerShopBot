@@ -883,6 +883,12 @@ export const en: Record<string, string> = {
     '💳 *CryptoBot invoice ready*\n\nAmount: *{amount}*\n\nTap *Open invoice*, complete the payment in CryptoBot, then tap *Check*.',
   'topup.cryptobot.open_invoice': '💳 Open invoice',
   'topup.cryptobot.check': '✅ I’ve paid / Check',
+  'topup.cryptobot.check_unavailable': 'This payment is already resolved or unavailable.',
+  'topup.cryptobot.check_failed': 'Could not check payment right now. Try again shortly.',
+  'topup.cryptobot.not_paid': 'Payment not received yet. Tap Check again after paying.',
+  'topup.cryptobot.check_success': 'Payment confirmed and wallet credited.',
+  'topup.cryptobot.already_processed': 'Payment already processed.',
+  'topup.cryptobot.finalize_failed': 'Could not finalize payment right now. Please try again.',
   'topup.cryptobot.success':
     '✅ *CryptoBot payment confirmed!*\n\nCredited: *{amount}*\nNew balance: *{balance}*',
 
