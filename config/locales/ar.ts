@@ -386,6 +386,12 @@ export const ar: Record<string, string> = {
     '💳 *فاتورة CryptoBot جاهزة*\n\nالمبلغ: *{amount}*\n\nاضغط *فتح الفاتورة* وأكمل الدفع في CryptoBot، ثم اضغط *تحقق*.',
   'topup.cryptobot.open_invoice': '💳 فتح الفاتورة',
   'topup.cryptobot.check': '✅ دفعت / تحقق',
+  'topup.cryptobot.check_unavailable': 'تمت معالجة هذه الدفعة أو أنها غير متاحة.',
+  'topup.cryptobot.check_failed': 'تعذر التحقق من الدفع الآن. حاول مرة أخرى قريبًا.',
+  'topup.cryptobot.not_paid': 'لم يتم استلام الدفع بعد. اضغط تحقق مرة أخرى بعد الدفع.',
+  'topup.cryptobot.check_success': 'تم تأكيد الدفع وإضافة الرصيد.',
+  'topup.cryptobot.already_processed': 'تمت معالجة الدفع مسبقًا.',
+  'topup.cryptobot.finalize_failed': 'تعذر إنهاء الدفع الآن. حاول مرة أخرى.',
   'topup.cryptobot.success':
     '✅ *تم تأكيد الدفع عبر CryptoBot!*\n\nتمت الإضافة: *{amount}*\nالرصيد الجديد: *{balance}*',
 

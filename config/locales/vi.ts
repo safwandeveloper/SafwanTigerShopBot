@@ -390,6 +390,12 @@ export const vi: Record<string, string> = {
     '💳 *Hóa đơn CryptoBot đã sẵn sàng*\n\nSố tiền: *{amount}*\n\nNhấn *Mở hóa đơn*, hoàn tất thanh toán trong CryptoBot, rồi nhấn *Kiểm tra*.',
   'topup.cryptobot.open_invoice': '💳 Mở hóa đơn',
   'topup.cryptobot.check': '✅ Đã thanh toán / Kiểm tra',
+  'topup.cryptobot.check_unavailable': 'Khoản thanh toán này đã được xử lý hoặc không khả dụng.',
+  'topup.cryptobot.check_failed': 'Chưa thể kiểm tra thanh toán. Vui lòng thử lại sau.',
+  'topup.cryptobot.not_paid': 'Chưa nhận được thanh toán. Hãy nhấn Kiểm tra lại sau khi thanh toán.',
+  'topup.cryptobot.check_success': 'Đã xác nhận thanh toán và cộng tiền vào ví.',
+  'topup.cryptobot.already_processed': 'Thanh toán đã được xử lý.',
+  'topup.cryptobot.finalize_failed': 'Chưa thể hoàn tất thanh toán. Vui lòng thử lại.',
   'topup.cryptobot.success':
     '✅ *Đã xác nhận thanh toán CryptoBot!*\n\nĐã cộng: *{amount}*\nSố dư mới: *{balance}*',
 

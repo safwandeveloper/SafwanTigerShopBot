@@ -2770,6 +2770,17 @@ export type CryptoPayCreditResult = {
   new_balance: number | null;
 };
 
+export function unwrapCryptoPayCreditResult(data: unknown): CryptoPayCreditResult {
+  const row = Array.isArray(data) ? data[0] : data;
+  const record = (row ?? {}) as Record<string, unknown>;
+  return {
+    credited: Boolean(record.credited),
+    user_id: record.user_id == null ? null : Number(record.user_id),
+    amount: record.amount == null ? null : Number(record.amount),
+    new_balance: record.new_balance == null ? null : Number(record.new_balance),
+  };
+}
+
 export async function creditCryptoPayDeposit(
   depositId: number,
   txHash: string,
@@ -2779,13 +2790,7 @@ export async function creditCryptoPayDeposit(
     p_tx_hash: txHash,
   });
   if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : data;
-  return {
-    credited: Boolean(row?.credited),
-    user_id: row?.user_id == null ? null : Number(row.user_id),
-    amount: row?.amount == null ? null : Number(row.amount),
-    new_balance: row?.new_balance == null ? null : Number(row.new_balance),
-  };
+  return unwrapCryptoPayCreditResult(data);
 }
 
 export async function listDeposits(user_id: number, limit = 10): Promise<DBDeposit[]> {

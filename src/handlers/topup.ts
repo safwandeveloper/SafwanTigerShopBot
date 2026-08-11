@@ -459,28 +459,38 @@ export function registerTopup(bot: Composer<AppCtx>): void {
     const depositId = Number(ctx.match[1]);
     const dep = await getDeposit(depositId);
     if (!dep || dep.status !== 'pending' || !dep.tx_hash?.startsWith('cryptopay:')) {
-      await ctx.answerCallbackQuery({ text: 'This payment is already resolved or unavailable.' });
+      await ctx.answerCallbackQuery({
+        text: ctx.t('topup.cryptobot.check_unavailable'),
+      });
       return;
     }
     const invoiceId = dep.tx_hash.slice('cryptopay:'.length);
     const result = await getInvoices([invoiceId]);
     if (!result.ok) {
-      await ctx.answerCallbackQuery({ text: 'Could not check payment right now. Try again shortly.' });
+      await ctx.answerCallbackQuery({
+        text: ctx.t('topup.cryptobot.check_failed'),
+      });
       return;
     }
     const invoice = result.invoices.find((item) => String(item.invoice_id) === invoiceId);
     if (!invoice || invoice.status !== 'paid') {
-      await ctx.answerCallbackQuery({ text: 'Payment not received yet. Tap Check again after paying.' });
+      await ctx.answerCallbackQuery({
+        text: ctx.t('topup.cryptobot.not_paid'),
+      });
       return;
     }
     try {
       const credited = await processCryptoPayPaidInvoice(ctx.api, dep.id, invoice);
       await ctx.answerCallbackQuery({
-        text: credited ? 'Payment confirmed and wallet credited.' : 'Payment already processed.',
+        text: credited
+          ? ctx.t('topup.cryptobot.check_success')
+          : ctx.t('topup.cryptobot.already_processed'),
       });
     } catch (err) {
       logger.warn({ err, depositId }, 'Crypto Pay check processing failed');
-      await ctx.answerCallbackQuery({ text: 'Could not finalize payment right now. Please try again.' });
+      await ctx.answerCallbackQuery({
+        text: ctx.t('topup.cryptobot.finalize_failed'),
+      });
     }
   });
 }
@@ -1398,6 +1408,34 @@ function formatUsdtAmount(amount: number): string {
   return `${Number(amount).toFixed(2)} USDT`;
 }
 
+export function parseCryptoPayAmount(
+  text: string,
+  configuredMinimum: number,
+): number | null {
+  let cleaned = text
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/^(?:usdt|usd)/i, '')
+    .replace(/(?:usdt|usd)$/i, '')
+    .replace(/^[$€₮]/, '')
+    .replace(/[$€₮]$/, '');
+  if (!cleaned) return null;
+  const comma = cleaned.lastIndexOf(',');
+  const dot = cleaned.lastIndexOf('.');
+  if (comma >= 0 && dot >= 0) {
+    const decimal = comma > dot ? ',' : '.';
+    const grouping = decimal === ',' ? '.' : ',';
+    cleaned = cleaned.split(grouping).join('').replace(decimal, '.');
+  } else {
+    cleaned = cleaned.replace(',', '.');
+  }
+  if (!/^\d+(?:\.\d+)?$/.test(cleaned)) return null;
+  const amount = Number(cleaned);
+  const minimum = Math.max(0.01, Number(configuredMinimum) || 0);
+  if (!Number.isFinite(amount) || amount < minimum) return null;
+  return Number(amount.toFixed(2));
+}
+
 async function handleCryptoBotUsdAmount(
   ctx: AppCtx,
   flow: Extract<
@@ -1406,12 +1444,13 @@ async function handleCryptoBotUsdAmount(
   >,
   text: string,
 ): Promise<void> {
-  const amount = Number(text.replace(/[^0-9.]/g, ''));
-  if (!Number.isFinite(amount) || amount <= 0 || amount < flow.data.min_amount) {
+  const minimum = Math.max(0.01, Number(flow.data.min_amount) || 0);
+  const amount = parseCryptoPayAmount(text, minimum);
+  if (amount === null) {
     await ctx.reply(
       renderMdHtml(
         ctx.t('topup.cryptobot.invalid_amount', {
-          min: formatUsdtAmount(flow.data.min_amount),
+          min: formatUsdtAmount(minimum),
         }),
       ),
       { parse_mode: 'HTML' },
