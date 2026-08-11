@@ -13,7 +13,7 @@ import { env } from '../env.js';
 import { parsePublicOrderId, publicOrderId } from '../services/orderId.js';
 import { formatReceivedItemsBlock } from '../services/orderRender.js';
 import * as adminLog from '../services/adminLog.js';
-import { clearAiSession } from './support.js';
+import { clearAiSession, showSupportMenu } from './support.js';
 import {
   disableButtonChrome,
   inlineBtn,
@@ -22,6 +22,7 @@ import {
 } from '../keyboards/helpers.js';
 import { showProfile, showReferScreen } from './profile.js';
 import { showTopupMenu } from './topup.js';
+import { showShopHome } from './shop.js';
 import {
   checkForceJoinStatus,
   isForceJoinSatisfied,
@@ -301,6 +302,34 @@ export function registerStart(bot: Composer<AppCtx>): void {
     clearAiSession(ctx.from?.id);
     if (await maybeGateForceJoin(ctx)) return;
     await showMainMenu(ctx, { fresh: true });
+  });
+
+  bot.command('products', async (ctx) => {
+    await clearOldReplyKeyboard(ctx);
+    clearAiSession(ctx.from?.id);
+    if (await maybeGateForceJoin(ctx)) return;
+    await showShopHome(ctx);
+  });
+
+  bot.command('deposit', async (ctx) => {
+    await clearOldReplyKeyboard(ctx);
+    clearAiSession(ctx.from?.id);
+    if (await maybeGateForceJoin(ctx)) return;
+    await showTopupMenu(ctx, false);
+  });
+
+  bot.command('settings', async (ctx) => {
+    await clearOldReplyKeyboard(ctx);
+    clearAiSession(ctx.from?.id);
+    if (await maybeGateForceJoin(ctx)) return;
+    await showProfile(ctx, { forceReply: true });
+  });
+
+  bot.command('support', async (ctx) => {
+    await clearOldReplyKeyboard(ctx);
+    clearAiSession(ctx.from?.id);
+    if (await maybeGateForceJoin(ctx)) return;
+    await showSupportMenu(ctx);
   });
 
   // "⬅️ Main Menu" inline button used across screens.
