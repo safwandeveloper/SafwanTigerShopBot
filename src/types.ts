@@ -414,6 +414,8 @@ export type DBWalletLedger = {
  *   - `usdt_ton`     TonCenter REST tx lookup (tx hash input)
  *   - `ltc`          BlockCypher REST tx lookup (USD amount input →
  *                    quote LTC amount, then tx hash)
+ *   - `cryptobot`    Telegram Crypto Pay API invoice lookup/webhook
+ *                    (USDT wallet top-up; invoice id is stored in tx_hash)
  *
  * `manual` skips auto-verification and falls back to the
  * legacy admin-approval flow.
@@ -425,7 +427,8 @@ export type PaymentProvider =
   | 'usdt_trc20'
   | 'usdt_bep20'
   | 'usdt_ton'
-  | 'ltc';
+  | 'ltc'
+  | 'cryptobot';
 
 export type DBPaymentMethod = {
   id: number;
@@ -437,7 +440,8 @@ export type DBPaymentMethod = {
   provider: PaymentProvider;
   /**
    * Wallet / account address. Required for every non-manual
-   * provider — chain providers verify the recipient against this.
+   * provider except `cryptobot` — chain providers verify the
+   * recipient against this.
    * For `binance_pay` rows this stores the merchant's 10-digit
    * Binance Pay ID (e.g. `"1101801594"`). For `bybit_pay` rows
    * this stores the merchant Bybit UID / ID shown to buyers.

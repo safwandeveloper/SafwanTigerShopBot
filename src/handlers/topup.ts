@@ -5,6 +5,7 @@ import {
   findDepositByTxHash,
   getDeposit,
   listPaymentMethods,
+  setCryptoPayInvoiceId,
   setDepositNote,
   setDepositStatus,
 } from '../db/queries.js';
@@ -28,6 +29,8 @@ import type { DBPaymentMethod, PaymentProvider } from '../types.js';
 import { getAdminContactUrlWithPrefill } from '../services/settings.js';
 import { renderPaymentMethodTutorial } from '../services/payMethodTutorialView.js';
 import { PE } from './paymentInstructionEmojis.js';
+import { createInvoice, getInvoices } from '../services/cryptoPay.js';
+import { processCryptoPayPaidInvoice } from '../services/cryptoPayDeposit.js';
 
 const LTC_QUOTE_TTL_MIN = 10;
 
@@ -250,6 +253,33 @@ export function registerTopup(bot: Composer<AppCtx>): void {
       return;
     }
 
+    if (m.provider === 'cryptobot') {
+      ctx.session.userFlow = {
+        type: 'cryptobot_topup',
+        step: 'usd_amount',
+        data: {
+          method_id: m.id,
+          method_name: m.name,
+          min_amount: Number(m.min_amount ?? 0),
+        },
+      };
+      await ctx.editMessageText(
+        renderMdHtml(
+          ctx.t('topup.cryptobot.amount_prompt', {
+            min: formatUsdtAmount(m.min_amount),
+          }),
+        ),
+        {
+          parse_mode: 'HTML',
+          reply_markup: new InlineKeyboard().text(
+            btn(ctx.lang, 'back'),
+            topupRootCallback(ctx),
+          ),
+        },
+      );
+      return;
+    }
+
     if (m.provider === 'bybit_pay') {
       if (!m.address) {
         await ctx.editMessageText(
@@ -418,7 +448,40 @@ export function registerTopup(bot: Composer<AppCtx>): void {
         return;
       }
     }
+    if (flow.type === 'cryptobot_topup' && flow.step === 'usd_amount') {
+      await handleCryptoBotUsdAmount(ctx, flow, text);
+      return;
+    }
     return next();
+  });
+
+  bot.callbackQuery(/^cryptopay:check:(\d+)$/, async (ctx) => {
+    const depositId = Number(ctx.match[1]);
+    const dep = await getDeposit(depositId);
+    if (!dep || dep.status !== 'pending' || !dep.tx_hash?.startsWith('cryptopay:')) {
+      await ctx.answerCallbackQuery({ text: 'This payment is already resolved or unavailable.' });
+      return;
+    }
+    const invoiceId = dep.tx_hash.slice('cryptopay:'.length);
+    const result = await getInvoices([invoiceId]);
+    if (!result.ok) {
+      await ctx.answerCallbackQuery({ text: 'Could not check payment right now. Try again shortly.' });
+      return;
+    }
+    const invoice = result.invoices.find((item) => String(item.invoice_id) === invoiceId);
+    if (!invoice || invoice.status !== 'paid') {
+      await ctx.answerCallbackQuery({ text: 'Payment not received yet. Tap Check again after paying.' });
+      return;
+    }
+    try {
+      const credited = await processCryptoPayPaidInvoice(ctx.api, dep.id, invoice);
+      await ctx.answerCallbackQuery({
+        text: credited ? 'Payment confirmed and wallet credited.' : 'Payment already processed.',
+      });
+    } catch (err) {
+      logger.warn({ err, depositId }, 'Crypto Pay check processing failed');
+      await ctx.answerCallbackQuery({ text: 'Could not finalize payment right now. Please try again.' });
+    }
   });
 }
 // ----- USDT chain flow (BEP20 / TRC20 / TON) -----------------------------
@@ -1329,6 +1392,102 @@ function buildLtcUsdAmountScreen(m: DBPaymentMethod): string {
     '*How much (in USD) do you want to top up?*',
     '_Reply with just the amount, e.g._ `10` _or_ `25.50`',
   ].join('\n');
+}
+
+function formatUsdtAmount(amount: number): string {
+  return `${Number(amount).toFixed(2)} USDT`;
+}
+
+async function handleCryptoBotUsdAmount(
+  ctx: AppCtx,
+  flow: Extract<
+    NonNullable<AppCtx['session']['userFlow']>,
+    { type: 'cryptobot_topup'; step: 'usd_amount' }
+  >,
+  text: string,
+): Promise<void> {
+  const amount = Number(text.replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(amount) || amount <= 0 || amount < flow.data.min_amount) {
+    await ctx.reply(
+      renderMdHtml(
+        ctx.t('topup.cryptobot.invalid_amount', {
+          min: formatUsdtAmount(flow.data.min_amount),
+        }),
+      ),
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+  const rounded = Number(amount.toFixed(2));
+  let dep;
+  try {
+    dep = await createDeposit({
+      user_id: ctx.user.telegram_id,
+      method: flow.data.method_name,
+      amount: rounded,
+      note: 'Crypto Pay USDT invoice awaiting payment',
+    });
+  } catch (err) {
+    logger.error({ err }, 'Crypto Pay deposit insert failed');
+    await ctx.reply(renderMdHtml(ctx.t('topup.cryptobot.start_failed')), { parse_mode: 'HTML' });
+    ctx.session.userFlow = undefined;
+    return;
+  }
+
+  const invoiceResult = await createInvoice({
+    amount: rounded,
+    payload: String(dep.id),
+    expiresIn: 1800,
+  });
+  if (!invoiceResult.ok || !invoiceResult.invoice.bot_invoice_url) {
+    await setDepositStatus(dep.id, 'rejected').catch(() => undefined);
+    logger.warn({ reason: invoiceResult.ok ? 'missing invoice URL' : invoiceResult.reason }, 'Crypto Pay invoice creation failed');
+    await ctx.reply(renderMdHtml(ctx.t('topup.cryptobot.invoice_failed')), { parse_mode: 'HTML' });
+    ctx.session.userFlow = undefined;
+    return;
+  }
+
+  const invoiceId = String(invoiceResult.invoice.invoice_id);
+  try {
+    await setCryptoPayInvoiceId(dep.id, invoiceId);
+  } catch (err) {
+    await setDepositStatus(dep.id, 'rejected').catch(() => undefined);
+    logger.error({ err, depositId: dep.id, invoiceId }, 'Crypto Pay invoice persistence failed');
+    await ctx.reply(renderMdHtml(ctx.t('topup.cryptobot.invoice_failed')), { parse_mode: 'HTML' });
+    ctx.session.userFlow = undefined;
+    return;
+  }
+
+  ctx.session.userFlow = {
+    type: 'cryptobot_topup',
+    step: 'awaiting_payment',
+    data: {
+      method_id: flow.data.method_id,
+      method_name: flow.data.method_name,
+      deposit_id: dep.id,
+      invoice_id: invoiceId,
+      amount: rounded,
+      invoice_url: invoiceResult.invoice.bot_invoice_url,
+    },
+  };
+  const keyboard = new InlineKeyboard()
+    .url(ctx.t('topup.cryptobot.open_invoice'), invoiceResult.invoice.bot_invoice_url)
+    .row()
+    .text(ctx.t('topup.cryptobot.check'), `cryptopay:check:${dep.id}`)
+    .row()
+    .text(btn(ctx.lang, 'back'), topupRootCallback(ctx));
+  const message = await ctx.reply(
+    renderMdHtml(
+      ctx.t('topup.cryptobot.invoice_ready', {
+        amount: formatUsdtAmount(rounded),
+      }),
+    ),
+    { parse_mode: 'HTML', reply_markup: keyboard },
+  );
+  const current = ctx.session.userFlow;
+  if (current?.type === 'cryptobot_topup' && current.step === 'awaiting_payment') {
+    current.data.instruction_message_id = message.message_id;
+  }
 }
 
 export async function showTopupMenu(ctx: AppCtx, asEdit = false) {

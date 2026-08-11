@@ -2751,6 +2751,43 @@ export async function setDepositTxHash(
   await supabase.from('deposits').update({ tx_hash }).eq('id', id);
 }
 
+export async function setCryptoPayInvoiceId(
+  id: number,
+  invoiceId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('deposits')
+    .update({ tx_hash: `cryptopay:${invoiceId}` })
+    .eq('id', id)
+    .eq('status', 'pending');
+  if (error) throw error;
+}
+
+export type CryptoPayCreditResult = {
+  credited: boolean;
+  user_id: number | null;
+  amount: number | null;
+  new_balance: number | null;
+};
+
+export async function creditCryptoPayDeposit(
+  depositId: number,
+  txHash: string,
+): Promise<CryptoPayCreditResult> {
+  const { data, error } = await supabase.rpc('credit_cryptopay_deposit', {
+    p_deposit_id: depositId,
+    p_tx_hash: txHash,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    credited: Boolean(row?.credited),
+    user_id: row?.user_id == null ? null : Number(row.user_id),
+    amount: row?.amount == null ? null : Number(row.amount),
+    new_balance: row?.new_balance == null ? null : Number(row.new_balance),
+  };
+}
+
 export async function listDeposits(user_id: number, limit = 10): Promise<DBDeposit[]> {
   const { data } = await supabase
     .from('deposits')
@@ -3341,6 +3378,26 @@ export async function listAllPendingDeposits(): Promise<DBDeposit[]> {
 export async function getDeposit(id: number): Promise<DBDeposit | null> {
   const { data } = await supabase.from('deposits').select('*').eq('id', id).maybeSingle();
   return (data as DBDeposit) ?? null;
+}
+
+export async function listPendingCryptoPayDeposits(
+  createdAfterIso: string,
+  limit = 100,
+): Promise<DBDeposit[]> {
+  const methods = (await listPaymentMethods()).filter((m) => m.provider === 'cryptobot');
+  const names = methods.map((m) => m.name);
+  if (names.length === 0) return [];
+  const { data } = await supabase
+    .from('deposits')
+    .select('*')
+    .eq('status', 'pending')
+    .in('method', names)
+    .gte('created_at', createdAfterIso)
+    .not('tx_hash', 'is', null)
+    .like('tx_hash', 'cryptopay:%')
+    .order('created_at', { ascending: true })
+    .limit(limit);
+  return (data ?? []) as DBDeposit[];
 }
 
 export async function setDepositStatus(

@@ -124,7 +124,8 @@ export function paymentMethodsKeyboard(
     usdt_ton: 3,
     usdt_trc20: 4,
     ltc: 5,
-    manual: 6,
+    cryptobot: 6,
+    manual: 7,
   };
   const sorted = methods.slice().sort((a, b) => {
     const pa = PROVIDER_PRIORITY[a.provider] ?? 99;

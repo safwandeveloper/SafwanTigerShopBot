@@ -4139,7 +4139,9 @@ adminBot.callbackQuery('adm:pay', async (ctx) => {
     .text('⚪ Add LTC', 'adm:pay:add:ltc')
     .row()
     .text('🟡 Add Binance Pay', 'adm:pay:add:binance_pay')
-    .text('Add Bybit Pay', 'adm:pay:add:bybit_pay');
+    .text('Add Bybit Pay', 'adm:pay:add:bybit_pay')
+    .row()
+    .text('💳 Add CryptoBot', 'adm:pay:add:cryptobot');
   backRow(kb);
   await ctx.editMessageText(
     [
@@ -4259,6 +4261,27 @@ adminBot.callbackQuery('adm:pay:add:bybit_pay', async (ctx) => {
   );
 });
 
+adminBot.callbackQuery('adm:pay:add:cryptobot', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = {
+    type: 'add_cryptobot_payment',
+    step: 'name',
+    data: {},
+  };
+  await ctx.editMessageText(
+    [
+      '💳 *Add CryptoBot*',
+      '',
+      'Send the *display name* shown in the user-facing top-up menu (e.g. `CryptoBot USDT`).',
+      '',
+      'This provider accepts USDT wallet top-ups through Telegram Crypto Pay.',
+      '',
+      'Or `/cancel` to abort.',
+    ].join('\n'),
+    { parse_mode: 'Markdown', reply_markup: backRow(new InlineKeyboard()) },
+  );
+});
+
 adminBot.callbackQuery('adm:pay:list', async (ctx) => {
   await ctx.answerCallbackQuery();
   await showPaymentList(ctx);
@@ -4288,6 +4311,8 @@ async function showPaymentList(ctx: AppCtx): Promise<void> {
                 ? 'auto • LTC'
                 : m.provider === 'bybit_pay'
                   ? 'auto • Bybit Pay'
+                  : m.provider === 'cryptobot'
+                    ? 'auto • CryptoBot USDT'
                 : 'auto • Binance Pay';
     lines.push(`#${m.id}  ${m.name} — _${tag}_`);
     if (m.address) {
@@ -8832,6 +8857,31 @@ adminBot.on('message:text', async (ctx, next) => {
       return;
     }
 
+    if (flow.type === 'add_cryptobot_payment' && flow.step === 'name') {
+      if (!text || text.length < 2 || text.length > 60) {
+        await ctx.reply('❌ Name must be 2–60 chars. Try again or `/cancel`.');
+        return;
+      }
+      const m = await addPaymentMethod({
+        name: text,
+        instructions: '(auto-verify — Crypto Pay invoice instructions are rendered by the bot)',
+        min_amount: 0,
+        provider: 'cryptobot',
+      });
+      ctx.session.adminFlow = undefined;
+      await ctx.reply(
+        [
+          `✅ *${m.name}* added (id=${m.id})`,
+          'Provider: `cryptobot`',
+          '',
+          'Set `CRYPTOBOT_API_TOKEN` in Railway before users pay with it.',
+          'The webhook path is `/cryptobot/webhook`.',
+        ].join('\n'),
+        { parse_mode: 'Markdown', reply_markup: rootMenu() },
+      );
+      return;
+    }
+
     if (flow.type === 'add_binance_payment') {
       if (flow.step === 'name') {
         if (!text || text.length < 2 || text.length > 60) {
@@ -10043,14 +10093,15 @@ adminBot.on('message:text', async (ctx, next) => {
       flow.type === 'add_payment' ||
       flow.type === 'add_chain_payment' ||
       flow.type === 'add_binance_payment' ||
-      flow.type === 'add_bybit_payment';
+      flow.type === 'add_bybit_payment' ||
+      flow.type === 'add_cryptobot_payment';
     if (isPaymentFlow && (e?.code === '42P01' || e?.code === '42703')) {
       await ctx.reply(
         '⚠️ *Payment-methods schema not migrated*\n\n' +
           `The database is missing a column or table needed for this provider: \`${escapeHtml(
             e.message ?? '',
           )}\`.\n\nRun the latest \`supabase/migrations/*.sql\` files (in particular ` +
-          '`0035_bybit_pay_provider.sql`) on your Supabase project, then retry.',
+          '`0044_cryptobot_provider.sql`) on your Supabase project, then retry.',
         { parse_mode: 'Markdown', reply_markup: rootMenu() },
       );
       return;
@@ -10061,7 +10112,7 @@ adminBot.on('message:text', async (ctx, next) => {
       await ctx.reply(
         '⚠️ *Provider not allowed by the database*\n\n' +
           'The Postgres CHECK constraint on `payment_methods.provider` rejected this row. ' +
-          'Apply the latest migration (`0035_bybit_pay_provider.sql`) so the constraint includes `bybit_pay`.',
+          'Apply the latest payment-provider migration so the constraint includes the selected provider.',
         { parse_mode: 'Markdown', reply_markup: rootMenu() },
       );
       return;

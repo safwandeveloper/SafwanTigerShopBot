@@ -443,6 +443,11 @@ export type AdminFlow =
       type: 'add_bybit_payment';
       step: 'bybit_name';
       data: { name: string; bybit_id: string };
+    }
+  | {
+      type: 'add_cryptobot_payment';
+      step: 'name';
+      data: Record<string, never>;
     };
 
 /**
@@ -605,6 +610,28 @@ export type UserFlow =
         /** See `chain_topup.opened_at_ms`. */
         opened_at_ms: number;
         /** Message id of the instruction screen — deleted on success. */
+        instruction_message_id?: number;
+      };
+    }
+  | {
+      type: 'cryptobot_topup';
+      step: 'usd_amount';
+      data: {
+        method_id: number;
+        method_name: string;
+        min_amount: number;
+      };
+    }
+  | {
+      type: 'cryptobot_topup';
+      step: 'awaiting_payment';
+      data: {
+        method_id: number;
+        method_name: string;
+        deposit_id: number;
+        invoice_id: string;
+        amount: number;
+        invoice_url: string;
         instruction_message_id?: number;
       };
     }

@@ -374,6 +374,20 @@ export const ar: Record<string, string> = {
   'topup.empty_methods': 'لا توجد طرق دفع مكوّنة. يرجى التواصل مع الدعم.',
   'topup.method.body': '*{name}*\n\n{instructions}',
   'topup.requested': '✅ تم تقديم طلب الشحن (#{id}).\nسيتم التحقق وإضافة الرصيد قريبًا.',
+  'topup.cryptobot.amount_prompt':
+    '💳 *شحن USDT عبر CryptoBot*\n\nكمية USDT التي تريد إضافتها؟\nأرسل المبلغ (الحد الأدنى: *{min}*).',
+  'topup.cryptobot.invalid_amount':
+    '❌ أرسل مبلغ USDT صالحًا (الحد الأدنى: *{min}*).',
+  'topup.cryptobot.start_failed':
+    '⚠️ تعذر بدء شحن CryptoBot. حاول مرة أخرى أو استخدم طريقة دفع أخرى.',
+  'topup.cryptobot.invoice_failed':
+    '⚠️ تعذر إنشاء فاتورة CryptoBot الآن. حاول مرة أخرى بعد قليل.',
+  'topup.cryptobot.invoice_ready':
+    '💳 *فاتورة CryptoBot جاهزة*\n\nالمبلغ: *{amount}*\n\nاضغط *فتح الفاتورة* وأكمل الدفع في CryptoBot، ثم اضغط *تحقق*.',
+  'topup.cryptobot.open_invoice': '💳 فتح الفاتورة',
+  'topup.cryptobot.check': '✅ دفعت / تحقق',
+  'topup.cryptobot.success':
+    '✅ *تم تأكيد الدفع عبر CryptoBot!*\n\nتمت الإضافة: *{amount}*\nالرصيد الجديد: *{balance}*',
 
   'support.title': '{support_title} الدعم',
   'support.body':

@@ -378,6 +378,20 @@ export const vi: Record<string, string> = {
   'topup.method.body': '*{name}*\n\n{instructions}',
   'topup.requested':
     '✅ Yêu cầu nạp đã gửi (#{id}).\nQuản trị viên sẽ xác nhận và cộng tiền sớm.',
+  'topup.cryptobot.amount_prompt':
+    '💳 *Nạp USDT qua CryptoBot*\n\nBạn muốn nạp bao nhiêu USDT?\nGửi số tiền (tối thiểu: *{min}*).',
+  'topup.cryptobot.invalid_amount':
+    '❌ Vui lòng gửi số USDT hợp lệ (tối thiểu: *{min}*).',
+  'topup.cryptobot.start_failed':
+    '⚠️ Không thể bắt đầu nạp CryptoBot. Vui lòng thử lại hoặc dùng phương thức khác.',
+  'topup.cryptobot.invoice_failed':
+    '⚠️ Không thể tạo hóa đơn CryptoBot lúc này. Vui lòng thử lại sau.',
+  'topup.cryptobot.invoice_ready':
+    '💳 *Hóa đơn CryptoBot đã sẵn sàng*\n\nSố tiền: *{amount}*\n\nNhấn *Mở hóa đơn*, hoàn tất thanh toán trong CryptoBot, rồi nhấn *Kiểm tra*.',
+  'topup.cryptobot.open_invoice': '💳 Mở hóa đơn',
+  'topup.cryptobot.check': '✅ Đã thanh toán / Kiểm tra',
+  'topup.cryptobot.success':
+    '✅ *Đã xác nhận thanh toán CryptoBot!*\n\nĐã cộng: *{amount}*\nSố dư mới: *{balance}*',
 
   'support.title': '{support_title} Hỗ trợ',
   'support.body':

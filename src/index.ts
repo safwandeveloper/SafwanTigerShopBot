@@ -7,18 +7,22 @@ import {
   handleHealthRequest,
   handleResellerApiRequest,
 } from './services/resellerApiHttp.js';
+import { handleCryptoPayWebhook } from './services/cryptoPayWebhookHttp.js';
 import { startSupplierStockSyncLoop } from './services/supplierAutoSync.js';
+import { startCryptoPayReconciliationLoop } from './services/cryptoPayReconcile.js';
 
 async function main() {
   const bot = await buildBot();
   logMailerStatus();
   startSupplierStockSyncLoop(bot.api);
+  startCryptoPayReconciliationLoop(bot.api);
 
   const startHttpServer = (telegramHandler?: http.RequestListener) => {
     const server = http.createServer((req, res) => {
       void (async () => {
         if (handleHealthRequest(req, res)) return;
         if (await handleResellerApiRequest(req, res, bot.api)) return;
+        if (await handleCryptoPayWebhook(req, res, bot.api)) return;
         if (telegramHandler) {
           telegramHandler(req, res);
           return;
