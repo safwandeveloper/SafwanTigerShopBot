@@ -95,6 +95,7 @@ export async function buildBot(): Promise<Bot<AppCtx>> {
     const adminCommands = [
       { command: 'start', description: 'Open the main menu' },
       { command: 'admin', description: 'Admin panel' },
+      { command: 'products', description: 'Browse products' },
       { command: 'deposit', description: 'Add funds to your wallet' },
       { command: 'settings', description: 'Your profile & settings' },
       { command: 'support', description: 'Get help' },
