@@ -245,6 +245,20 @@ export async function setForceJoinEnabled(enabled: boolean, updated_by?: number)
   cache.set('force_join.enabled', enabled);
 }
 
+export function getApiPriceAlertsEnabled(): boolean {
+  const v = cache.get('api_price_alerts.enabled');
+  if (v === undefined) return true;
+  return v === true || v === 'true';
+}
+
+export async function setApiPriceAlertsEnabled(
+  enabled: boolean,
+  updated_by?: number,
+): Promise<void> {
+  await setSetting('api_price_alerts.enabled', enabled, updated_by);
+  cache.set('api_price_alerts.enabled', enabled);
+}
+
 /**
  * Public URL of the email-explanation PDF. When set, the Why Email
  * "Know More" button becomes a URL button that opens the PDF in

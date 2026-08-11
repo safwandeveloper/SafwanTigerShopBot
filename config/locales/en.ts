@@ -123,6 +123,10 @@ export const en: Record<string, string> = {
   'btn.deposit_history': '💳 My Deposits',
   'btn.channel': 'Channel',
   'btn.reseller_api': '🔑 Api Key',
+  'api.price_alert.up':
+    '{notify_bell} Dear API user, *{product}* price is now *up* to {price}. Please update your prices for this product.',
+  'api.price_alert.down':
+    '{notify_bell} Dear API user, *{product}* price is now *down* to {price}. Please update your prices for this product.',
   'btn.stats': '📊 Stats',
   'btn.stats_refresh': '🔄 Refresh',
   'btn.stats_back': '◀️ Back',

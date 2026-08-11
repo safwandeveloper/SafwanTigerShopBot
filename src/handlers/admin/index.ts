@@ -122,6 +122,8 @@ import {
   getChannelUrl,
   getForceJoinEnabled,
   setForceJoinEnabled,
+  getApiPriceAlertsEnabled,
+  setApiPriceAlertsEnabled,
   getEmoji,
   getButtonColor,
   getButtonIcon,
@@ -155,6 +157,7 @@ import {
 import { t as translate } from '../../i18n/index.js';
 import * as adminLog from '../../services/adminLog.js';
 import * as publicFeed from '../../services/publicFeed.js';
+import { notifyApiPriceChange } from '../../services/priceAlert.js';
 import { describeMailerStatus, sendWelcomeEmail } from '../../services/mailer.js';
 import { fulfillPendingPreordersForProduct } from '../../services/preorder.js';
 import { buildOrderDeliveredChunks } from '../../services/orderRender.js';
@@ -332,9 +335,15 @@ adminBot.callbackQuery('adm:close', async (ctx) => {
 // a single key in the `settings` table.
 async function showBotSettings(ctx: AppCtx): Promise<void> {
   const forceJoin = getForceJoinEnabled();
+  const apiPriceAlerts = getApiPriceAlertsEnabled();
   const channelUrl = getChannelUrl();
   const kb = new InlineKeyboard()
     .text(forceJoin ? '🔒 Force Join: ON' : '🔓 Force Join: OFF', 'adm:bot:forcejoin:toggle')
+    .row()
+    .text(
+      apiPriceAlerts ? '💰 API Price Alerts: ON' : '🔕 API Price Alerts: OFF',
+      'adm:bot:api_price_alerts:toggle',
+    )
     .row()
     .text('📣 Set Join Channel', 'adm:bot:forcejoin:channel')
     .text('🗑 Clear Join Channel', 'adm:bot:forcejoin:clear')
@@ -354,6 +363,7 @@ async function showBotSettings(ctx: AppCtx): Promise<void> {
       '⚙️ *Bot Settings*',
       '',
       `*Force Join:* ${forceJoinLine}`,
+      `*API Price Alerts:* ${apiPriceAlerts ? '*ON*' : '*OFF*'}`,
       `*Join Channel:* ${channelLine}`,
       '',
       '_When Force Join is ON, users must join the configured channel before the main menu unlocks._',
@@ -375,6 +385,16 @@ adminBot.callbackQuery('adm:bot:forcejoin:toggle', async (ctx) => {
   const next = !getForceJoinEnabled();
   await setForceJoinEnabled(next, ctx.from!.id);
   await ctx.answerCallbackQuery({ text: `Force Join ${next ? 'enabled' : 'disabled'}.` });
+  ctx.session.adminFlow = undefined;
+  await showBotSettings(ctx);
+});
+
+adminBot.callbackQuery('adm:bot:api_price_alerts:toggle', async (ctx) => {
+  const next = !getApiPriceAlertsEnabled();
+  await setApiPriceAlertsEnabled(next, ctx.from!.id);
+  await ctx.answerCallbackQuery({
+    text: `API price alerts ${next ? 'enabled' : 'disabled'}.`,
+  });
   ctx.session.adminFlow = undefined;
   await showBotSettings(ctx);
 });
@@ -8460,7 +8480,16 @@ adminBot.on('message:text', async (ctx, next) => {
         await ctx.reply('❌ Bad price. Send a number like `9.99`.');
         return;
       }
+      const before = await getProduct(flow.data.product_id);
       await updateProduct(flow.data.product_id, { price });
+      if (before && Number(before.price) !== price) {
+        void notifyApiPriceChange(ctx.api, before, Number(before.price), price).catch((err) => {
+          logger.warn(
+            { err, productId: before.id },
+            'API price alert worker failed',
+          );
+        });
+      }
       ctx.session.adminFlow = undefined;
       await ctx.reply('✅ Price updated.');
       await showProductEditor(ctx, flow.data.product_id, flow.data.page);

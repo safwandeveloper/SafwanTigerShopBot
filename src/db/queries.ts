@@ -2855,6 +2855,56 @@ export async function listUsersForAnnouncement(): Promise<{ telegram_id: number 
   return rows;
 }
 
+export type ApiPriceAlertRecipient = {
+  telegram_id: number;
+  language: Lang;
+  currency: string | null;
+};
+
+export async function listActiveApiPriceAlertRecipients(): Promise<
+  ApiPriceAlertRecipient[]
+> {
+  const userIds = new Set<number>();
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('reseller_api_keys')
+      .select('user_id')
+      .eq('active', true)
+      .order('user_id', { ascending: true })
+      .range(from, to);
+    if (error) {
+      logger.error({ err: error }, 'listActiveApiPriceAlertRecipients keys failed');
+      throw error;
+    }
+    const batch = (data ?? []) as { user_id: number }[];
+    for (const row of batch) userIds.add(Number(row.user_id));
+    if (batch.length < pageSize) break;
+  }
+  const ids = [...userIds];
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('users')
+    .select('telegram_id,language,currency,is_banned')
+    .in('telegram_id', ids)
+    .eq('is_banned', false);
+  if (error) {
+    logger.error({ err: error }, 'listActiveApiPriceAlertRecipients users failed');
+    throw error;
+  }
+  return ((data ?? []) as Array<{
+    telegram_id: number;
+    language: Lang;
+    currency: string | null;
+    is_banned: boolean;
+  }>).map(({ telegram_id, language, currency }) => ({
+    telegram_id,
+    language,
+    currency,
+  }));
+}
+
 // ---------- Admin: stats / management ----------
 
 export type Stats = {
