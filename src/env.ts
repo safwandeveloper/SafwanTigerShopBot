@@ -276,6 +276,12 @@ const schema = z.object({
   // Optional comma-separated failover proxies. The bot tries these
   // first, then BYBIT_PROXY_URL, then direct.
   BYBIT_PROXY_URLS: z.string().optional().or(z.literal('')),
+
+  // ----------------------------------------------------------------
+  //  Telegram Crypto Pay auto-verify (USDT wallet top-ups)
+  // ----------------------------------------------------------------
+  CRYPTOBOT_API_TOKEN: z.string().optional().or(z.literal('')),
+  CRYPTOBOT_API_BASE_URL: z.string().url().default('https://pay.crypt.bot'),
 });
 
 // Provide a stable alias `BOT_TOKEN` on the parsed env for consumers.

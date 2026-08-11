@@ -197,7 +197,7 @@ export function registerDirectPay(bot: Composer<AppCtx>): void {
     const intent = await buildIntent(ctx, raw, qty);
 
     const methods = (await listPaymentMethods()).filter(
-      (m) => m.provider !== 'manual',
+      (m) => m.provider !== 'manual' && m.provider !== 'cryptobot',
     );
     if (methods.length === 0) {
       await ctx.answerCallbackQuery({

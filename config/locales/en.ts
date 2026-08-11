@@ -871,6 +871,20 @@ export const en: Record<string, string> = {
   'topup.method.body': '*{name}*\n\n{instructions}',
   'topup.requested':
     '✅ Topup request submitted (#{id}).\nAdmin will verify and credit your wallet shortly.',
+  'topup.cryptobot.amount_prompt':
+    '💳 *CryptoBot USDT Top-Up*\n\nHow much USDT would you like to add?\nReply with an amount (minimum: *{min}*).',
+  'topup.cryptobot.invalid_amount':
+    '❌ Please send a valid USDT amount (minimum: *{min}*).',
+  'topup.cryptobot.start_failed':
+    '⚠️ Could not start the CryptoBot top-up. Please try again or use another payment method.',
+  'topup.cryptobot.invoice_failed':
+    '⚠️ Could not create a CryptoBot invoice right now. Please try again shortly.',
+  'topup.cryptobot.invoice_ready':
+    '💳 *CryptoBot invoice ready*\n\nAmount: *{amount}*\n\nTap *Open invoice*, complete the payment in CryptoBot, then tap *Check*.',
+  'topup.cryptobot.open_invoice': '💳 Open invoice',
+  'topup.cryptobot.check': '✅ I’ve paid / Check',
+  'topup.cryptobot.success':
+    '✅ *CryptoBot payment confirmed!*\n\nCredited: *{amount}*\nNew balance: *{balance}*',
 
   // ---------- Support ----------
   'support.title': '{support_title} Support',
