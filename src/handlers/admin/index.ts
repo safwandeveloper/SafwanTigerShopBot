@@ -6713,7 +6713,11 @@ type PromoTierInput = {
 
 function promoTierLabel(tiers: PromoTierInput[]): string {
   return tiers
-    .map((t) => `${t.min_qty}-${t.max_qty ?? '+'} → $${Number(t.unit_price).toFixed(2)} each`)
+    .map(
+      (t) =>
+        `${t.max_qty === null ? `${t.min_qty}+` : `${t.min_qty}-${t.max_qty}`}` +
+        ` → $${Number(t.unit_price).toFixed(2)} each`,
+    )
     .join(' · ');
 }
 
