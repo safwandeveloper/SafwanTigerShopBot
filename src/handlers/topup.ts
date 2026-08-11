@@ -1449,16 +1449,6 @@ async function handleCryptoBotUsdAmount(
 ): Promise<void> {
   const userMessageId = ctx.message?.message_id;
   if (userMessageId !== undefined && ctx.chat) {
-    if (flow.data.instruction_message_id) {
-      void ctx.api
-        .deleteMessage(ctx.chat.id, flow.data.instruction_message_id)
-        .catch((err) =>
-          logger.warn(
-            { err, messageId: flow.data.instruction_message_id },
-            'Crypto Pay amount prompt delete failed',
-          ),
-        );
-    }
     void ctx.api.deleteMessage(ctx.chat.id, userMessageId).catch((err) =>
       logger.warn(
         { err, messageId: userMessageId },
@@ -1478,6 +1468,16 @@ async function handleCryptoBotUsdAmount(
       { parse_mode: 'HTML' },
     );
     return;
+  }
+  if (ctx.chat && flow.data.instruction_message_id) {
+    void ctx.api
+      .deleteMessage(ctx.chat.id, flow.data.instruction_message_id)
+      .catch((err) =>
+        logger.warn(
+          { err, messageId: flow.data.instruction_message_id },
+          'Crypto Pay amount prompt delete failed',
+        ),
+      );
   }
   const rounded = Number(amount.toFixed(2));
   let dep;
