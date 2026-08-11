@@ -162,6 +162,10 @@ export const vi: Record<string, string> = {
   'shop.product.line.promo.fallback_label': 'số lượng ≥ {min_qty}',
   'shop.product.line.promo.teaser':
     '{prod_promo} *Khuyến mãi:* Mua {min_qty}+ giảm −${discount}',
+  'shop.product.line.promo.tier':
+    '{prod_promo} *Khuyến mãi:* {min_qty}+ → ${unit_price}/mỗi sản phẩm',
+  'shop.product.line.promo.tier_teaser':
+    '{prod_promo} *Khuyến mãi:* Mua {min_qty}+ → ${unit_price}/mỗi sản phẩm',
   'shop.product.line.total.discounted':
     '{prod_total_amount} *Tổng tiền:* ~~{gross}~~ {total}',
   'shop.product.out_of_stock_popup':
@@ -450,4 +454,6 @@ export const vi: Record<string, string> = {
 
   'err.generic': '⚠️ Đã xảy ra lỗi. Vui lòng thử lại.',
   'err.unknown_action': '⚠️ Hành động không xác định.',
+  'profile.pricelist.csv.promo_tier_format':
+    'Mua {min_qty}+ → {unit_price} USDT mỗi sản phẩm',
 };

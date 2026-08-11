@@ -12,8 +12,12 @@
  * The applied discount is always clamped to `unit_price * qty` so the
  * line total can never go below zero.
  */
-import { findApplicablePromos, findScopedActivePromos } from '../db/queries.js';
-import type { DBPromo } from '../types.js';
+import {
+  findApplicablePromos,
+  findScopedActivePromos,
+  getPromoTiersForPromos,
+} from '../db/queries.js';
+import type { DBPromo, DBPromoTier } from '../types.js';
 
 export type PromoMatch = {
   promo: DBPromo;
@@ -27,7 +31,36 @@ export type PromoMatch = {
   specificity: 0 | 1 | 2 | 3;
   /** Effective USDT discount, clamped to the line total. */
   discount: number;
+  /** Selected tier, when this is a tiered promo. */
+  selectedTier?: DBPromoTier;
+  /** Charged unit price after the promo, when tiered. */
+  chargedUnitPrice?: number;
 };
+
+export function promoTierForQty(
+  promo: DBPromo,
+  qty: number,
+): DBPromoTier | null {
+  const tiers = promo.tiers ?? [];
+  if (tiers.length === 0) return null;
+  return (
+    tiers.find(
+      (t) => t.min_qty <= qty && (t.max_qty === null || qty <= t.max_qty),
+    ) ??
+    tiers
+      .filter((t) => t.min_qty <= qty)
+      .sort((a, b) => b.min_qty - a.min_qty)[0] ??
+    null
+  );
+}
+
+export function nextPromoTier(promo: DBPromo, qty: number): DBPromoTier | null {
+  return (
+    (promo.tiers ?? [])
+      .filter((t) => t.min_qty > qty)
+      .sort((a, b) => a.min_qty - b.min_qty)[0] ?? null
+  );
+}
 
 function tier(p: DBPromo): 0 | 1 | 2 | 3 {
   if (p.telegram_id !== null && p.product_id !== null) return 3;
@@ -52,11 +85,30 @@ export async function resolvePromo(
   if (lineTotal <= 0) return null;
   const promos = await findApplicablePromos(telegram_id, product_id, qty);
   if (promos.length === 0) return null;
-  const candidates: PromoMatch[] = promos.map((p) => ({
-    promo: p,
-    specificity: tier(p),
-    discount: Math.min(Number(p.discount_amount), lineTotal),
-  }));
+  const tierMap = await getPromoTiersForPromos(promos.map((p) => p.id));
+  const candidates: PromoMatch[] = [];
+  for (const p of promos) {
+    const tiers = tierMap.get(p.id) ?? [];
+    if (tiers.length > 0) {
+      const selectedTier = promoTierForQty({ ...p, tiers }, qty);
+      if (!selectedTier) continue;
+      const chargedUnitPrice = Math.min(unit_price, Number(selectedTier.unit_price));
+      const total = +(chargedUnitPrice * qty).toFixed(2);
+      candidates.push({
+        promo: { ...p, tiers },
+        specificity: tier(p),
+        discount: Math.max(0, +(lineTotal - total).toFixed(2)),
+        selectedTier,
+        chargedUnitPrice,
+      });
+    } else {
+      candidates.push({
+        promo: p,
+        specificity: tier(p),
+        discount: Math.min(Number(p.discount_amount), lineTotal),
+      });
+    }
+  }
   // Highest specificity tier; within tier, largest effective discount.
   candidates.sort(
     (a, b) =>
@@ -84,7 +136,9 @@ export function priceBreakdown(
 ): { gross: number; discount: number; total: number } {
   const gross = +(unit_price * qty).toFixed(2);
   const discount = match ? Math.min(match.discount, gross) : 0;
-  const total = +(gross - discount).toFixed(2);
+  const total = match?.selectedTier
+    ? +(Math.min(unit_price, match.chargedUnitPrice ?? unit_price) * qty).toFixed(2)
+    : +(gross - discount).toFixed(2);
   return { gross, discount, total };
 }
 
@@ -113,12 +167,29 @@ export async function nextPromoTeaser(
   currentDiscount = 0,
 ): Promise<DBPromo | null> {
   const all = await findScopedActivePromos(telegram_id, product_id);
-  let upcoming = all.filter((p) => p.min_qty > qty);
+  const tierMap = await getPromoTiersForPromos(all.map((p) => p.id));
+  const tiered = all
+    .map((p) => ({ promo: p, tiers: tierMap.get(p.id) ?? [] }))
+    .filter((x) => x.tiers.length > 0);
+  const flat = all.filter((p) => !tierMap.has(p.id));
+  let upcoming = flat.filter((p) => p.min_qty > qty);
   if (currentDiscount > 0) {
     upcoming = upcoming.filter(
       (p) => Number(p.discount_amount) > currentDiscount,
     );
   }
+  const tierUpcoming = tiered
+    .flatMap(({ promo, tiers }) =>
+      tiers
+        .filter((t) => t.min_qty > qty)
+        .map((t) => ({ promo: { ...promo, tiers }, tier: t })),
+    )
+    .sort(
+      (a, b) =>
+        tier(b.promo) - tier(a.promo) ||
+        a.tier.min_qty - b.tier.min_qty,
+    )[0];
+  if (tierUpcoming) return tierUpcoming.promo;
   if (upcoming.length === 0) return null;
   upcoming.sort(
     (a, b) =>

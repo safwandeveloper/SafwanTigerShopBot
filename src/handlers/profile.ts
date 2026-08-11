@@ -1354,6 +1354,8 @@ export function registerProfile(bot: Composer<AppCtx>): void {
             min_qty,
             discount,
           }),
+        promo_tier_format: (min_qty: number, unit_price: string) =>
+          ctx.t('profile.pricelist.csv.promo_tier_format', { min_qty, unit_price }),
         unlimited: ctx.t('profile.pricelist.csv.unlimited'),
         promo_footer: promoFooter,
       },
@@ -1381,6 +1383,8 @@ export function registerProfile(bot: Composer<AppCtx>): void {
             min_qty,
             discount,
           }),
+        promo_tier_format: (min_qty: number, unit_price: string) =>
+          ctx.t('profile.pricelist.csv.promo_tier_format', { min_qty, unit_price }),
         promo_footer: promoFooter,
       },
     });

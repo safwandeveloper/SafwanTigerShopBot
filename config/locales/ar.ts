@@ -160,6 +160,10 @@ export const ar: Record<string, string> = {
   'shop.product.line.promo.fallback_label': 'الكمية ≥ {min_qty}',
   'shop.product.line.promo.teaser':
     '{prod_promo} *عرض ترويجي:* اشترِ {min_qty}+ بخصم −${discount}',
+  'shop.product.line.promo.tier':
+    '{prod_promo} *عرض ترويجي:* {min_qty}+ ← ${unit_price} للوحدة',
+  'shop.product.line.promo.tier_teaser':
+    '{prod_promo} *عرض ترويجي:* اشترِ {min_qty}+ ← ${unit_price} للوحدة',
   'shop.product.line.total.discounted':
     '{prod_total_amount} *الإجمالي:* ~~{gross}~~ {total}',
   'shop.product.out_of_stock_popup':
@@ -443,4 +447,6 @@ export const ar: Record<string, string> = {
 
   'err.generic': '⚠️ حدث خطأ. حاول مرة أخرى.',
   'err.unknown_action': '⚠️ إجراء غير معروف.',
+  'profile.pricelist.csv.promo_tier_format':
+    'اشترِ {min_qty}+ ← {unit_price} USDT للوحدة',
 };

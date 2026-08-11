@@ -239,6 +239,10 @@ export const en: Record<string, string> = {
   // the threshold is met (the strikethrough Total takes over).
   'shop.product.line.promo.teaser':
     '{prod_promo} *Promo:* Buy {min_qty}+ −${discount} Off',
+  'shop.product.line.promo.tier':
+    '{prod_promo} *Promo:* {min_qty}+ → ${unit_price} each',
+  'shop.product.line.promo.tier_teaser':
+    '{prod_promo} *Promo:* Buy {min_qty}+ → ${unit_price} each',
   // Strikethrough Total Amount line shown when an active promo
   // applies — gross (struck) → effective price.
   'shop.product.line.total.discounted':
@@ -632,6 +636,7 @@ export const en: Record<string, string> = {
   'profile.pricelist.csv.status.upcoming': 'Upcoming',
   'profile.pricelist.csv.promo_none': '\u2014',
   'profile.pricelist.csv.promo_format': 'Buy {min_qty}+ \u2212{discount} USDT',
+  'profile.pricelist.csv.promo_tier_format': 'Buy {min_qty}+ \u2192 {unit_price} USDT each',
   'profile.pricelist.csv.unlimited': '\u221e',
   // PDF (mail-only) — title / section header used by buildPriceListPdf.
   'profile.pricelist.pdf.title': 'SafwanTiger Shop \u2014 Price List',

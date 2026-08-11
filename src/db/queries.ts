@@ -15,6 +15,7 @@ import type {
   DBGiftCodeRedemption,
   DBUserPriceOverride,
   DBPromo,
+  DBPromoTier,
   DBOrderDeliverySubmission,
   DeliveryFieldSpec,
   PaymentProvider,
@@ -2089,7 +2090,41 @@ export async function removePromoExclusion(
 /** Fetch a single promo by id, for the admin edit/delete screens. */
 export async function getPromo(id: number): Promise<DBPromo | null> {
   const { data } = await supabase.from('promos').select('*').eq('id', id).maybeSingle();
-  return (data as DBPromo | null) ?? null;
+  if (!data) return null;
+  return { ...(data as DBPromo), tiers: await getPromoTiers(id) };
+}
+
+export async function getPromoTiers(promo_id: number): Promise<DBPromoTier[]> {
+  const { data, error } = await supabase
+    .from('promo_tiers')
+    .select('*')
+    .eq('promo_id', promo_id)
+    .order('min_qty', { ascending: true });
+  if (error) {
+    logger.error({ err: error, promo_id }, 'getPromoTiers failed');
+    return [];
+  }
+  return (data ?? []) as DBPromoTier[];
+}
+
+export async function getPromoTiersForPromos(promo_ids: number[]): Promise<Map<number, DBPromoTier[]>> {
+  const result = new Map<number, DBPromoTier[]>();
+  if (promo_ids.length === 0) return result;
+  const { data, error } = await supabase
+    .from('promo_tiers')
+    .select('*')
+    .in('promo_id', promo_ids)
+    .order('min_qty', { ascending: true });
+  if (error) {
+    logger.error({ err: error, promo_ids }, 'getPromoTiersForPromos failed');
+    return result;
+  }
+  for (const row of (data ?? []) as DBPromoTier[]) {
+    const tiers = result.get(row.promo_id) ?? [];
+    tiers.push(row);
+    result.set(row.promo_id, tiers);
+  }
+  return result;
 }
 
 /**
@@ -2113,7 +2148,9 @@ export async function listActivePromos(): Promise<DBPromo[]> {
     logger.error({ err: error }, 'listActivePromos failed');
     return [];
   }
-  return (data ?? []) as DBPromo[];
+  const rows = (data ?? []) as DBPromo[];
+  const tierMap = await getPromoTiersForPromos(rows.map((p) => p.id));
+  return rows.map((p) => ({ ...p, tiers: tierMap.get(p.id) ?? [] }));
 }
 
 export async function listPromos(
@@ -2139,7 +2176,11 @@ export async function listPromos(
     ...rest,
     product_name: products?.name ?? null,
   }));
-  return { rows, total: count ?? 0 };
+  const tierMap = await getPromoTiersForPromos(rows.map((p) => p.id));
+  return {
+    rows: rows.map((p) => ({ ...p, tiers: tierMap.get(p.id) ?? [] })),
+    total: count ?? 0,
+  };
 }
 
 export async function addPromo(args: {
@@ -2167,6 +2208,49 @@ export async function addPromo(args: {
     throw error ?? new Error('addPromo failed');
   }
   return data as DBPromo;
+}
+
+export type PromoTierInput = {
+  min_qty: number;
+  max_qty: number | null;
+  unit_price: number;
+};
+
+export async function addTieredPromo(args: {
+  product_id: number | null;
+  telegram_id: number | null;
+  name: string | null;
+  created_by: number;
+  tiers: PromoTierInput[];
+}): Promise<DBPromo> {
+  const { data, error } = await supabase.rpc('create_tiered_promo', {
+    p_product_id: args.product_id,
+    p_telegram_id: args.telegram_id,
+    p_name: args.name,
+    p_min_qty: args.tiers[0]!.min_qty,
+    p_created_by: args.created_by,
+    p_tiers: args.tiers,
+  });
+  if (error || !data) {
+    logger.error({ err: error }, 'addTieredPromo failed');
+    throw error ?? new Error('addTieredPromo failed');
+  }
+  return data as DBPromo;
+}
+
+export async function replacePromoTiers(
+  promo_id: number,
+  tiers: PromoTierInput[],
+): Promise<void> {
+  const { error } = await supabase.rpc('replace_promo_tiers', {
+    p_promo_id: promo_id,
+    p_min_qty: tiers[0]!.min_qty,
+    p_tiers: tiers,
+  });
+  if (error) {
+    logger.error({ err: error, promo_id }, 'replacePromoTiers failed');
+    throw error;
+  }
 }
 
 export async function updatePromo(
@@ -2263,6 +2347,7 @@ export async function listAllPromos(): Promise<
     }
   }
 
+  const tierMap = await getPromoTiersForPromos(promoRows.map((p) => p.id));
   return promoRows.map((p) => {
     const target = p.telegram_id !== null ? userMap.get(Number(p.telegram_id)) : null;
     const actor = p.created_by !== null ? userMap.get(Number(p.created_by)) : null;
@@ -2277,6 +2362,7 @@ export async function listAllPromos(): Promise<
       first_name: target?.first_name ?? null,
       created_by_username: actor?.username ?? null,
       created_by_first_name: actor?.first_name ?? null,
+      tiers: tierMap.get(p.id) ?? [],
     };
   });
 }
