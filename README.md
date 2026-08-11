@@ -141,12 +141,16 @@ npm run lint
 
    ```
    start - Open the main menu
-   menu - Show the main menu
-   admin - Admin commands (admin only)
+   products - Browse products
+   deposit - Add funds to your wallet
+   settings - Your profile & settings
+   support - Get help
+   api - Reseller API access
    ```
 
    The bot also calls `setMyCommands` on startup — this step is just for
-   discovery in clients that haven't refreshed.
+   discovery in clients that haven't refreshed. `/menu` and `/admin` still
+   work as typed commands but are intentionally kept out of the slash menu.
 7. *(For Telegram Premium emojis)* Find a premium emoji pack you like and
    copy its `custom_emoji_id`s (they appear in the message as
    `tg://emoji?id=…`). Then run inside your bot:
