@@ -15,6 +15,7 @@ import { registerResellerApi } from './handlers/resellerApi.js';
 import { registerPublicGroup } from './handlers/publicGroup.js';
 import { adminBot } from './handlers/admin/index.js';
 import { refreshSettings } from './services/settings.js';
+import { listAdminTelegramIds } from './db/queries.js';
 
 export async function buildBot(): Promise<Bot<AppCtx>> {
   const bot = new Bot<AppCtx>(env.BOT_TOKEN);
@@ -88,16 +89,30 @@ export async function buildBot(): Promise<Bot<AppCtx>> {
     { command: 'api', description: 'Reseller API access' },
   ]);
 
-  // Wipe any lingering admin-scoped commands left over from earlier
-  // versions of the bot (so /admin doesn't show up in the popup for
-  // the admin either).
+  // Give every configured admin a chat-scoped list with /admin in slot 2.
+  // The chat scope overrides the global buyer list for those chats.
   if (env.ADMIN_USER_ID) {
-    try {
-      await bot.api.deleteMyCommands({
-        scope: { type: 'chat', chat_id: env.ADMIN_USER_ID },
-      });
-    } catch (err) {
-      logger.debug({ err }, 'No admin-scoped commands to delete');
+    const adminCommands = [
+      { command: 'start', description: 'Open the main menu' },
+      { command: 'admin', description: 'Admin panel' },
+      { command: 'products', description: 'Browse products' },
+      { command: 'deposit', description: 'Add funds to your wallet' },
+      { command: 'settings', description: 'Your profile & settings' },
+      { command: 'support', description: 'Get help' },
+      { command: 'api', description: 'Reseller API access' },
+    ];
+    const adminIds = new Set<number>([
+      env.ADMIN_USER_ID,
+      ...(await listAdminTelegramIds()),
+    ]);
+    for (const adminId of adminIds) {
+      try {
+        await bot.api.setMyCommands(adminCommands, {
+          scope: { type: 'chat', chat_id: adminId },
+        });
+      } catch (err) {
+        logger.debug({ err, adminId }, 'Failed to set admin-scoped commands');
+      }
     }
 
     // Live Support reachability probe: Telegram won't let the bot
