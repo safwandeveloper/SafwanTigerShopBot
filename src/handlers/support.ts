@@ -337,6 +337,22 @@ function supportKeyboard(
   return kb;
 }
 
+export async function showSupportMenu(ctx: AppCtx): Promise<void> {
+  const text = `${ctx.t('support.title')}\n\n${ctx.t('support.body')}`;
+  const options = {
+    parse_mode: 'HTML' as const,
+    reply_markup: supportKeyboard(
+      getAdminContactUrlWithPrefill(ctx.t('support.contact_prefill')),
+      ctx.lang,
+    ),
+  };
+  if (ctx.callbackQuery) {
+    await ctx.editMessageText(renderMdHtml(text), options);
+  } else {
+    await ctx.reply(renderMdHtml(text), options);
+  }
+}
+
 /**
  * Best-effort wrapper around `createForumTopic` for a private bot
  * chat. Requires the bot owner to have enabled forum topics in
@@ -616,14 +632,7 @@ export function registerSupport(bot: Composer<AppCtx>): void {
 
   bot.callbackQuery('support:open', async (ctx) => {
     await ctx.answerCallbackQuery();
-    const text = `${ctx.t('support.title')}\n\n${ctx.t('support.body')}`;
-    await ctx.editMessageText(renderMdHtml(text), {
-      parse_mode: 'HTML',
-      reply_markup: supportKeyboard(
-        getAdminContactUrlWithPrefill(ctx.t('support.contact_prefill')),
-        ctx.lang,
-      ),
-    });
+    await showSupportMenu(ctx);
   });
 
   // ------------------------------ Live Support ----------------------

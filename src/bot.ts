@@ -77,9 +77,16 @@ export async function buildBot(): Promise<Bot<AppCtx>> {
   // Render redeploy mid-session doesn't break the user→admin relay.
   await restoreLiveSupportSession();
 
-  // Slash-menu shows only /start to everyone. /admin and /menu still
-  // work as typed commands but are intentionally hidden.
-  await bot.api.setMyCommands([{ command: 'start', description: 'Open the main menu' }]);
+  // The slash menu exposes the six buyer shortcuts below. /admin and
+  // /menu still work as typed commands but remain intentionally hidden.
+  await bot.api.setMyCommands([
+    { command: 'start', description: 'Open the main menu' },
+    { command: 'products', description: 'Browse products' },
+    { command: 'deposit', description: 'Add funds to your wallet' },
+    { command: 'settings', description: 'Your profile & settings' },
+    { command: 'support', description: 'Get help' },
+    { command: 'api', description: 'Reseller API access' },
+  ]);
 
   // Wipe any lingering admin-scoped commands left over from earlier
   // versions of the bot (so /admin doesn't show up in the popup for

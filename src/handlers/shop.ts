@@ -127,7 +127,7 @@ function buildShopRows(
   return out;
 }
 
-async function showShopHome(ctx: AppCtx, page = 0) {
+export async function showShopHome(ctx: AppCtx, page = 0) {
   const { rows: rawRows, total: rawTotal } = await listActiveProducts(0, 10000);
   // Layer per-user price overrides onto the catalog rows before we
   // build the keyboard so the price embedded in each button label
