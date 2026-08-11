@@ -375,7 +375,7 @@ export const ar: Record<string, string> = {
   'topup.method.body': '*{name}*\n\n{instructions}',
   'topup.requested': '✅ تم تقديم طلب الشحن (#{id}).\nسيتم التحقق وإضافة الرصيد قريبًا.',
   'topup.cryptobot.amount_prompt':
-    '💳 *شحن USDT عبر CryptoBot*\n\nكمية USDT التي تريد إضافتها؟\nأرسل المبلغ (الحد الأدنى: *{min}*).',
+    '*شحن USDT عبر CryptoBot*\n\nكمية USDT التي تريد إضافتها؟\nأرسل المبلغ (الحد الأدنى: *{min}*).',
   'topup.cryptobot.invalid_amount':
     '❌ أرسل مبلغ USDT صالحًا (الحد الأدنى: *{min}*).',
   'topup.cryptobot.start_failed':
@@ -383,7 +383,9 @@ export const ar: Record<string, string> = {
   'topup.cryptobot.invoice_failed':
     '⚠️ تعذر إنشاء فاتورة CryptoBot الآن. حاول مرة أخرى بعد قليل.',
   'topup.cryptobot.invoice_ready':
-    '💳 *فاتورة CryptoBot جاهزة*\n\nالمبلغ: *{amount}*\n\nاضغط *فتح الفاتورة* وأكمل الدفع في CryptoBot، ثم اضغط *تحقق*.',
+    '*فاتورة CryptoBot جاهزة*\n\nالمبلغ: *{amount}*\n\nاضغط *فتح الفاتورة* وأكمل الدفع في CryptoBot، ثم اضغط *تحقق*.',
+  'directpay.cryptobot.invoice_ready':
+    '*فاتورة الدفع المباشر عبر CryptoBot جاهزة*\n\nالمبلغ: *{amount} USDT*\n\nاضغط *فتح الفاتورة* وأكمل الدفع في CryptoBot، ثم اضغط *تحقق* لتسليم طلبك.',
   'topup.cryptobot.open_invoice': '💳 فتح الفاتورة',
   'topup.cryptobot.check': '✅ دفعت / تحقق',
   'topup.cryptobot.check_unavailable': 'تمت معالجة هذه الدفعة أو أنها غير متاحة.',

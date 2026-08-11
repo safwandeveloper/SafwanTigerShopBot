@@ -31,6 +31,8 @@ import {
   getDeposit,
   getProduct,
   listPaymentMethods,
+  setCryptoPayInvoiceId,
+  setCryptoPayNotificationMessage,
   setDepositNote,
   setDepositStatus,
 } from '../db/queries.js';
@@ -63,6 +65,7 @@ import type {
   PaymentProvider,
 } from '../types.js';
 import { renderPaymentMethodTutorial } from '../services/payMethodTutorialView.js';
+import { createInvoice } from '../services/cryptoPay.js';
 
 const LTC_QUOTE_TTL_MIN = 10;
 
@@ -196,9 +199,7 @@ export function registerDirectPay(bot: Composer<AppCtx>): void {
     const qty = ctx.session.qty[id] ?? QTY_MIN;
     const intent = await buildIntent(ctx, raw, qty);
 
-    const methods = (await listPaymentMethods()).filter(
-      (m) => m.provider !== 'manual' && m.provider !== 'cryptobot',
-    );
+    const methods = (await listPaymentMethods()).filter((m) => m.provider !== 'manual');
     if (methods.length === 0) {
       await ctx.answerCallbackQuery({
         text: 'No direct-pay networks are configured yet — admin must add at least one auto-verify method.',
@@ -404,6 +405,88 @@ export function registerDirectPay(bot: Composer<AppCtx>): void {
           reply_markup: directPayInstructionKeyboard(ctx, m, productId),
         },
       );
+      return;
+    }
+
+    if (m.provider === 'cryptobot') {
+      let depId: number | undefined;
+      try {
+        const dep = await createDeposit({
+          user_id: ctx.user.telegram_id,
+          method: m.name,
+          amount: intent.total,
+          note: 'Direct-pay CryptoBot invoice awaiting payment',
+          order_intent: intent,
+        });
+        depId = dep.id;
+        const invoiceResult = await createInvoice({
+          amount: intent.total,
+          payload: String(dep.id),
+          expiresIn: 1800,
+        });
+        if (!invoiceResult.ok || !invoiceResult.invoice.bot_invoice_url) {
+          await setDepositStatus(dep.id, 'rejected').catch(() => undefined);
+          await ctx.editMessageText(
+            renderMdHtml(
+              ctx.t('topup.cryptobot.invoice_failed'),
+            ),
+            {
+              parse_mode: 'HTML',
+              reply_markup: new InlineKeyboard().text(
+                btn(ctx.lang, 'back'),
+                `pay:direct:${productId}`,
+              ),
+            },
+          );
+          return;
+        }
+        const invoiceId = String(invoiceResult.invoice.invoice_id);
+        await setCryptoPayInvoiceId(dep.id, invoiceId);
+        const keyboard = new InlineKeyboard()
+          .url(
+            ctx.t('topup.cryptobot.open_invoice'),
+            invoiceResult.invoice.bot_invoice_url,
+          )
+          .row()
+          .text(ctx.t('topup.cryptobot.check'), `cryptopay:check:${dep.id}`)
+          .row()
+          .text(btn(ctx.lang, 'back'), `pay:direct:${productId}`);
+        await ctx.editMessageText(
+          renderMdHtml(
+            `${PE.usdt_title} ${ctx.t('directpay.cryptobot.invoice_ready', {
+              amount: Number(intent.total).toFixed(2),
+            })}`,
+          ),
+          { parse_mode: 'HTML', reply_markup: keyboard },
+        );
+        await setCryptoPayNotificationMessage(
+          dep.id,
+          ctx.chat!.id,
+          ctx.callbackQuery!.message!.message_id,
+        ).catch((err) =>
+          logger.warn(
+            {
+              err,
+              depositId: dep.id,
+              messageId: ctx.callbackQuery!.message!.message_id,
+            },
+            'Direct Crypto Pay invoice message persistence failed',
+          ),
+        );
+      } catch (err) {
+        logger.error({ err, depId }, 'Direct Crypto Pay invoice setup failed');
+        if (depId) await setDepositStatus(depId, 'rejected').catch(() => undefined);
+        await ctx.editMessageText(
+          renderMdHtml(ctx.t('topup.cryptobot.invoice_failed')),
+          {
+            parse_mode: 'HTML',
+            reply_markup: new InlineKeyboard().text(
+              btn(ctx.lang, 'back'),
+              `pay:direct:${productId}`,
+            ),
+          },
+        );
+      }
       return;
     }
 

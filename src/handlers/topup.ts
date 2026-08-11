@@ -6,6 +6,7 @@ import {
   getDeposit,
   listPaymentMethods,
   setCryptoPayInvoiceId,
+  setCryptoPayNotificationMessage,
   setDepositNote,
   setDepositStatus,
 } from '../db/queries.js';
@@ -254,6 +255,7 @@ export function registerTopup(bot: Composer<AppCtx>): void {
     }
 
     if (m.provider === 'cryptobot') {
+      const minimum = Math.max(0.01, Number(m.min_amount) || 0);
       ctx.session.userFlow = {
         type: 'cryptobot_topup',
         step: 'usd_amount',
@@ -261,13 +263,14 @@ export function registerTopup(bot: Composer<AppCtx>): void {
           method_id: m.id,
           method_name: m.name,
           min_amount: Number(m.min_amount ?? 0),
+          instruction_message_id: ctx.callbackQuery?.message?.message_id,
         },
       };
       await ctx.editMessageText(
         renderMdHtml(
-          ctx.t('topup.cryptobot.amount_prompt', {
-            min: formatUsdtAmount(m.min_amount),
-          }),
+          `${PE.usdt_title} ${ctx.t('topup.cryptobot.amount_prompt', {
+            min: formatUsdtAmount(minimum),
+          })}`,
         ),
         {
           parse_mode: 'HTML',
@@ -1444,6 +1447,25 @@ async function handleCryptoBotUsdAmount(
   >,
   text: string,
 ): Promise<void> {
+  const userMessageId = ctx.message?.message_id;
+  if (userMessageId !== undefined && ctx.chat) {
+    if (flow.data.instruction_message_id) {
+      void ctx.api
+        .deleteMessage(ctx.chat.id, flow.data.instruction_message_id)
+        .catch((err) =>
+          logger.warn(
+            { err, messageId: flow.data.instruction_message_id },
+            'Crypto Pay amount prompt delete failed',
+          ),
+        );
+    }
+    void ctx.api.deleteMessage(ctx.chat.id, userMessageId).catch((err) =>
+      logger.warn(
+        { err, messageId: userMessageId },
+        'Crypto Pay amount message delete failed',
+      ),
+    );
+  }
   const minimum = Math.max(0.01, Number(flow.data.min_amount) || 0);
   const amount = parseCryptoPayAmount(text, minimum);
   if (amount === null) {
@@ -1517,11 +1539,17 @@ async function handleCryptoBotUsdAmount(
     .text(btn(ctx.lang, 'back'), topupRootCallback(ctx));
   const message = await ctx.reply(
     renderMdHtml(
-      ctx.t('topup.cryptobot.invoice_ready', {
+      `${PE.usdt_title} ${ctx.t('topup.cryptobot.invoice_ready', {
         amount: formatUsdtAmount(rounded),
-      }),
+      })}`,
     ),
     { parse_mode: 'HTML', reply_markup: keyboard },
+  );
+  await setCryptoPayNotificationMessage(dep.id, ctx.chat!.id, message.message_id).catch((err) =>
+    logger.warn(
+      { err, depositId: dep.id, messageId: message.message_id },
+      'Crypto Pay invoice message persistence failed',
+    ),
   );
   const current = ctx.session.userFlow;
   if (current?.type === 'cryptobot_topup' && current.step === 'awaiting_payment') {

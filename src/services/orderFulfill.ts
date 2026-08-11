@@ -45,6 +45,7 @@ import {
 } from './postPurchaseDelivery.js';
 import { t as translate } from '../i18n/index.js';
 import type { DBDeposit, OrderIntent, PaymentProvider } from '../types.js';
+import { PE } from '../handlers/paymentInstructionEmojis.js';
 
 /**
  * Map a payment provider to the user-facing "Paid Via" label that
@@ -205,9 +206,12 @@ export async function fulfilOrderForDeposit(args: {
     api,
     deposit.user_id,
     renderMdHtml(
-      t('shop.buy.payment_verified', {
-        total: intent.total.toFixed(2),
-      }),
+      `${provider === 'cryptobot' ? `${PE.usdt_title} ` : ''}${t(
+        'shop.buy.payment_verified',
+        {
+          total: intent.total.toFixed(2),
+        },
+      )}`,
     ),
   );
 

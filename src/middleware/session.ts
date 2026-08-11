@@ -620,6 +620,7 @@ export type UserFlow =
         method_id: number;
         method_name: string;
         min_amount: number;
+        instruction_message_id?: number;
       };
     }
   | {
