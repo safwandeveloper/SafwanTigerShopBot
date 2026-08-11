@@ -290,6 +290,17 @@ export type DBPromo = {
    * doesn't have to know about the exclusion list.
    */
   excluded_telegram_ids: number[];
+  tiers?: DBPromoTier[];
+};
+
+export type DBPromoTier = {
+  id: number;
+  promo_id: number;
+  min_qty: number;
+  max_qty: number | null;
+  unit_price: number;
+  created_at: string;
+  updated_at: string;
 };
 
 export type DBDeposit = {

@@ -328,6 +328,34 @@ export type AdminFlow =
     }
   | {
       type: 'promo_add';
+      step: 'type';
+      data: {
+        scope: 'default' | 'product' | 'user' | 'user_product';
+        product_id: number | null;
+        telegram_id: number | null;
+      };
+    }
+  | {
+      type: 'promo_add';
+      step: 'tiers';
+      data: {
+        scope: 'default' | 'product' | 'user' | 'user_product';
+        product_id: number | null;
+        telegram_id: number | null;
+      };
+    }
+  | {
+      type: 'promo_add';
+      step: 'tier_confirm';
+      data: {
+        scope: 'default' | 'product' | 'user' | 'user_product';
+        product_id: number | null;
+        telegram_id: number | null;
+        tiers: Array<{ min_qty: number; max_qty: number | null; unit_price: number }>;
+      };
+    }
+  | {
+      type: 'promo_add';
       step: 'discount';
       data: {
         scope: 'default' | 'product' | 'user' | 'user_product';
@@ -350,6 +378,7 @@ export type AdminFlow =
   // Single-field edits invoked from the promo edit card.
   | { type: 'promo_edit_qty'; step: 'value'; data: { promo_id: number } }
   | { type: 'promo_edit_discount'; step: 'value'; data: { promo_id: number } }
+  | { type: 'promo_edit_tiers'; step: 'value'; data: { promo_id: number } }
   | { type: 'promo_edit_name'; step: 'value'; data: { promo_id: number } }
   // Exclude-a-user prompt opened from the promo card. Accepts a
   // numeric Telegram id or @username (same resolution as the

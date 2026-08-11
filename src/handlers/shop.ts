@@ -30,6 +30,7 @@ import {
 } from '../services/pricing.js';
 import {
   nextPromoTeaser,
+  nextPromoTier,
   priceBreakdown,
   resolvePromo,
   type PromoMatch,
@@ -310,16 +311,22 @@ function productPageText(
   //     they know the next reachable rule. We never surface a
   //     "weaker" upcoming promo on top of an active one — that
   //     would just be noise.
-  const teaserBeats = teaser
-    ? Number(teaser.discount_amount) > discount
-    : false;
+  const teaserTier = teaser ? nextPromoTier(teaser, qty) : null;
+  const teaserBeats = teaserTier
+    ? Math.min(p.price, Number(teaserTier.unit_price)) < p.price
+    : teaser
+      ? Number(teaser.discount_amount) > discount
+      : false;
   if (teaser && (!eligible || teaserBeats)) {
-    lines.push(
-      ctx.t('shop.product.line.promo.teaser', {
-        min_qty: teaser.min_qty,
-        discount: Number(teaser.discount_amount).toFixed(2),
-      }),
-    );
+    lines.push(teaserTier
+      ? ctx.t('shop.product.line.promo.tier_teaser', {
+          min_qty: teaserTier.min_qty,
+          unit_price: Number(Math.min(p.price, teaserTier.unit_price)).toFixed(2),
+        })
+      : ctx.t('shop.product.line.promo.teaser', {
+          min_qty: teaser.min_qty,
+          discount: Number(teaser.discount_amount).toFixed(2),
+        }));
   }
 
   lines.push('', ctx.t('shop.product.line.qty', { qty }));
@@ -395,12 +402,18 @@ function renderPromoLine(
     ctx.t('shop.product.line.promo.fallback_label', {
       min_qty: promo.promo.min_qty,
     });
-  return (
-    ctx.t('shop.product.line.promo', {
-      label,
-      discount: formatPriceWithCurrency(discount, ctx.user.currency),
-    }) + '\n'
-  );
+  if (promo.selectedTier) {
+    return (
+      ctx.t('shop.product.line.promo.tier', {
+        min_qty: promo.selectedTier.min_qty,
+        unit_price: formatPriceWithCurrency(promo.chargedUnitPrice ?? 0, ctx.user.currency),
+      }) + '\n'
+    );
+  }
+  return ctx.t('shop.product.line.promo', {
+    label,
+    discount: formatPriceWithCurrency(discount, ctx.user.currency),
+  }) + '\n';
 }
 
 type ReferralPaymentState = {

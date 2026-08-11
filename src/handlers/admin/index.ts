@@ -71,11 +71,13 @@ import {
   getGiftCode,
   countGiftCodeRedemptions,
   addPromo,
+  addTieredPromo,
   listPromos,
   listAllPromos,
   getPromo,
   getPromoImpact,
   updatePromo,
+  replacePromoTiers,
   deletePromo,
   addPromoExclusion,
   removePromoExclusion,
@@ -6703,6 +6705,100 @@ adminBot.callbackQuery('adm:price:csv', async (ctx) => {
 
 const PROMO_PAGE_SIZE = 8;
 
+type PromoTierInput = {
+  min_qty: number;
+  max_qty: number | null;
+  unit_price: number;
+};
+
+function promoTierLabel(tiers: PromoTierInput[]): string {
+  return tiers
+    .map((t) => `${t.min_qty}-${t.max_qty ?? '+'} → $${Number(t.unit_price).toFixed(2)} each`)
+    .join(' · ');
+}
+
+function parsePromoTiers(text: string): { tiers?: PromoTierInput[]; error?: string } {
+  const tiers: PromoTierInput[] = [];
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return { error: 'Send at least one tier line.' };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const m = line.match(/^(\d+)\s*-\s*(\d+)\s+([0-9]+(?:\.[0-9]+)?)$/) ??
+      line.match(/^(\d+)\s*\+\s+([0-9]+(?:\.[0-9]+)?)$/);
+    if (!m) {
+      return { error: `Line ${i + 1} is invalid: \`${line}\`. Use \`min-max price\` or \`min+ price\`.` };
+    }
+    const min_qty = Number(m[1]);
+    const max_qty = m[3] === undefined ? null : Number(m[2]);
+    const unit_price = Number(m[3] === undefined ? m[2] : m[3]);
+    if (!Number.isInteger(min_qty) || min_qty < 1) {
+      return { error: `Line ${i + 1} has an invalid minimum quantity.` };
+    }
+    if (max_qty !== null && (!Number.isInteger(max_qty) || max_qty < min_qty)) {
+      return { error: `Line ${i + 1} has max quantity below min quantity.` };
+    }
+    if (!Number.isFinite(unit_price) || unit_price < 0) {
+      return { error: `Line ${i + 1} has an invalid unit price.` };
+    }
+    tiers.push({ min_qty, max_qty, unit_price });
+  }
+  tiers.sort((a, b) => a.min_qty - b.min_qty);
+  for (let i = 1; i < tiers.length; i++) {
+    const previous = tiers[i - 1]!;
+    const current = tiers[i]!;
+    if (previous.max_qty === null || previous.max_qty >= current.min_qty) {
+      return { error: `Lines ${i} and ${i + 1} overlap.` };
+    }
+  }
+  return { tiers };
+}
+
+async function promptPromoType(ctx: AppCtx, data: {
+  scope: 'default' | 'product' | 'user' | 'user_product';
+  product_id: number | null;
+  telegram_id: number | null;
+}): Promise<void> {
+  const kb = new InlineKeyboard()
+    .text('💵 Flat discount', 'adm:promo:type:flat')
+    .row()
+    .text('📊 Tiered per-unit pricing', 'adm:promo:type:tiered')
+    .row()
+    .text('⬅️ Cancel', 'adm:promo');
+  ctx.session.adminFlow = { type: 'promo_add', step: 'type', data };
+  await ctx.reply(
+    [
+      '➕ *New promo — Step 3/4: Pricing type*',
+      '',
+      'Choose the existing flat discount or a quantity-tiered unit price ladder.',
+    ].join('\n'),
+    { parse_mode: 'Markdown', reply_markup: kb },
+  );
+}
+
+async function promptPromoTiers(ctx: AppCtx, data: {
+  scope: 'default' | 'product' | 'user' | 'user_product';
+  product_id: number | null;
+  telegram_id: number | null;
+}): Promise<void> {
+  ctx.session.adminFlow = { type: 'promo_add', step: 'tiers', data };
+  await ctx.reply(
+    [
+      '➕ *New promo — Tier ladder*',
+      '',
+      'Send one tier per line as `min-max price`.',
+      'Use `min+ price` for an open-ended top tier.',
+      'Example:',
+      '`1-99 0.70`',
+      '`100-199 0.60`',
+      '`200+ 0.50`',
+      '',
+      'Gaps are allowed; overlapping ranges are rejected.',
+      'Send `/cancel` to abort.',
+    ].join('\n'),
+    { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('⬅️ Cancel', 'adm:promo') },
+  );
+}
+
 /** Human-readable scope label for the list / detail views. */
 function promoScopeLabel(p: Pick<DBPromo, 'product_id' | 'telegram_id'> & { product_name?: string | null }): string {
   if (p.telegram_id !== null && p.product_id !== null) {
@@ -6732,7 +6828,11 @@ async function showPromoList(ctx: AppCtx, page: number): Promise<void> {
       const active = p.active ? '🟢' : '⏸';
       const name = p.name?.trim() ? ` — _${p.name.trim()}_` : '';
       lines.push(
-        `${active} \`#${p.id}\` qty ≥ *${p.min_qty}* → −*$${Number(p.discount_amount).toFixed(2)}*${name}`,
+        `${active} \`#${p.id}\` ${
+          p.tiers && p.tiers.length > 0
+            ? promoTierLabel(p.tiers)
+            : `qty ≥ *${p.min_qty}* → −*$${Number(p.discount_amount).toFixed(2)}*`
+        }${name}`,
         `   ${scope}`,
       );
     }
@@ -6751,7 +6851,11 @@ async function showPromoList(ctx: AppCtx, page: number): Promise<void> {
           ? 'Prod'
           : 'Def';
     kb.text(
-      `#${p.id} ${scope} q≥${p.min_qty} −$${Number(p.discount_amount).toFixed(2)}`,
+      `#${p.id} ${scope} ${
+        p.tiers && p.tiers.length > 0
+          ? 'tiered'
+          : `q≥${p.min_qty} −$${Number(p.discount_amount).toFixed(2)}`
+      }`,
       `adm:promo:v:${p.id}`,
     ).row();
   }
@@ -6924,8 +7028,12 @@ async function showPromoCard(ctx: AppCtx, promo_id: number): Promise<void> {
     '',
     `Status: ${p.active ? '🟢 *Active*' : '⏸ *Paused*'}`,
     `Scope: ${scope}`,
-    `Min qty: *${p.min_qty}*`,
-    `Discount: *$${Number(p.discount_amount).toFixed(2)}* off the line total`,
+    p.tiers && p.tiers.length > 0
+      ? `Tiers: *${promoTierLabel(p.tiers)}*`
+      : `Min qty: *${p.min_qty}*`,
+    p.tiers && p.tiers.length > 0
+      ? 'Pricing: tiered per-unit (never above the effective user price)'
+      : `Discount: *$${Number(p.discount_amount).toFixed(2)}* off the line total`,
     `Name: ${p.name?.trim() ? `_${p.name.trim()}_` : '—'}`,
   ];
 
@@ -6941,13 +7049,18 @@ async function showPromoCard(ctx: AppCtx, promo_id: number): Promise<void> {
     );
     // Cheap "savings preview" so the admin can sanity-check the
     // promo at a glance — what the buyer pays at the threshold qty.
-    const grossAtMin = price * p.min_qty;
-    const discountAtMin = Math.min(Number(p.discount_amount), grossAtMin);
-    const totalAtMin = grossAtMin - discountAtMin;
+    const previewTier = p.tiers?.[0];
+    const previewQty = previewTier?.min_qty ?? p.min_qty;
+    const grossAtMin = price * previewQty;
+    const previewUnit = previewTier
+      ? Math.min(price, Number(previewTier.unit_price))
+      : price;
+    const totalAtMin = previewUnit * previewQty;
+    const discountAtMin = grossAtMin - totalAtMin;
     const pct =
       grossAtMin > 0 ? `${((discountAtMin / grossAtMin) * 100).toFixed(1)}%` : 'n/a';
     lines.push(
-      `   • At qty *${p.min_qty}*: gross *$${grossAtMin.toFixed(2)}*` +
+      `   • At qty *${previewQty}*: gross *$${grossAtMin.toFixed(2)}*` +
         ` → pay *$${totalAtMin.toFixed(2)}* (saves $${discountAtMin.toFixed(2)} / ${pct})`,
     );
   }
@@ -7018,10 +7131,15 @@ async function showPromoCard(ctx: AppCtx, promo_id: number): Promise<void> {
 
   const kb = new InlineKeyboard()
     .text(p.active ? '⏸ Pause' : '▶️ Activate', `adm:promo:toggle:${p.id}`)
-    .row()
-    .text('✏️ Min qty', `adm:promo:editq:${p.id}`)
-    .text('💵 Discount', `adm:promo:editd:${p.id}`)
-    .row()
+    .row();
+  if (p.tiers && p.tiers.length > 0) {
+    kb.text('✏️ Edit tiers', `adm:promo:editt:${p.id}`).row();
+  } else {
+    kb.text('✏️ Min qty', `adm:promo:editq:${p.id}`)
+      .text('💵 Discount', `adm:promo:editd:${p.id}`)
+      .row();
+  }
+  kb
     .text('🏷 Name', `adm:promo:editn:${p.id}`)
     .text(
       excluded.length > 0
@@ -7123,7 +7241,11 @@ async function showPromoExclusions(ctx: AppCtx, promo_id: number): Promise<void>
   const lines: string[] = [
     `🚫 *Promo #${p.id} — Excluded users*`,
     '',
-    `Promo: qty ≥ *${p.min_qty}* → −*$${Number(p.discount_amount).toFixed(2)}* ` +
+    `Promo: ${
+      p.tiers && p.tiers.length > 0
+        ? promoTierLabel(p.tiers)
+        : `qty ≥ *${p.min_qty}* → −*$${Number(p.discount_amount).toFixed(2)}*`
+    } ` +
       `(${p.active ? '🟢 Active' : '⏸ Paused'})`,
     `Scope: ${promoScopeLabel(p)}`,
     '',
@@ -7311,7 +7433,11 @@ adminBot.callbackQuery(/^adm:promo:report:(\d+)$/, async (ctx) => {
           : '';
       const im = impactMap.get(r.id)!;
       lines.push(
-        `   • ${status} \`#${r.id}\` qty ≥ *${r.min_qty}* → −*$${Number(r.discount_amount).toFixed(2)}*${name}` +
+        `   • ${status} \`#${r.id}\` ${
+          r.tiers && r.tiers.length > 0
+            ? promoTierLabel(r.tiers)
+            : `qty ≥ *${r.min_qty}* → −*$${Number(r.discount_amount).toFixed(2)}*`
+        }${name}` +
           `${userPart}${productPart}`,
         `       impact: ${im.orders} orders · $${im.total_discount.toFixed(2)}`,
       );
@@ -7499,12 +7625,7 @@ adminBot.callbackQuery(/^adm:promo:scope:(default|product|user|user_product)$/, 
   await ctx.answerCallbackQuery();
   const scope = ctx.match[1] as 'default' | 'product' | 'user' | 'user_product';
   if (scope === 'default') {
-    ctx.session.adminFlow = {
-      type: 'promo_add',
-      step: 'min_qty',
-      data: { scope, product_id: null, telegram_id: null },
-    };
-    await promptPromoMinQty(ctx);
+    await promptPromoType(ctx, { scope, product_id: null, telegram_id: null });
     return;
   }
   if (scope === 'product') {
@@ -7560,16 +7681,56 @@ adminBot.callbackQuery(/^adm:promo:npp:(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery({ text: 'Product not found.', show_alert: true });
     return;
   }
-  ctx.session.adminFlow = {
-    type: 'promo_add',
-    step: 'min_qty',
-    data: {
-      scope: flow.data.scope,
-      product_id,
-      telegram_id: flow.data.telegram_id,
-    },
-  };
+  await promptPromoType(ctx, {
+    scope: flow.data.scope,
+    product_id,
+    telegram_id: flow.data.telegram_id,
+  });
+});
+
+adminBot.callbackQuery(/^adm:promo:type:(flat|tiered)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'promo_add' || flow.step !== 'type') {
+    await ctx.editMessageText('❓ Lost the promo flow — start over.', {
+      reply_markup: new InlineKeyboard().text('⬅️ Back', 'adm:promo'),
+    });
+    return;
+  }
+  if (ctx.match[1] === 'tiered') {
+    await promptPromoTiers(ctx, flow.data);
+    return;
+  }
+  ctx.session.adminFlow = { type: 'promo_add', step: 'min_qty', data: flow.data };
   await promptPromoMinQty(ctx);
+});
+
+adminBot.callbackQuery('adm:promo:tierSave', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'promo_add' || flow.step !== 'tier_confirm') {
+    await ctx.editMessageText('❓ Lost the promo flow — start over.', {
+      reply_markup: new InlineKeyboard().text('⬅️ Back', 'adm:promo'),
+    });
+    return;
+  }
+  try {
+    const created = await addTieredPromo({
+      product_id: flow.data.product_id,
+      telegram_id: flow.data.telegram_id,
+      name: null,
+      created_by: ctx.from!.id,
+      tiers: flow.data.tiers,
+    });
+    ctx.session.adminFlow = undefined;
+    await showPromoCard(ctx, created.id);
+  } catch (err) {
+    logger.error({ err, flow }, 'tiered promo save failed');
+    await ctx.editMessageText(
+      '⚠️ Could not save tiered promo. Apply migration `0043_promo_tiers.sql` and try again.',
+      { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('⬅️ Back', 'adm:promo') },
+    );
+  }
 });
 
 adminBot.callbackQuery(/^adm:promo:editq:(\d+)$/, async (ctx) => {
@@ -7591,6 +7752,26 @@ adminBot.callbackQuery(/^adm:promo:editd:(\d+)$/, async (ctx) => {
   ctx.session.adminFlow = { type: 'promo_edit_discount', step: 'value', data: { promo_id: id } };
   await ctx.editMessageText(
     `💵 *Promo #${id} — Discount*\n\nSend the new flat discount in USDT (e.g. \`5\` or \`12.5\`).\n\n\`/cancel\` to abort.`,
+    {
+      parse_mode: 'Markdown',
+      reply_markup: new InlineKeyboard().text('⬅️ Cancel', `adm:promo:v:${id}`),
+    },
+  );
+});
+
+adminBot.callbackQuery(/^adm:promo:editt:(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const id = Number(ctx.match[1]);
+  ctx.session.adminFlow = { type: 'promo_edit_tiers', step: 'value', data: { promo_id: id } };
+  await ctx.editMessageText(
+    [
+      `✏️ *Promo #${id} — Edit tiers*`,
+      '',
+      'Send the replacement ladder, one tier per line:',
+      '`min-max price` or `min+ price`',
+      '',
+      'Overlapping ranges are rejected. `/cancel` to abort.',
+    ].join('\n'),
     {
       parse_mode: 'Markdown',
       reply_markup: new InlineKeyboard().text('⬅️ Cancel', `adm:promo:v:${id}`),
@@ -9538,25 +9719,11 @@ adminBot.on('message:text', async (ctx, next) => {
         return;
       }
       if (flow.data.scope === 'user') {
-        ctx.session.adminFlow = {
-          type: 'promo_add',
-          step: 'min_qty',
-          data: { scope: 'user', product_id: null, telegram_id },
-        };
-        await ctx.reply(
-          [
-            '➕ *New promo — Step 3/4: Minimum qty*',
-            '',
-            'Send the minimum quantity that triggers this promo.',
-            'Whole number ≥ 1, e.g. `10`.',
-            '',
-            'Send `/cancel` to abort.',
-          ].join('\n'),
-          {
-            parse_mode: 'Markdown',
-            reply_markup: new InlineKeyboard().text('⬅️ Cancel', 'adm:promo'),
-          },
-        );
+        await promptPromoType(ctx, {
+          scope: 'user',
+          product_id: null,
+          telegram_id,
+        });
         return;
       }
       // user_product → next step is product picker.
@@ -9613,6 +9780,34 @@ adminBot.on('message:text', async (ctx, next) => {
           parse_mode: 'Markdown',
           reply_markup: new InlineKeyboard().text('⬅️ Cancel', 'adm:promo'),
         },
+      );
+      return;
+    }
+
+    if (flow.type === 'promo_add' && flow.step === 'tiers') {
+      const parsed = parsePromoTiers(text);
+      if (!parsed.tiers) {
+        await ctx.reply(`❌ ${parsed.error}`, { parse_mode: 'Markdown' });
+        return;
+      }
+      ctx.session.adminFlow = {
+        type: 'promo_add',
+        step: 'tier_confirm',
+        data: { ...flow.data, tiers: parsed.tiers },
+      };
+      const kb = new InlineKeyboard()
+        .text('✅ Save tiered promo', 'adm:promo:tierSave')
+        .row()
+        .text('❌ Cancel', 'adm:promo');
+      await ctx.reply(
+        [
+          '📊 *Confirm tier ladder*',
+          '',
+          promoTierLabel(parsed.tiers),
+          '',
+          'Save this tiered promo?',
+        ].join('\n'),
+        { parse_mode: 'Markdown', reply_markup: kb },
       );
       return;
     }
@@ -9699,6 +9894,29 @@ adminBot.on('message:text', async (ctx, next) => {
         parse_mode: 'Markdown',
       });
       await showPromoCard(ctx, flow.data.promo_id);
+      return;
+    }
+
+    if (flow.type === 'promo_edit_tiers') {
+      const parsed = parsePromoTiers(text);
+      if (!parsed.tiers) {
+        await ctx.reply(`❌ ${parsed.error}`, { parse_mode: 'Markdown' });
+        return;
+      }
+      try {
+        await replacePromoTiers(flow.data.promo_id, parsed.tiers);
+        ctx.session.adminFlow = undefined;
+        await ctx.reply(`✅ Tiers updated: ${promoTierLabel(parsed.tiers)}`, {
+          parse_mode: 'Markdown',
+        });
+        await showPromoCard(ctx, flow.data.promo_id);
+      } catch (err) {
+        logger.error({ err, promo_id: flow.data.promo_id }, 'promo tiers update failed');
+        await ctx.reply(
+          '⚠️ Could not replace tiers. Apply migration `0043_promo_tiers.sql` and try again.',
+          { parse_mode: 'Markdown' },
+        );
+      }
       return;
     }
 

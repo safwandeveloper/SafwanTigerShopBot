@@ -230,6 +230,7 @@ export interface PriceListLabels {
   status_upcoming: string;
   promo_none: string;
   promo_format: (min_qty: number, discount: string) => string;
+  promo_tier_format: (min_qty: number, unit_price: string) => string;
   unlimited: string;
   promo_footer: string;
 }
@@ -273,7 +274,14 @@ export function buildPriceListCsv(args: {
       .slice()
       .sort((a, b) => a.min_qty - b.min_qty)[0];
     const promoCell = cheapest
-      ? args.labels.promo_format(cheapest.min_qty, Number(cheapest.discount_amount).toFixed(2))
+      ? cheapest.tiers && cheapest.tiers.length > 0
+        ? args.labels.promo_tier_format(
+            cheapest.tiers.reduce((a, b) =>
+              Number(a.unit_price) <= Number(b.unit_price) ? a : b,
+            ).min_qty,
+            Math.min(...cheapest.tiers.map((t) => Number(t.unit_price))).toFixed(2),
+          )
+        : args.labels.promo_format(cheapest.min_qty, Number(cheapest.discount_amount).toFixed(2))
       : args.labels.promo_none;
     rows.push([
       product.name,

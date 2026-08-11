@@ -958,6 +958,7 @@ export interface PriceListPdfLabels {
   promo_none: string;
   /** Builds the promo cell text from min_qty + discount. */
   promo_format: (min_qty: number, discount: string) => string;
+  promo_tier_format: (min_qty: number, unit_price: string) => string;
   /** Footer line printed once at the bottom. */
   promo_footer: string;
 }
@@ -1020,10 +1021,17 @@ export async function buildPriceListPdf(args: {
         .slice()
         .sort((a, b) => a.min_qty - b.min_qty)[0];
       const promoCell = cheapest
-        ? labels.promo_format(
-            cheapest.min_qty,
-            Number(cheapest.discount_amount).toFixed(2),
-          )
+        ? cheapest.tiers && cheapest.tiers.length > 0
+          ? labels.promo_tier_format(
+              cheapest.tiers.reduce((a, b) =>
+                Number(a.unit_price) <= Number(b.unit_price) ? a : b,
+              ).min_qty,
+              Math.min(...cheapest.tiers.map((t) => Number(t.unit_price))).toFixed(2),
+            )
+          : labels.promo_format(
+              cheapest.min_qty,
+              Number(cheapest.discount_amount).toFixed(2),
+            )
         : labels.promo_none;
       const cardW = PAGE_W - MARGIN_X * 2;
       drawKvCard(
