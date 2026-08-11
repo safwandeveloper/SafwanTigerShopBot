@@ -2725,6 +2725,8 @@ export async function createDeposit(d: {
    * skips the legacy wallet-credit path entirely.
    */
   order_intent?: OrderIntent;
+  notify_chat_id?: number;
+  notify_message_id?: number;
 }): Promise<DBDeposit> {
   const { data, error } = await supabase
     .from('deposits')
@@ -2736,11 +2738,28 @@ export async function createDeposit(d: {
       expected_amount: d.expected_amount ?? null,
       quote_expires_at: d.quote_expires_at ?? null,
       order_intent: d.order_intent ?? null,
+      notify_chat_id: d.notify_chat_id ?? null,
+      notify_message_id: d.notify_message_id ?? null,
     })
     .select('*')
     .single();
   if (error || !data) throw error ?? new Error('createDeposit failed');
   return data as DBDeposit;
+}
+
+export async function setCryptoPayNotificationMessage(
+  id: number,
+  chatId: number,
+  messageId: number,
+): Promise<void> {
+  const { error } = await supabase
+    .from('deposits')
+    .update({
+      notify_chat_id: chatId,
+      notify_message_id: messageId,
+    })
+    .eq('id', id);
+  if (error) throw error;
 }
 
 /** Persist the on-chain tx hash on an existing deposit row. */

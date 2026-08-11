@@ -872,7 +872,7 @@ export const en: Record<string, string> = {
   'topup.requested':
     '✅ Topup request submitted (#{id}).\nAdmin will verify and credit your wallet shortly.',
   'topup.cryptobot.amount_prompt':
-    '💳 *CryptoBot USDT Top-Up*\n\nHow much USDT would you like to add?\nReply with an amount (minimum: *{min}*).',
+    '*CryptoBot USDT Top-Up*\n\nHow much USDT would you like to add?\nReply with an amount (minimum: *{min}*).',
   'topup.cryptobot.invalid_amount':
     '❌ Please send a valid USDT amount (minimum: *{min}*).',
   'topup.cryptobot.start_failed':
@@ -880,7 +880,9 @@ export const en: Record<string, string> = {
   'topup.cryptobot.invoice_failed':
     '⚠️ Could not create a CryptoBot invoice right now. Please try again shortly.',
   'topup.cryptobot.invoice_ready':
-    '💳 *CryptoBot invoice ready*\n\nAmount: *{amount}*\n\nTap *Open invoice*, complete the payment in CryptoBot, then tap *Check*.',
+    '*CryptoBot invoice ready*\n\nAmount: *{amount}*\n\nTap *Open invoice*, complete the payment in CryptoBot, then tap *Check*.',
+  'directpay.cryptobot.invoice_ready':
+    '*CryptoBot direct-pay invoice ready*\n\nAmount: *{amount} USDT*\n\nTap *Open invoice*, complete the payment in CryptoBot, then tap *Check* to deliver your order.',
   'topup.cryptobot.open_invoice': '💳 Open invoice',
   'topup.cryptobot.check': '✅ I’ve paid / Check',
   'topup.cryptobot.check_unavailable': 'This payment is already resolved or unavailable.',

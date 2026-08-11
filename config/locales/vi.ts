@@ -379,7 +379,7 @@ export const vi: Record<string, string> = {
   'topup.requested':
     '✅ Yêu cầu nạp đã gửi (#{id}).\nQuản trị viên sẽ xác nhận và cộng tiền sớm.',
   'topup.cryptobot.amount_prompt':
-    '💳 *Nạp USDT qua CryptoBot*\n\nBạn muốn nạp bao nhiêu USDT?\nGửi số tiền (tối thiểu: *{min}*).',
+    '*Nạp USDT qua CryptoBot*\n\nBạn muốn nạp bao nhiêu USDT?\nGửi số tiền (tối thiểu: *{min}*).',
   'topup.cryptobot.invalid_amount':
     '❌ Vui lòng gửi số USDT hợp lệ (tối thiểu: *{min}*).',
   'topup.cryptobot.start_failed':
@@ -387,7 +387,9 @@ export const vi: Record<string, string> = {
   'topup.cryptobot.invoice_failed':
     '⚠️ Không thể tạo hóa đơn CryptoBot lúc này. Vui lòng thử lại sau.',
   'topup.cryptobot.invoice_ready':
-    '💳 *Hóa đơn CryptoBot đã sẵn sàng*\n\nSố tiền: *{amount}*\n\nNhấn *Mở hóa đơn*, hoàn tất thanh toán trong CryptoBot, rồi nhấn *Kiểm tra*.',
+    '*Hóa đơn CryptoBot đã sẵn sàng*\n\nSố tiền: *{amount}*\n\nNhấn *Mở hóa đơn*, hoàn tất thanh toán trong CryptoBot, rồi nhấn *Kiểm tra*.',
+  'directpay.cryptobot.invoice_ready':
+    '*Hóa đơn thanh toán trực tiếp CryptoBot đã sẵn sàng*\n\nSố tiền: *{amount} USDT*\n\nNhấn *Mở hóa đơn*, hoàn tất thanh toán trong CryptoBot, rồi nhấn *Kiểm tra* để giao đơn hàng.',
   'topup.cryptobot.open_invoice': '💳 Mở hóa đơn',
   'topup.cryptobot.check': '✅ Đã thanh toán / Kiểm tra',
   'topup.cryptobot.check_unavailable': 'Khoản thanh toán này đã được xử lý hoặc không khả dụng.',

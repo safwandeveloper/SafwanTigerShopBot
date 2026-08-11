@@ -336,6 +336,9 @@ export type DBDeposit = {
    * crediting the wallet). Null for normal wallet top-ups.
    */
   order_intent: OrderIntent | null;
+  /** Telegram message containing the pending Crypto Pay invoice. */
+  notify_chat_id: number | null;
+  notify_message_id: number | null;
   created_at: string;
   updated_at: string;
 };
