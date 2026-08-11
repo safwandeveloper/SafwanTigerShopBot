@@ -1,6 +1,11 @@
--- Harden the Crypto Pay credit RPC after 0044.
--- Explicit aliases and output casts avoid PL/pgSQL name-resolution
--- ambiguity in UPDATE ... RETURNING and RETURN QUERY.
+-- 0044 created this function under the wrong name
+-- (credit_cryptobot_deposit) while the bot calls
+-- credit_cryptopay_deposit, so every Crypto Pay credit failed.
+-- Recreate it under the name the bot calls and drop the orphan.
+-- Explicit aliases and output casts also avoid PL/pgSQL
+-- name-resolution ambiguity in UPDATE ... RETURNING / RETURN QUERY.
+
+drop function if exists public.credit_cryptobot_deposit(bigint, text);
 
 create or replace function public.credit_cryptopay_deposit(
     p_deposit_id bigint,
