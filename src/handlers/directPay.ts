@@ -36,7 +36,7 @@ import {
   setDepositNote,
   setDepositStatus,
 } from '../db/queries.js';
-import { btn, inlineBtn } from '../keyboards/helpers.js';
+import { btn, inlineBtn, inlineUrl } from '../keyboards/helpers.js';
 import { paymentMethodsKeyboard } from '../keyboards/payMethods.js';
 import { PE } from './paymentInstructionEmojis.js';
 import type { AppCtx } from '../middleware/user.js';
@@ -481,15 +481,20 @@ export function registerDirectPay(bot: Composer<AppCtx>): void {
         }
         const invoiceId = String(invoiceResult.invoice.invoice_id);
         await setCryptoPayInvoiceId(dep.id, invoiceId);
-        const keyboard = new InlineKeyboard()
-          .url(
-            ctx.t('topup.cryptobot.open_invoice'),
-            invoiceResult.invoice.bot_invoice_url,
-          )
-          .row()
-          .text(ctx.t('topup.cryptobot.check'), `cryptopay:check:${dep.id}`)
-          .row()
-          .text(btn(ctx.lang, 'back'), `pay:direct:${productId}`);
+        const keyboard = new InlineKeyboard();
+        inlineUrl(
+          keyboard,
+          ctx.lang,
+          'cryptobot_open_invoice',
+          invoiceResult.invoice.bot_invoice_url,
+        ).row();
+        inlineBtn(
+          keyboard,
+          ctx.lang,
+          'cryptobot_check',
+          `cryptopay:check:${dep.id}`,
+        ).row();
+        inlineBtn(keyboard, ctx.lang, 'back', `pay:direct:${productId}`);
         await ctx.editMessageText(
           renderMdHtml(
             `${PE.usdt_title} ${ctx.t('directpay.cryptobot.invoice_ready', {

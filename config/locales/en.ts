@@ -126,6 +126,8 @@ export const en: Record<string, string> = {
   'btn.force_join': '📢 Join Channel',
   'btn.force_join_done': '✅ Done',
   'btn.force_join_skip': '🔕 Skip',
+  'btn.cryptobot_open_invoice': '💳 Open invoice',
+  'btn.cryptobot_check': '✅ I’ve paid / Check',
   'api.price_alert.up':
     '{notify_bell} Dear API user, *{product}* price is now *up* to {price}. Please update your prices for this product.',
   'api.price_alert.down':
