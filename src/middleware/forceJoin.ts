@@ -1,7 +1,11 @@
 import { InlineKeyboard, type MiddlewareFn } from 'grammy';
 import type { AppCtx } from './user.js';
 import { logger } from '../logger.js';
-import { getChannelUrl, getForceJoinEnabled } from '../services/settings.js';
+import {
+  clearForceJoinPending,
+  getChannelUrl,
+  getForceJoinEnabled,
+} from '../services/settings.js';
 
 const DEFAULT_FORCE_JOIN_CHANNEL = '@SafwanTigerStore';
 const BELL_EMOJI_ID = '5798670723975221399';
@@ -59,7 +63,11 @@ export async function checkForceJoinStatus(ctx: AppCtx): Promise<ForceJoinStatus
   if (ctx.session.forceJoinUnlocked) return 'joined';
   const channelUrl = getChannelUrl() ?? DEFAULT_FORCE_JOIN_CHANNEL;
   const status = await checkChannelMembership(ctx, channelUrl);
-  if (status === 'joined') ctx.session.forceJoinUnlocked = true;
+  if (status === 'joined') {
+    ctx.session.forceJoinUnlocked = true;
+    ctx.session.forceJoinRequired = false;
+    await clearForceJoinPending(ctx.user.telegram_id);
+  }
   return status;
 }
 
@@ -79,7 +87,10 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   if (ctx.callbackQuery?.data === 'forcejoin:done') return next();
   if (ctx.callbackQuery?.data === 'forcejoin:skip') return next();
   if (ctx.from.id === Number(process.env.ADMIN_USER_ID || 0)) return next();
-  if (!(ctx.user as typeof ctx.user & { __just_created?: boolean }).__just_created) {
+  if (
+    !(ctx.session.forceJoinRequired ||
+      (ctx.user as typeof ctx.user & { __just_created?: boolean }).__just_created)
+  ) {
     return next();
   }
 

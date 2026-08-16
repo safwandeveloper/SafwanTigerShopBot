@@ -234,6 +234,27 @@ export async function clearChannelUrl(updated_by?: number): Promise<void> {
   cache.set('channel.url', '');
 }
 
+const FORCE_JOIN_PENDING_PREFIX = 'force_join.pending.';
+
+export function isForceJoinPending(telegram_id: number): boolean {
+  return cache.get(`${FORCE_JOIN_PENDING_PREFIX}${telegram_id}`) === true;
+}
+
+export async function setForceJoinPending(
+  telegram_id: number,
+  pending: boolean,
+): Promise<void> {
+  const key = `${FORCE_JOIN_PENDING_PREFIX}${telegram_id}`;
+  await setSetting(key, pending, telegram_id);
+  cache.set(key, pending);
+}
+
+export async function clearForceJoinPending(telegram_id: number): Promise<void> {
+  const key = `${FORCE_JOIN_PENDING_PREFIX}${telegram_id}`;
+  await deleteSetting(key);
+  cache.delete(key);
+}
+
 export function getForceJoinEnabled(): boolean {
   const v = cache.get('force_join.enabled');
   if (v === undefined) return true;
