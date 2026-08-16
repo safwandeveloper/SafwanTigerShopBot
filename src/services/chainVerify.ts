@@ -83,11 +83,17 @@ async function fetchJson<T>(
   }
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+function round4(n: number): number {
+  return Math.round(n * 10000) / 10000;
 }
 function round8(n: number): number {
   return Math.round(n * 1e8) / 1e8;
+}
+export function decodeUsdtRawAmount(
+  rawAmount: bigint | number | string,
+  decimals: number,
+): number {
+  return Number(rawAmount) / 10 ** decimals;
 }
 function stringifyErr(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -201,12 +207,15 @@ export async function verifyTrc20Tx(args: {
       if (match.to.toLowerCase() !== args.expectedAddress.toLowerCase()) {
         return { ok: false, reason: `recipient mismatch (paid to ${match.to})` };
       }
-      const amount = Number(match.value) / 1_000_000;
+      const amount = decodeUsdtRawAmount(match.value, 6);
       if (!Number.isFinite(amount) || amount <= 0) {
         return { ok: false, reason: 'could not decode amount' };
       }
       if (amount + 1e-9 < args.minAmount) {
-        return { ok: false, reason: `amount ${amount.toFixed(2)} < min ${args.minAmount}` };
+        return {
+          ok: false,
+          reason: `amount ${amount.toFixed(4)} < min ${Number(args.minAmount).toFixed(4)}`,
+        };
       }
       const paidAtMs =
         typeof info.blockTimeStamp === 'number' && Number.isFinite(info.blockTimeStamp)
@@ -214,7 +223,7 @@ export async function verifyTrc20Tx(args: {
           : null;
       return {
         ok: true,
-        amount: round2(amount),
+        amount: round4(amount),
         sender: match.from,
         confirmations: info.blockNumber ?? null,
         paidAtMs,
@@ -300,12 +309,15 @@ export async function verifyBep20Tx(args: {
   if (totalRaw === 0n) {
     return { ok: false, reason: 'no USDT Transfer to wallet in tx' };
   }
-  const amount = Number(totalRaw) / 1e18;
+  const amount = decodeUsdtRawAmount(totalRaw, 18);
   if (!Number.isFinite(amount) || amount <= 0) {
     return { ok: false, reason: 'could not decode amount' };
   }
   if (amount + 1e-9 < args.minAmount) {
-    return { ok: false, reason: `amount ${amount.toFixed(2)} < min ${args.minAmount}` };
+    return {
+      ok: false,
+      reason: `amount ${amount.toFixed(4)} < min ${Number(args.minAmount).toFixed(4)}`,
+    };
   }
 
   // Block timestamp lookup. The receipt only carries a block number,
@@ -331,7 +343,7 @@ export async function verifyBep20Tx(args: {
 
   return {
     ok: true,
-    amount: round2(amount),
+    amount: round4(amount),
     sender,
     confirmations: parseInt(receipt.blockNumber, 16) || null,
     paidAtMs,
@@ -563,12 +575,15 @@ async function verifyTonViaTonApi(
       };
     }
     // USDT on TON has 6 decimals
-    const amount = Number(jt.amount) / 1_000_000;
+    const amount = decodeUsdtRawAmount(jt.amount, 6);
     if (!Number.isFinite(amount) || amount <= 0) {
       return { ok: false, reason: 'could not decode amount' };
     }
     if (amount + 1e-9 < args.minAmount) {
-      return { ok: false, reason: `amount ${amount.toFixed(2)} < min ${args.minAmount}` };
+      return {
+        ok: false,
+        reason: `amount ${amount.toFixed(4)} < min ${Number(args.minAmount).toFixed(4)}`,
+      };
     }
     const paidAtMs =
       typeof eventResp.timestamp === 'number' && Number.isFinite(eventResp.timestamp)
@@ -576,7 +591,7 @@ async function verifyTonViaTonApi(
         : null;
     return {
       ok: true,
-      amount: round2(amount),
+      amount: round4(amount),
       sender: jt.sender.address,
       confirmations: null,
       paidAtMs,
@@ -658,12 +673,15 @@ async function verifyTonViaTonCenterV3(
         reason: `recipient mismatch (paid to ${row.destination})`,
       };
     }
-    const amount = Number(row.amount) / 1_000_000;
+    const amount = decodeUsdtRawAmount(row.amount ?? '0', 6);
     if (!Number.isFinite(amount) || amount <= 0) {
       return { ok: false, reason: 'could not decode amount' };
     }
     if (amount + 1e-9 < args.minAmount) {
-      return { ok: false, reason: `amount ${amount.toFixed(2)} < min ${args.minAmount}` };
+      return {
+        ok: false,
+        reason: `amount ${amount.toFixed(4)} < min ${Number(args.minAmount).toFixed(4)}`,
+      };
     }
     const paidAtMs =
       typeof row.transaction_now === 'number' && Number.isFinite(row.transaction_now)
@@ -671,7 +689,7 @@ async function verifyTonViaTonCenterV3(
         : null;
     return {
       ok: true,
-      amount: round2(amount),
+      amount: round4(amount),
       sender: row.source ?? 'unknown',
       confirmations: null,
       paidAtMs,
