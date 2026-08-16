@@ -151,6 +151,12 @@ export function classifyReason(reason: string): 'duplicate' | 'reject' | 'defer'
 
   // Already-used tx hash / Binance order id.
   if (r.includes('tx already used by deposit')) return 'duplicate';
+  if (
+    r.includes('on-chain amount') &&
+    r.includes('does not match expected')
+  ) {
+    return 'defer';
+  }
 
   // Hard rejections — verifier proved the tx is invalid for us.
   const rejectMatchers = [
