@@ -21,8 +21,8 @@ import {
   findDepositByTxHash,
   findDepositByReference,
   setDepositStatus,
-  setDepositAmount,
   setDepositTxHash,
+  setDepositAmount,
   listPaymentMethods,
 } from '../db/queries.js';
 import type { DBDeposit, DBPaymentMethod } from '../types.js';
@@ -37,6 +37,7 @@ import {
 import { findPayTransactionByOrderId, isBinancePayEnabled } from './binance.js';
 import { isBybitPayEnabled, verifyBybitInternalDeposit } from './bybit.js';
 import { fulfilOrderForDeposit } from './orderFulfill.js';
+import { validateUsdtQuoteAmount } from './usdtQuote.js';
 
 /**
  * How long after the user opens a payment screen can their on-chain
@@ -451,6 +452,14 @@ export async function verifyAndCreditDeposit(args: {
       };
     }
 
+    const quoteCheck = validateUsdtQuoteAmount({
+      expectedAmount: deposit.expected_amount,
+      actualAmount: result.amount,
+      quoteExpiresAt: deposit.quote_expires_at,
+    });
+    if (!quoteCheck.ok) return quoteCheck;
+    const onChainAmount = Number(result.amount);
+
     // Direct-pay amount guard. Same logic as the binance_pay branch:
     // never fulfil an order if the user paid less than the locked
     // total. The chain verifiers report the on-chain USDT amount,
@@ -459,11 +468,11 @@ export async function verifyAndCreditDeposit(args: {
       const required = Number(deposit.order_intent.total);
       if (
         Number.isFinite(required) &&
-        Number(result.amount) + 0.01 < required
+        onChainAmount + 0.0001 < required
       ) {
         return {
           ok: false,
-          reason: `paid amount $${Number(result.amount).toFixed(2)} is less than order total $${required.toFixed(2)}`,
+          reason: `paid amount $${onChainAmount.toFixed(4)} is less than order total $${required.toFixed(2)}`,
         };
       }
     }
@@ -472,7 +481,7 @@ export async function verifyAndCreditDeposit(args: {
       api: args.api,
       deposit,
       method,
-      amount: result.amount,
+      amount: Number(deposit.amount),
       txHash,
       sender: result.sender,
       // `result.paidAtMs` is the on-chain block timestamp we just
@@ -607,7 +616,11 @@ async function finalizeApproval(args: {
   };
 }): Promise<AutoVerifyResult> {
   const { api, deposit, method } = args;
-  if (Number(deposit.amount) !== args.amount) {
+  const isUsdtChain =
+    method.provider === 'usdt_trc20' ||
+    method.provider === 'usdt_bep20' ||
+    method.provider === 'usdt_ton';
+  if (!isUsdtChain && Number(deposit.amount) !== args.amount) {
     await setDepositAmount(deposit.id, args.amount);
   }
   await setDepositTxHash(deposit.id, args.txHash);
@@ -743,6 +756,3 @@ async function finalizeApproval(args: {
     provider: method.provider,
   };
 }
-
-
-

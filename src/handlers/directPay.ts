@@ -66,6 +66,7 @@ import type {
 } from '../types.js';
 import { renderPaymentMethodTutorial } from '../services/payMethodTutorialView.js';
 import { createInvoice } from '../services/cryptoPay.js';
+import { ceilUsdtBase, reserveUniqueUsdtAmount } from '../services/usdtQuote.js';
 
 const LTC_QUOTE_TTL_MIN = 10;
 
@@ -315,6 +316,41 @@ export function registerDirectPay(bot: Composer<AppCtx>): void {
         );
         return;
       }
+      let reservedAmount: number;
+      let depositId: number;
+      let expiresAtMs: number;
+      try {
+        const quote = await reserveUniqueUsdtAmount({
+          baseAmount: ceilUsdtBase(intent.total),
+          provider: m.provider,
+        });
+        if (!quote) {
+          await ctx.editMessageText(renderMdHtml(ctx.t('topup.usdt.quote_busy')), {
+            parse_mode: 'HTML',
+            reply_markup: new InlineKeyboard().text(btn(ctx.lang, 'back'), `pay:direct:${productId}`),
+          });
+          return;
+        }
+        const dep = await createDeposit({
+          user_id: ctx.user.telegram_id,
+          method: m.name,
+          amount: ceilUsdtBase(intent.total),
+          expected_amount: quote.amount,
+          quote_expires_at: quote.expiresAt.toISOString(),
+          note: `Direct-pay USDT unique amount quote: ${quote.amount.toFixed(4)} USDT`,
+          order_intent: intent,
+        });
+        reservedAmount = quote.amount;
+        depositId = dep.id;
+        expiresAtMs = quote.expiresAt.getTime();
+      } catch (err) {
+        logger.error({ err }, 'direct-pay USDT unique amount reservation failed');
+        await ctx.editMessageText(renderMdHtml(ctx.t('topup.usdt.quote_failed')), {
+          parse_mode: 'HTML',
+          reply_markup: new InlineKeyboard().text(btn(ctx.lang, 'back'), `pay:direct:${productId}`),
+        });
+        return;
+      }
       // Lock the flow-open instant the moment the user lands on the
       // address screen. The verifier in `services/depositVerify.ts`
       // anchors its 30-min freshness window on this value so an
@@ -328,12 +364,15 @@ export function registerDirectPay(bot: Composer<AppCtx>): void {
           provider: m.provider,
           address: m.address,
           intent,
+          deposit_id: depositId,
+          reserved_amount: reservedAmount,
+          expires_at_ms: expiresAtMs,
           opened_at_ms: Date.now(),
           instruction_message_id: ctx.callbackQuery?.message?.message_id,
         },
       };
       await ctx.editMessageText(
-        renderMdHtml(buildChainDirectScreen(m, intent)),
+        renderMdHtml(buildChainDirectScreen(m, intent, reservedAmount, ctx.t)),
         {
           parse_mode: 'HTML',
           reply_markup: directPayInstructionKeyboard(ctx, m, productId),
@@ -876,7 +915,7 @@ async function handleBinanceDirectSubmit(
           `❌ *Disapproved (#${depId}).*`,
           '',
           `Order ID: \`${orderId}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'This order did not match our records. If you believe this is a mistake, tap *Admin Help* below.',
         ].join('\n'),
@@ -888,7 +927,7 @@ async function handleBinanceDirectSubmit(
           `⏳ *Submitted (#${depId}) — pending admin review.*`,
           '',
           `Order ID: \`${orderId}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'Your order will be delivered as soon as admin verifies the payment manually.',
         ].join('\n'),
@@ -1023,7 +1062,7 @@ async function handleBybitDirectSubmit(
         `❌ *Disapproved (#${depId}).*`,
         '',
         `Bybit TXID: \`${txId}\``,
-        `_${friendlyReason(result.reason)}_`,
+        `_${friendlyReason(result.reason, ctx.t)}_`,
         '',
         'This transfer did not match our records. If you believe this is a mistake, tap *Admin Help* below.',
       ].join('\n'),
@@ -1041,7 +1080,7 @@ async function handleBybitDirectSubmit(
         `⏳ *Submitted (#${depId}) - pending admin review.*`,
         '',
         `Bybit TXID: \`${txId}\``,
-        `_${friendlyReason(result.reason)}_`,
+        `_${friendlyReason(result.reason, ctx.t)}_`,
         '',
         'Your order will be delivered as soon as admin verifies the payment manually.',
       ].join('\n'),
@@ -1168,36 +1207,7 @@ async function handleChainDirectSubmit(
       return;
     }
   } else {
-    try {
-      const dep = await createDeposit({
-        user_id: ctx.user.telegram_id,
-        method: flow.data.method_name,
-        amount: intent.total,
-        reference: txHash,
-        note: 'Direct-pay on-chain tx submitted via auto-verify',
-        tx_hash: txHash,
-        order_intent: intent,
-      });
-      depId = dep.id;
-    } catch (err) {
-      const msg = (err as { message?: string })?.message ?? '';
-      if (/23505|duplicate/i.test(msg)) {
-        await ctx.reply(
-          renderMdHtml(
-            '❌ *Already-used transaction.*\n\nThis transaction hash has already been used to credit a previous deposit. Each transaction can only be used once.',
-          ),
-          { parse_mode: 'HTML' },
-        );
-        ctx.session.userFlow = undefined;
-        return;
-      }
-      logger.error({ err }, 'Direct-pay chain deposit insert failed');
-      await ctx.reply(
-        '⚠️ Could not record your payment. Please try again or contact support.',
-      );
-      ctx.session.userFlow = undefined;
-      return;
-    }
+    depId = flow.data.deposit_id;
   }
   ctx.session.userFlow = undefined;
 
@@ -1274,7 +1284,7 @@ async function handleChainDirectSubmit(
           `❌ *Disapproved (#${depId}).*`,
           '',
           `Tx: \`${txHash}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'This transaction did not match our records. If you believe this is a mistake, tap *Admin Help* below.',
         ].join('\n'),
@@ -1286,7 +1296,7 @@ async function handleChainDirectSubmit(
           `⏳ *Submitted (#${depId}) — pending admin review.*`,
           '',
           `Tx: \`${txHash}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'Your order will be delivered as soon as admin verifies the payment manually.',
         ].join('\n'),
@@ -1418,7 +1428,7 @@ async function handleLtcDirectSubmit(
           `❌ *Disapproved (#${depId}).*`,
           '',
           `Tx: \`${cleaned}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'This transaction did not match our records. If you believe this is a mistake, tap *Admin Help* below.',
         ].join('\n'),
@@ -1430,7 +1440,7 @@ async function handleLtcDirectSubmit(
           `⏳ *Submitted (#${depId}) — pending admin review.*`,
           '',
           `Tx: \`${cleaned}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'Your order will be delivered as soon as admin verifies the payment manually.',
         ].join('\n'),
@@ -1507,6 +1517,8 @@ function buildBybitDirectScreen(
 function buildChainDirectScreen(
   m: DBPaymentMethod,
   intent: OrderIntent,
+  reservedAmount: number,
+  t: (key: string, vars?: Record<string, string | number>) => string,
 ): string {
   const headingGlyph =
     m.provider === 'usdt_ton' ? PE.ton_title : PE.usdt_title;
@@ -1516,24 +1528,26 @@ function buildChainDirectScreen(
       : m.provider === 'usdt_trc20'
         ? `${headingGlyph} *USDT (TRC-20) — Direct Pay*`
         : `${headingGlyph} *TON Network — Direct Pay*`;
-  const totalStr = intent.total.toFixed(2);
+  const totalStr = reservedAmount.toFixed(4);
   // Per-provider "send" line — same per-coin wording as the top-up
   // screens, but pinned to the exact amount due for this order.
   const sendLine =
     m.provider === 'usdt_bep20'
-      ? `${PE.bullet_send} Send *exactly ${totalStr} USDT* to the address above`
+      ? `${PE.bullet_send} ${t('topup.usdt.send_exact', { amount: totalStr })}`
       : m.provider === 'usdt_ton'
-        ? `${PE.bullet_send} Send *exactly ${totalStr} USDT* (TON Jetton) — or the live-rate equivalent in Native TON Coin — to the address above`
-        : `${PE.bullet_send} Send *exactly ${totalStr} USDT* (TRC-20) — or the live-rate equivalent in Native TRX — to the address above`;
+        ? `${PE.bullet_send} ${t('topup.usdt.send_exact', { amount: totalStr })}`
+        : `${PE.bullet_send} ${t('topup.usdt.send_exact', { amount: totalStr })}`;
   const lines: string[] = [
     heading,
     '',
     `*${intent.product_name}*  ×  *${intent.qty}*`,
-    `*Send EXACTLY:*  \`${totalStr} USDT\``,
+    `${PE.note} *${t('topup.usdt.reserved_amount', { amount: totalStr })}*`,
     '',
     `\`${m.address ?? '(address not set)'}\``,
     '',
     sendLine,
+    `${PE.note} _${t('topup.usdt.other_amount')}_`,
+    `⏰ _${t('topup.usdt.validity')}_`,
     `${PE.bullet_paste} Paste your *Transaction Hash (TXID)* below`,
     '',
   ];
@@ -1541,7 +1555,7 @@ function buildChainDirectScreen(
     lines.push(
       `${PE.note} _AA Wallet users: paste the *Bundle Hash* from BscScan, not the AA TxHash._`,
     );
-    lines.push(`${PE.note} _Up to 3 decimal places only._`);
+    lines.push(`${PE.note} _Up to 4 decimal places only._`);
   } else if (m.provider === 'usdt_ton') {
     lines.push(
       `${PE.convert} _TON coins are automatically converted to USDT at live market rates._`,

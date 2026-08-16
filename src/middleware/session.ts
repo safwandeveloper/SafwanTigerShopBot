@@ -523,12 +523,27 @@ export type UserFlow =
        * and credit on success.
        */
       type: 'chain_topup';
+      step: 'usd_amount';
+      data: {
+        method_id: number;
+        method_name: string;
+        provider: 'usdt_trc20' | 'usdt_bep20' | 'usdt_ton';
+        address: string;
+        min_amount: number;
+        instruction_message_id?: number;
+      };
+    }
+  | {
+      type: 'chain_topup';
       step: 'tx_hash';
       data: {
         method_id: number;
         method_name: string;
         provider: 'usdt_trc20' | 'usdt_bep20' | 'usdt_ton';
         address: string;
+        deposit_id: number;
+        reserved_amount: number;
+        expires_at_ms: number;
         /**
          * Wall-clock instant (ms since epoch) when the user landed
          * on the address screen. Forwarded to the verifier as
@@ -650,6 +665,9 @@ export type UserFlow =
         provider: 'usdt_trc20' | 'usdt_bep20' | 'usdt_ton';
         address: string;
         intent: import('../types.js').OrderIntent;
+        deposit_id: number;
+        reserved_amount: number;
+        expires_at_ms: number;
         /** See `chain_topup.opened_at_ms`. */
         opened_at_ms: number;
         /** Message id of the instruction screen — deleted on success. */
