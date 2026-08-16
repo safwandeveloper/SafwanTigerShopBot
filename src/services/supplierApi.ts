@@ -67,7 +67,6 @@ export type SupplierSourceConfig = {
   auth_mode?: SupplierAuthMode;
   key_header?: string;
   key_query_param?: string;
-  health_path?: string;
   products_path?: string;
   balance_path?: string;
   order_path?: string;
@@ -141,15 +140,12 @@ export function canbosoSupplierConfig(apiKey: string): SupplierSourceConfig {
     notes: 'One-click Canboso v2 telegram-buyer supplier connector.',
   };
 }
-
-
 export function insightxSupplierConfig(apiKey: string): SupplierSourceConfig {
   return {
     name: 'InsightX Store',
     base_url: 'https://insightxstore-bot-production.up.railway.app',
     api_key: apiKey.trim(),
     auth_mode: 'bearer',
-    health_path: '/api/v1/health',
     products_path: '/api/v1/products',
     balance_path: '/api/v1/balance',
     order_path: '/api/v1/orders',
@@ -495,14 +491,6 @@ export async function fetchSupplierBalance(
   );
 }
 
-export async function fetchSupplierHealth(
-  source: DBSupplierApiSource,
-): Promise<boolean> {
-  if (!source.health_path) return true;
-  await supplierFetch(source, source.health_path);
-  return true;
-}
-
 export async function fetchSupplierProducts(
   source: DBSupplierApiSource,
 ): Promise<SupplierCatalogProduct[]> {
@@ -599,12 +587,6 @@ export async function importSupplierProduct(args: {
 export async function testSupplierConnection(
   source: DBSupplierApiSource,
 ): Promise<SupplierConnectionTest> {
-  const healthResult = source.health_path
-    ? await fetchSupplierHealth(source).then(
-        () => ({ ok: true as const }),
-        (err: unknown) => ({ ok: false as const, error: err }),
-      )
-    : { ok: true as const };
   const balanceResult = await fetchSupplierBalance(source).then(
     (balance) => ({ ok: true as const, balance }),
     (err: unknown) => ({ ok: false as const, error: err }),
@@ -614,7 +596,6 @@ export async function testSupplierConnection(
     (err: unknown) => ({ ok: false as const, error: err }),
   );
   const errors: string[] = [];
-  if (!healthResult.ok) errors.push(`health: ${errorMessage(healthResult.error)}`);
   if (!balanceResult.ok) errors.push(`balance: ${errorMessage(balanceResult.error)}`);
   if (!productsResult.ok) errors.push(`products: ${errorMessage(productsResult.error)}`);
   const products = productsResult.ok ? productsResult.products : [];
@@ -978,7 +959,6 @@ export function parseSupplierSourceConfig(text: string): SupplierSourceConfig {
     auth_mode: authMode as SupplierAuthMode,
     key_header: asString(cfg.key_header ?? cfg.keyHeader) ?? 'x-api-key',
     key_query_param: asString(cfg.key_query_param ?? cfg.keyQueryParam) ?? 'api_key',
-    health_path: asString(cfg.health_path ?? cfg.healthPath) ?? '',
     products_path: asString(cfg.products_path ?? cfg.productsPath) ?? '/products',
     balance_path: asString(cfg.balance_path ?? cfg.balancePath) ?? '/balance',
     order_path: asString(cfg.order_path ?? cfg.orderPath) ?? '/order',

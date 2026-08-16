@@ -1233,7 +1233,6 @@ async function showSupplierError(ctx: AppCtx, err: unknown): Promise<void> {
         'Run these Supabase migrations first:',
         '`supabase/migrations/0037_supplier_apis.sql`',
         '`supabase/migrations/0038_supplier_easy_import.sql`',
-        '`supabase/migrations/0047_supplier_health_path.sql`',
         '',
         '_Paste the SQL file contents in Supabase SQL Editor, not the file path._',
       ].join('\n')
@@ -10201,7 +10200,7 @@ adminBot.on('message:text', async (ctx, next) => {
       if (isSupplierMigrationError(err)) {
         await ctx.reply(
             '⚠️ *Supplier APIs Not Ready*\n\n' +
-            'Run `supabase/migrations/0037_supplier_apis.sql`, `0038_supplier_easy_import.sql`, and `0047_supplier_health_path.sql` in Supabase SQL Editor, ' +
+            'Run `supabase/migrations/0037_supplier_apis.sql` and `0038_supplier_easy_import.sql` in Supabase SQL Editor, ' +
             'then try this setup again.',
           { parse_mode: 'Markdown', reply_markup: rootMenu() },
         );
