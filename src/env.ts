@@ -175,6 +175,13 @@ const schema = z.object({
     .optional()
     .transform(logChannelTransformer('')),
 
+  // Reseller/API-only sales feed. Use a public @username or private -100... chat id.
+  API_SALES_CHAT_ID: z
+    .string()
+    .trim()
+    .optional()
+    .transform(logChannelTransformer('')),
+
   // ----------------------------------------------------------------
   //  Required Join Channels (force users to join before using bot)
   // ----------------------------------------------------------------

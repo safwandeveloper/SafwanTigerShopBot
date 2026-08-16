@@ -19,6 +19,7 @@ type FeedButton = {
 
 const CART_FALLBACK = '\u{1F6D2}';
 const PRODUCT_FALLBACK = '\u{1F4E6}';
+const API_WALLET_EMOJI_ID = '5085022089103016925';
 const TIGER_STOCK_CHAT = '@TigerStockChat';
 let resolvedTigerStockChatId: number | undefined;
 
@@ -57,6 +58,19 @@ async function resolvePublicSalesChat(api: Api): Promise<string | number | undef
     return chat.id;
   } catch (err) {
     logger.warn({ err, chat: configured }, 'public sales feed getChat failed; using configured value');
+    return configured;
+  }
+}
+
+async function resolveApiSalesChat(api: Api): Promise<string | number | undefined> {
+  const configured = env.API_SALES_CHAT_ID;
+  if (!configured) return undefined;
+  if (typeof configured === 'number') return configured;
+  try {
+    const chat = await api.getChat(configured);
+    return chat.id;
+  } catch (err) {
+    logger.warn({ err, chat: configured }, 'API sales feed getChat failed; using configured value');
     return configured;
   }
 }
@@ -159,6 +173,12 @@ async function sendSalesHtml(api: Api, html: string, button?: FeedButton): Promi
   await sendRenderedHtmlTo(api, chat, 'Public sales group', html, button);
 }
 
+async function sendApiSalesHtml(api: Api, html: string): Promise<void> {
+  const chat = await resolveApiSalesChat(api);
+  if (!chat) return;
+  await sendRenderedHtmlTo(api, chat, 'API sales group', html);
+}
+
 function productIconHtml(product: { emoji?: string | null; emoji_id?: string | null } | null): string {
   const glyph = product?.emoji?.trim() ?? '';
   if (product?.emoji_id) {
@@ -251,6 +271,7 @@ export async function notifyPurchase(api: Api, args: {
     productId: args.productId,
     productName: args.productName,
     qty: args.qty,
+    isApiSale: args.paidVia.toLowerCase().includes('reseller api'),
   });
 }
 
@@ -258,13 +279,22 @@ export async function notifySalesPurchase(api: Api, args: {
   productId: number;
   productName: string;
   qty: number;
+  isApiSale?: boolean;
 }): Promise<void> {
   const product = await getProduct(args.productId).catch(() => null);
   const productIcon = productIconHtml(product);
-  const html = renderHtmlTemplate(
-    `{broadcast_shop_now} Someone just bought <b>${args.qty}x</b> ${productIcon} <b>${escapeAttr(args.productName)}!</b>`,
-  );
-  await sendSalesHtml(api, html);
+  const html = renderHtmlTemplate(args.isApiSale
+    ? [
+        `{broadcast_shop_now} <b>Someone just bought ${args.qty}x</b>`,
+        `${productIcon}<b>${escapeAttr(args.productName)}!</b>`,
+        `<tg-emoji emoji-id="${API_WALLET_EMOJI_ID}">👛</tg-emoji> <b>via Reseller API</b>`,
+      ].join(' ')
+    : `{broadcast_shop_now} Someone just bought <b>${args.qty}x</b> ${productIcon} <b>${escapeAttr(args.productName)}!</b>`);
+  if (args.isApiSale) {
+    await sendApiSalesHtml(api, html);
+  } else {
+    await sendSalesHtml(api, html);
+  }
 }
 
 export async function notifyTopup(api: Api, args: {
