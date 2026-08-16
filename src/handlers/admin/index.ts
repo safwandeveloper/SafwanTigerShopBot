@@ -10199,7 +10199,7 @@ adminBot.on('message:text', async (ctx, next) => {
     ) {
       if (isSupplierMigrationError(err)) {
         await ctx.reply(
-            '⚠️ *Supplier APIs Not Ready*\n\n' +
+          '⚠️ *Supplier APIs Not Ready*\n\n' +
             'Run `supabase/migrations/0037_supplier_apis.sql` and `0038_supplier_easy_import.sql` in Supabase SQL Editor, ' +
             'then try this setup again.',
           { parse_mode: 'Markdown', reply_markup: rootMenu() },
