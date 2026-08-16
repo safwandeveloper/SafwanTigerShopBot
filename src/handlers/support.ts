@@ -675,22 +675,19 @@ export function registerSupport(bot: Composer<AppCtx>): void {
       }
     }
     // Same user re-clicking Live Support while their own session is
-    // still active: don't tear down + recreate (which would orphan
-    // the previous topics and panel). Tear down the old session
-    // first, then fall through to create a fresh one. This handles
-    // the case where the user's panel got lost in scrollback or the
-    // previous cancel left some Telegram state behind.
+    // still active must not create another topic or panel. The old
+    // behavior recreated the session on every tap, leaving orphaned
+    // Live Support topics while the single slot tracked only the newest.
     if (liveUser !== null && liveUser.telegram_id === ctx.user.telegram_id) {
       logger.info(
         { telegram_id: liveUser.telegram_id },
-        'live-support: re-start by same user, tearing down previous topics first',
+        'live-support: duplicate start ignored for active session',
       );
-      const prev = liveUser;
-      liveUser = null;
-      await persistLiveUser();
-      await tryDeleteTopic(ctx, prev.telegram_id, prev.userTopicId);
-      await tryDeleteTopic(ctx, env.ADMIN_USER_ID, prev.adminTopicId);
-      await teardownPanel(ctx, prev.telegram_id, prev.panelMessageId);
+      await ctx.answerCallbackQuery({
+        text: ctx.t('support.live.busy_popup'),
+        show_alert: true,
+      });
+      return;
     }
     await ctx.answerCallbackQuery();
     liveUser = {
