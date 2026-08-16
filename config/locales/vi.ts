@@ -375,7 +375,7 @@ export const vi: Record<string, string> = {
   'topup.title': '👛 *Nạp ví*',
   'topup.usdt.amount_prompt': 'Bạn muốn nạp bao nhiêu USDT?',
   'topup.usdt.amount_example': 'Gửi số tiền, ví dụ `10` hoặc `25.50`.',
-  'topup.usdt.invalid_amount': '❌ Hãy gửi số USDT hợp lệ (tối thiểu: *0.01 USDT*).',
+  'topup.usdt.invalid_amount': '❌ Hãy gửi số USDT hợp lệ (tối thiểu: *{minimum} USDT*).',
   'topup.usdt.quote_failed': '⚠️ Không thể giữ chỗ số tiền thanh toán. Vui lòng thử lại sau.',
   'topup.usdt.quote_busy': '⚠️ Tất cả số tiền thanh toán đang bận. Vui lòng thử lại sau vài phút.',
   'topup.usdt.reserved_amount': 'Gửi chính xác {amount} USDT',

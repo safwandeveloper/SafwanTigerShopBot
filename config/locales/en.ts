@@ -868,7 +868,7 @@ export const en: Record<string, string> = {
   'topup.title': '👛 *Top Up Wallet*',
   'topup.usdt.amount_prompt': 'How much USDT would you like to add?',
   'topup.usdt.amount_example': 'Reply with the amount, for example `10` or `25.50`.',
-  'topup.usdt.invalid_amount': '❌ Please send a valid USDT amount (minimum: *0.01 USDT*).',
+  'topup.usdt.invalid_amount': '❌ Please send a valid USDT amount (minimum: *{minimum} USDT*).',
   'topup.usdt.quote_failed': '⚠️ Could not reserve a payment amount. Please try again shortly.',
   'topup.usdt.quote_busy': '⚠️ All payment amounts are busy right now. Please try again in a few minutes.',
   'topup.usdt.reserved_amount': 'Send exactly {amount} USDT',

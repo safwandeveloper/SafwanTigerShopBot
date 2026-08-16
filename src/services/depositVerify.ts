@@ -21,8 +21,8 @@ import {
   findDepositByTxHash,
   findDepositByReference,
   setDepositStatus,
-  setDepositAmount,
   setDepositTxHash,
+  setDepositAmount,
   listPaymentMethods,
 } from '../db/queries.js';
 import type { DBDeposit, DBPaymentMethod } from '../types.js';
@@ -458,7 +458,6 @@ export async function verifyAndCreditDeposit(args: {
       quoteExpiresAt: deposit.quote_expires_at,
     });
     if (!quoteCheck.ok) return quoteCheck;
-    const expectedAmount = quoteCheck.amount;
     const onChainAmount = Number(result.amount);
 
     // Direct-pay amount guard. Same logic as the binance_pay branch:
@@ -482,7 +481,7 @@ export async function verifyAndCreditDeposit(args: {
       api: args.api,
       deposit,
       method,
-      amount: expectedAmount,
+      amount: Number(deposit.amount),
       txHash,
       sender: result.sender,
       // `result.paidAtMs` is the on-chain block timestamp we just
@@ -617,7 +616,11 @@ async function finalizeApproval(args: {
   };
 }): Promise<AutoVerifyResult> {
   const { api, deposit, method } = args;
-  if (Number(deposit.amount) !== args.amount) {
+  const isUsdtChain =
+    method.provider === 'usdt_trc20' ||
+    method.provider === 'usdt_bep20' ||
+    method.provider === 'usdt_ton';
+  if (!isUsdtChain && Number(deposit.amount) !== args.amount) {
     await setDepositAmount(deposit.id, args.amount);
   }
   await setDepositTxHash(deposit.id, args.txHash);

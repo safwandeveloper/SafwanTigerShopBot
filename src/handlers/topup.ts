@@ -32,7 +32,7 @@ import { renderPaymentMethodTutorial } from '../services/payMethodTutorialView.j
 import { PE } from './paymentInstructionEmojis.js';
 import { createInvoice, getInvoices } from '../services/cryptoPay.js';
 import { processCryptoPayPaidInvoice } from '../services/cryptoPayDeposit.js';
-import { reserveUniqueUsdtAmount } from '../services/usdtQuote.js';
+import { reserveUniqueUsdtAmount, roundUsdtBase } from '../services/usdtQuote.js';
 
 const LTC_QUOTE_TTL_MIN = 10;
 
@@ -188,6 +188,7 @@ export function registerTopup(bot: Composer<AppCtx>): void {
           method_name: m.name,
           provider: m.provider,
           address: m.address,
+          min_amount: m.min_amount,
           instruction_message_id: ctx.callbackQuery?.message?.message_id,
         },
       };
@@ -504,9 +505,16 @@ async function handleChainUsdAmount(
   flow: Extract<NonNullable<AppCtx['session']['userFlow']>, { type: 'chain_topup'; step: 'usd_amount' }>,
   text: string,
 ): Promise<void> {
-  const baseAmount = parseCryptoPayAmount(text, 0.01);
+  const baseAmount = parseCryptoPayAmount(text, flow.data.min_amount);
   if (baseAmount === null) {
-    await ctx.reply(renderMdHtml(ctx.t('topup.usdt.invalid_amount')), { parse_mode: 'HTML' });
+    await ctx.reply(
+      renderMdHtml(
+        ctx.t('topup.usdt.invalid_amount', {
+          minimum: Math.max(0.01, Number(flow.data.min_amount) || 0).toFixed(2),
+        }),
+      ),
+      { parse_mode: 'HTML' },
+    );
     return;
   }
 
@@ -531,7 +539,7 @@ async function handleChainUsdAmount(
     const dep = await createDeposit({
       user_id: ctx.user.telegram_id,
       method: flow.data.method_name,
-      amount: quote.amount,
+      amount: roundUsdtBase(baseAmount),
       expected_amount: quote.amount,
       quote_expires_at: quote.expiresAt.toISOString(),
       note: `USDT unique amount quote: ${quote.amount.toFixed(4)} USDT`,
@@ -726,7 +734,7 @@ async function handleChainTopupSubmit(
         `✅ *Auto-verified (#${depId}).*`,
         '',
         `Tx: \`${txHash}\``,
-        `Credited: *$${result.amount.toFixed(4)}*`,
+        `Credited: *$${result.amount.toFixed(2)}*`,
         `New balance: *$${Number(result.newBalance).toFixed(2)}*`,
       ].join('\n'),
       reply_markup: successKeyboard(ctx.lang, topupExitCallback(ctx)),

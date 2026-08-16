@@ -1951,7 +1951,11 @@ export function registerProfile(bot: Composer<AppCtx>): void {
         const status = ctx.t(statusKey);
         const block = [
           ctx.t('profile.deposits.line.id', { n: i + 1 }),
-          ctx.t('profile.deposits.line.amount', { amount: Number(d.amount) }),
+          ctx.t('profile.deposits.line.amount', {
+            amount: Number(d.expected_amount ?? d.amount).toFixed(
+              d.expected_amount === null ? 2 : 4,
+            ),
+          }),
           ctx.t('profile.deposits.line.method', { method: d.method }),
           ctx.t('profile.deposits.line.status', { status }),
           d.reference

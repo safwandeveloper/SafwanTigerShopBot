@@ -529,6 +529,7 @@ export type UserFlow =
         method_name: string;
         provider: 'usdt_trc20' | 'usdt_bep20' | 'usdt_ton';
         address: string;
+        min_amount: number;
         instruction_message_id?: number;
       };
     }

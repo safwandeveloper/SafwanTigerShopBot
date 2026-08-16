@@ -372,7 +372,7 @@ export const ar: Record<string, string> = {
   'topup.title': '👛 *شحن المحفظة*',
   'topup.usdt.amount_prompt': 'كم تريد أن تضيف من USDT؟',
   'topup.usdt.amount_example': 'أرسل المبلغ، مثل `10` أو `25.50`.',
-  'topup.usdt.invalid_amount': '❌ أرسل مبلغ USDT صحيحًا (الحد الأدنى: *0.01 USDT*).',
+  'topup.usdt.invalid_amount': '❌ أرسل مبلغ USDT صحيحًا (الحد الأدنى: *{minimum} USDT*).',
   'topup.usdt.quote_failed': '⚠️ تعذر حجز مبلغ الدفع. حاول مرة أخرى بعد قليل.',
   'topup.usdt.quote_busy': '⚠️ جميع مبالغ الدفع مشغولة حاليًا. حاول مرة أخرى بعد بضع دقائق.',
   'topup.usdt.reserved_amount': 'أرسل بالضبط {amount} USDT',

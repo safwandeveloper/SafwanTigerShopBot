@@ -4579,10 +4579,11 @@ async function showDepositList(ctx: AppCtx): Promise<void> {
   const lines = ['💰 *Pending Deposits*', ''];
   const kb = new InlineKeyboard();
   for (const d of deps) {
+    const displayAmount = d.expected_amount ?? d.amount;
     const amountStr =
-      Number(d.amount) <= 0.01
+      Number(displayAmount) <= 0.01
         ? `_(amount not set)_`
-        : `$${d.amount}`;
+        : `$${Number(d.expected_amount ?? d.amount).toFixed(d.expected_amount === null ? 2 : 4)}`;
     const refLine = d.reference ? `\n     ref: \`${d.reference}\`` : '';
     const txLine = d.tx_hash && d.tx_hash !== d.reference ? `\n     tx: \`${d.tx_hash}\`` : '';
     const noteLine = d.note ? `\n     ${d.note}` : '';
