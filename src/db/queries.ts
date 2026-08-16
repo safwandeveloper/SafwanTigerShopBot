@@ -3474,14 +3474,17 @@ export async function setDepositNote(id: number, note: string | null): Promise<v
 export async function listRecentUsers(
   page: number,
   perPage: number,
+  sort: 'recent' | 'balance' = 'recent',
 ): Promise<{ rows: DBUser[]; total: number }> {
   const from = page * perPage;
   const to = from + perPage - 1;
-  const { data, count } = await supabase
+  const query = supabase
     .from('users')
     .select('*', { count: 'exact' })
-    .order('last_seen_at', { ascending: false })
-    .range(from, to);
+    .order(sort === 'balance' ? 'balance' : 'last_seen_at', {
+      ascending: false,
+    });
+  const { data, count } = await query.range(from, to);
   return { rows: (data ?? []) as DBUser[], total: count ?? 0 };
 }
 

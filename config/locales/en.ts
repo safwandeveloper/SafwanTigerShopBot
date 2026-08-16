@@ -497,6 +497,30 @@ export const en: Record<string, string> = {
     '',
     '_Use these NEW details — discard the previous submission. (This message is automated — please process the correction quickly.)_',
   ].join('\n'),
+  'shop.delivery.vendor.new_private': [
+    '{delivery_vendor} *Hey my dear vendor — here is a new order to fulfil.*',
+    '',
+    '*Order Tag:* {order_tag}',
+    '*Product:* {product_name}',
+    '*Quantity:* {qty}',
+    '',
+    '*Submitted Details:*',
+    '{details}',
+    '',
+    '_This message is automated — please process this order quickly._',
+  ].join('\n'),
+  'shop.delivery.vendor.resubmit_private': [
+    '{delivery_resubmit} *Heads up vendor — corrected details for an existing order.*',
+    '',
+    '*Order Tag:* {order_tag}',
+    '*Product:* {product_name}',
+    '*Quantity:* {qty}',
+    '',
+    '*Corrected Details (revision {revision}):*',
+    '{details}',
+    '',
+    '_Use these NEW details — discard the previous submission._',
+  ].join('\n'),
 
   // ---------- Using Method tutorial ----------
   // Per-product tutorial body shown when the buyer taps `📘 Using
