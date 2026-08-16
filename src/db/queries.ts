@@ -2606,6 +2606,17 @@ export async function listPaymentMethods(): Promise<DBPaymentMethod[]> {
   );
 }
 
+export async function listPaymentMethodNamesByProvider(
+  provider: PaymentProvider,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('payment_methods')
+    .select('name')
+    .eq('provider', provider);
+  if (error) throw error;
+  return (data ?? []).map((row) => String((row as { name: string }).name));
+}
+
 export async function addPaymentMethod(p: {
   name: string;
   instructions: string;
@@ -2703,6 +2714,23 @@ export async function findDepositByTxHash(
     .limit(1)
     .maybeSingle();
   return (data as DBDeposit) ?? null;
+}
+
+export async function listPendingDepositExpectedAmounts(
+  methods: string[],
+  nowIso = new Date().toISOString(),
+): Promise<number[]> {
+  if (methods.length === 0) return [];
+  const { data, error } = await supabase
+    .from('deposits')
+    .select('expected_amount, quote_expires_at')
+    .eq('status', 'pending')
+    .in('method', methods)
+    .gt('quote_expires_at', nowIso);
+  if (error) throw error;
+  return (data ?? [])
+    .map((row) => Number((row as { expected_amount: number | null }).expected_amount))
+    .filter((amount) => Number.isFinite(amount));
 }
 
 export async function createDeposit(d: {

@@ -32,6 +32,7 @@ import { renderPaymentMethodTutorial } from '../services/payMethodTutorialView.j
 import { PE } from './paymentInstructionEmojis.js';
 import { createInvoice, getInvoices } from '../services/cryptoPay.js';
 import { processCryptoPayPaidInvoice } from '../services/cryptoPayDeposit.js';
+import { reserveUniqueUsdtAmount } from '../services/usdtQuote.js';
 
 const LTC_QUOTE_TTL_MIN = 10;
 
@@ -179,23 +180,18 @@ export function registerTopup(bot: Composer<AppCtx>): void {
         );
         return;
       }
-      // Lock the flow-open instant the moment the user lands on the
-      // address screen — anchors the 30-min freshness window in
-      // `services/depositVerify.ts` so a stale vendor TXID can't be
-      // replayed by re-opening the screen.
       ctx.session.userFlow = {
         type: 'chain_topup',
-        step: 'tx_hash',
+        step: 'usd_amount',
         data: {
           method_id: m.id,
           method_name: m.name,
           provider: m.provider,
           address: m.address,
-          opened_at_ms: Date.now(),
           instruction_message_id: ctx.callbackQuery?.message?.message_id,
         },
       };
-      await ctx.editMessageText(renderMdHtml(buildChainTopupScreen(m)), {
+      await ctx.editMessageText(renderMdHtml(buildChainTopupAmountScreen(m, ctx.t)), {
         parse_mode: 'HTML',
         reply_markup: topupInstructionKeyboard(ctx, m),
       });
@@ -429,7 +425,11 @@ export function registerTopup(bot: Composer<AppCtx>): void {
       return next();
     }
 
-    if (flow.type === 'chain_topup') {
+    if (flow.type === 'chain_topup' && flow.step === 'usd_amount') {
+      await handleChainUsdAmount(ctx, flow, text);
+      return;
+    }
+    if (flow.type === 'chain_topup' && flow.step === 'tx_hash') {
       await handleChainTopupSubmit(ctx, flow, text);
       return;
     }
@@ -499,9 +499,91 @@ export function registerTopup(bot: Composer<AppCtx>): void {
 }
 // ----- USDT chain flow (BEP20 / TRC20 / TON) -----------------------------
 
+async function handleChainUsdAmount(
+  ctx: AppCtx,
+  flow: Extract<NonNullable<AppCtx['session']['userFlow']>, { type: 'chain_topup'; step: 'usd_amount' }>,
+  text: string,
+): Promise<void> {
+  const baseAmount = parseCryptoPayAmount(text, 0.01);
+  if (baseAmount === null) {
+    await ctx.reply(renderMdHtml(ctx.t('topup.usdt.invalid_amount')), { parse_mode: 'HTML' });
+    return;
+  }
+
+  let quote: Awaited<ReturnType<typeof reserveUniqueUsdtAmount>>;
+  try {
+    quote = await reserveUniqueUsdtAmount({
+      baseAmount,
+      provider: flow.data.provider,
+    });
+  } catch (err) {
+    logger.error({ err }, 'USDT unique amount reservation failed');
+    await ctx.reply(renderMdHtml(ctx.t('topup.usdt.quote_failed')), { parse_mode: 'HTML' });
+    return;
+  }
+  if (!quote) {
+    await ctx.reply(renderMdHtml(ctx.t('topup.usdt.quote_busy')), { parse_mode: 'HTML' });
+    return;
+  }
+
+  let depositId: number;
+  try {
+    const dep = await createDeposit({
+      user_id: ctx.user.telegram_id,
+      method: flow.data.method_name,
+      amount: quote.amount,
+      expected_amount: quote.amount,
+      quote_expires_at: quote.expiresAt.toISOString(),
+      note: `USDT unique amount quote: ${quote.amount.toFixed(4)} USDT`,
+    });
+    depositId = dep.id;
+  } catch (err) {
+    logger.error({ err }, 'USDT deposit insert failed');
+    await ctx.reply(renderMdHtml(ctx.t('topup.usdt.quote_failed')), { parse_mode: 'HTML' });
+    ctx.session.userFlow = undefined;
+    return;
+  }
+
+  const openedAtMs = Date.now();
+  ctx.session.userFlow = {
+    type: 'chain_topup',
+    step: 'tx_hash',
+    data: {
+      ...flow.data,
+      deposit_id: depositId,
+      reserved_amount: quote.amount,
+      expires_at_ms: quote.expiresAt.getTime(),
+      opened_at_ms: openedAtMs,
+    },
+  };
+  await ctx.reply(
+    renderMdHtml(buildChainTopupScreen(
+      {
+        ...({
+          id: flow.data.method_id,
+          name: flow.data.method_name,
+          provider: flow.data.provider,
+          address: flow.data.address,
+        } as DBPaymentMethod),
+      },
+      quote.amount,
+      ctx.t,
+    )),
+    { parse_mode: 'HTML', reply_markup: topupInstructionKeyboard(ctx, {
+      id: flow.data.method_id,
+      name: flow.data.method_name,
+      provider: flow.data.provider,
+      address: flow.data.address,
+    } as DBPaymentMethod) },
+  );
+}
+
 async function handleChainTopupSubmit(
   ctx: AppCtx,
-  flow: Extract<NonNullable<AppCtx['session']['userFlow']>, { type: 'chain_topup' }>,
+  flow: Extract<
+    NonNullable<AppCtx['session']['userFlow']>,
+    { type: 'chain_topup'; step: 'tx_hash' }
+  >,
   text: string,
 ): Promise<void> {
   // Rate-limit on-chain TX hash submissions per user to prevent
@@ -600,35 +682,7 @@ async function handleChainTopupSubmit(
       return;
     }
   } else {
-    try {
-      const dep = await createDeposit({
-        user_id: ctx.user.telegram_id,
-        method: flow.data.method_name,
-        amount: 0.01,
-        reference: txHash,
-        note: 'On-chain tx submitted via auto-verify',
-        tx_hash: txHash,
-      });
-      depId = dep.id;
-    } catch (err) {
-      const msg = (err as { message?: string })?.message ?? '';
-      if (/23505|duplicate/i.test(msg)) {
-        await ctx.reply(
-          renderMdHtml(
-            '❌ *Already-used transaction.*\n\nThis transaction hash has already been used to credit a previous deposit. Each transaction can only be used once.',
-          ),
-          { parse_mode: 'HTML' },
-        );
-        ctx.session.userFlow = undefined;
-        return;
-      }
-      logger.error({ err }, 'Chain top-up deposit insert failed');
-      await ctx.reply(
-        '⚠️ Could not record your submission. Please try again or contact support.',
-      );
-      ctx.session.userFlow = undefined;
-      return;
-    }
+    depId = flow.data.deposit_id;
   }
   ctx.session.userFlow = undefined;
 
@@ -672,7 +726,7 @@ async function handleChainTopupSubmit(
         `✅ *Auto-verified (#${depId}).*`,
         '',
         `Tx: \`${txHash}\``,
-        `Credited: *$${result.amount.toFixed(2)}*`,
+        `Credited: *$${result.amount.toFixed(4)}*`,
         `New balance: *$${Number(result.newBalance).toFixed(2)}*`,
       ].join('\n'),
       reply_markup: successKeyboard(ctx.lang, topupExitCallback(ctx)),
@@ -704,7 +758,7 @@ async function handleChainTopupSubmit(
           `❌ *Disapproved (#${depId}).*`,
           '',
           `Tx: \`${txHash}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'This transaction did not match our records. If you believe this is a mistake, tap *Admin Help* below.',
         ].join('\n'),
@@ -722,7 +776,7 @@ async function handleChainTopupSubmit(
           `⏳ *Submitted (#${depId}) — pending admin review.*`,
           '',
           `Tx: \`${txHash}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'Admin will check your payment manually and credit your wallet shortly.',
         ].join('\n'),
@@ -952,7 +1006,7 @@ async function handleLtcTxHash(
           `❌ *Disapproved (#${depId}).*`,
           '',
           `Tx: \`${cleaned}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'This transaction did not match our records. If you believe this is a mistake, tap *Admin Help* below.',
         ].join('\n'),
@@ -970,7 +1024,7 @@ async function handleLtcTxHash(
           `⏳ *Submitted (#${depId}) — pending admin review.*`,
           '',
           `Tx: \`${cleaned}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'Admin will check your payment manually and credit your wallet shortly.',
         ].join('\n'),
@@ -1143,7 +1197,7 @@ async function handleBybitPayTxId(
         `❌ *Disapproved (#${depId}).*`,
         '',
         `Bybit TXID: \`${txId}\``,
-        `_${friendlyReason(result.reason)}_`,
+        `_${friendlyReason(result.reason, ctx.t)}_`,
         '',
         'This transfer did not match our records. If you believe this is a mistake, tap *Admin Help* below.',
       ].join('\n'),
@@ -1161,7 +1215,7 @@ async function handleBybitPayTxId(
         `⏳ *Submitted (#${depId}) - pending admin review.*`,
         '',
         `Bybit TXID: \`${txId}\``,
-        `_${friendlyReason(result.reason)}_`,
+        `_${friendlyReason(result.reason, ctx.t)}_`,
         '',
         'Admin will check your payment manually and credit your wallet shortly.',
       ].join('\n'),
@@ -1308,7 +1362,7 @@ async function handleBinancePayOrderId(
           `❌ *Disapproved (#${depId}).*`,
           '',
           `Order ID: \`${orderId}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'This order did not match our records. If you believe this is a mistake, tap *Admin Help* below.',
         ].join('\n'),
@@ -1326,7 +1380,7 @@ async function handleBinancePayOrderId(
           `⏳ *Submitted (#${depId}) — pending admin review.*`,
           '',
           `Order ID: \`${orderId}\``,
-          `_${friendlyReason(result.reason)}_`,
+          `_${friendlyReason(result.reason, ctx.t)}_`,
           '',
           'Admin will check your payment manually and credit your wallet shortly.',
         ].join('\n'),
@@ -1348,7 +1402,11 @@ async function handleBinancePayOrderId(
   }
 }
 
-function buildChainTopupScreen(m: DBPaymentMethod): string {
+function buildChainTopupScreen(
+  m: DBPaymentMethod,
+  reservedAmount: number,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   const headingGlyph =
     m.provider === 'usdt_ton' ? PE.ton_title : PE.usdt_title;
   const heading =
@@ -1362,16 +1420,19 @@ function buildChainTopupScreen(m: DBPaymentMethod): string {
   // BEP-20 only auto-verifies USDT itself.
   const sendLine =
     m.provider === 'usdt_bep20'
-      ? `${PE.bullet_send} Send any USDT amount to the address above`
+      ? `${PE.bullet_send} ${t('topup.usdt.send_exact', { amount: reservedAmount.toFixed(4) })}`
       : m.provider === 'usdt_ton'
-        ? `${PE.bullet_send} Send Native TON Coin or USDT (TON) to the address above`
-        : `${PE.bullet_send} Send Native TRX or USDT (TRC-20) to the address above`;
+        ? `${PE.bullet_send} ${t('topup.usdt.send_exact', { amount: reservedAmount.toFixed(4) })}`
+        : `${PE.bullet_send} ${t('topup.usdt.send_exact', { amount: reservedAmount.toFixed(4) })}`;
   const lines: string[] = [
     heading,
     '',
     `\`${m.address ?? '(address not set)'}\``,
     '',
+    `${PE.note} *${t('topup.usdt.reserved_amount', { amount: reservedAmount.toFixed(4) })}*`,
     sendLine,
+    `${PE.note} _${t('topup.usdt.other_amount')}_`,
+    `⏰ _${t('topup.usdt.validity')}_`,
     `${PE.bullet_paste} Paste your *Transaction Hash (TXID)* below`,
     '',
   ];
@@ -1379,7 +1440,7 @@ function buildChainTopupScreen(m: DBPaymentMethod): string {
     lines.push(
       `${PE.note} _AA Wallet users: paste the *Bundle Hash* from BscScan, not the AA TxHash._`,
     );
-    lines.push(`${PE.note} _Up to 3 decimal places only._`);
+    lines.push(`${PE.note} _Up to 4 decimal places only._`);
   } else if (m.provider === 'usdt_ton') {
     lines.push(
       `${PE.convert} _TON coins are automatically converted to USDT at live market rates._`,
@@ -1392,6 +1453,26 @@ function buildChainTopupScreen(m: DBPaymentMethod): string {
   lines.push('');
   lines.push('*Please send your TX hash below:*');
   return lines.join('\n');
+}
+
+function buildChainTopupAmountScreen(
+  m: DBPaymentMethod,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  const title =
+    m.provider === 'usdt_bep20'
+      ? 'USDT (BEP-20) Top-Up'
+      : m.provider === 'usdt_trc20'
+        ? 'USDT (TRC-20) Top-Up'
+        : 'TON USDT Top-Up';
+  return [
+    `${PE.usdt_title} *${title}*`,
+    '',
+    `\`${m.address ?? '(address not set)'}\``,
+    '',
+    t('topup.usdt.amount_prompt'),
+    t('topup.usdt.amount_example'),
+  ].join('\n');
 }
 
 function buildLtcUsdAmountScreen(m: DBPaymentMethod): string {

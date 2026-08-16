@@ -866,6 +866,20 @@ export const en: Record<string, string> = {
 
   // ---------- Topup ----------
   'topup.title': '👛 *Top Up Wallet*',
+  'topup.usdt.amount_prompt': 'How much USDT would you like to add?',
+  'topup.usdt.amount_example': 'Reply with the amount, for example `10` or `25.50`.',
+  'topup.usdt.invalid_amount': '❌ Please send a valid USDT amount (minimum: *0.01 USDT*).',
+  'topup.usdt.quote_failed': '⚠️ Could not reserve a payment amount. Please try again shortly.',
+  'topup.usdt.quote_busy': '⚠️ All payment amounts are busy right now. Please try again in a few minutes.',
+  'topup.usdt.reserved_amount': 'Send exactly {amount} USDT',
+  'topup.usdt.send_exact': 'Send exactly *{amount} USDT* to the address above.',
+  'topup.usdt.other_amount':
+    'Any other amount will not be auto-credited and requires manual admin review.',
+  'topup.usdt.validity': 'This amount is valid for 30 minutes from now.',
+  'verify.usdt.no_quote': 'This USDT deposit has no locked amount. An admin will verify it manually.',
+  'verify.usdt.quote_expired': 'This USDT payment quote expired. An admin will verify it manually.',
+  'verify.usdt.amount_mismatch':
+    'The payment amount does not match the reserved amount of {expected} USDT. An admin will review it manually.',
   'topup.choose_method': '👛 *Top Up Wallet*',
   'topup.empty_methods': 'No payment methods configured. Please contact support.',
   'topup.method.body': '*{name}*\n\n{instructions}',

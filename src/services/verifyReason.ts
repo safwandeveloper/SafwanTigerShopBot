@@ -12,7 +12,10 @@
  * useful information from the user.
  */
 
-export function friendlyReason(reason: string): string {
+export function friendlyReason(
+  reason: string,
+  t?: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   const r = reason.toLowerCase();
 
   // ----- Binance Pay --------------------------------------------------
@@ -109,6 +112,18 @@ export function friendlyReason(reason: string): string {
   }
   if (r.includes('tx hash required')) {
     return 'Please paste the transaction hash below.';
+  }
+  if (r.includes('no locked quote')) {
+    return t?.('verify.usdt.no_quote') ?? 'This USDT deposit has no locked amount. An admin will verify it manually.';
+  }
+  if (r.includes('quote expired')) {
+    return t?.('verify.usdt.quote_expired') ?? 'This USDT payment quote expired. An admin will verify it manually.';
+  }
+  if (r.includes('on-chain amount') && r.includes('expected')) {
+    const match = reason.match(/expected\s+([0-9.]+)/i);
+    return t?.('verify.usdt.amount_mismatch', {
+      expected: match?.[1] ?? 'unknown',
+    }) ?? reason;
   }
 
   // Fallback — show the raw reason.
