@@ -81,6 +81,9 @@ export const ar: Record<string, string> = {
   'btn.deposit_history': '💳 سجل الإيداعات',
   'btn.channel': 'القناة',
   'btn.reseller_api': '🔑 Api Key',
+  'btn.force_join': '📢 الانضمام للقناة',
+  'btn.force_join_done': '✅ تم',
+  'btn.force_join_skip': '🔕 تخطي',
   'api.price_alert.up':
     '{notify_bell} عزيزي مستخدم API، أصبح سعر *{product}* الآن *أعلى* ووصل إلى {price}. يرجى تحديث أسعاركم لهذا المنتج.',
   'api.price_alert.down':
