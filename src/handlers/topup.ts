@@ -1620,12 +1620,20 @@ async function handleCryptoBotUsdAmount(
       invoice_url: invoiceResult.invoice.bot_invoice_url,
     },
   };
-  const keyboard = new InlineKeyboard()
-    .url(ctx.t('topup.cryptobot.open_invoice'), invoiceResult.invoice.bot_invoice_url)
-    .row()
-    .text(ctx.t('topup.cryptobot.check'), `cryptopay:check:${dep.id}`)
-    .row()
-    .text(btn(ctx.lang, 'back'), topupRootCallback(ctx));
+  const keyboard = new InlineKeyboard();
+  inlineUrl(
+    keyboard,
+    ctx.lang,
+    'cryptobot_open_invoice',
+    invoiceResult.invoice.bot_invoice_url,
+  ).row();
+  inlineBtn(
+    keyboard,
+    ctx.lang,
+    'cryptobot_check',
+    `cryptopay:check:${dep.id}`,
+  ).row();
+  inlineBtn(keyboard, ctx.lang, 'back', topupRootCallback(ctx));
   const message = await ctx.reply(
     renderMdHtml(
       `${PE.usdt_title} ${ctx.t('topup.cryptobot.invoice_ready', {

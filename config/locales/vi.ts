@@ -82,6 +82,11 @@ export const vi: Record<string, string> = {
   'btn.deposit_history': '💳 Lịch sử nạp',
   'btn.channel': 'Kênh',
   'btn.reseller_api': '🔑 Api Key',
+  'btn.force_join': '📢 Tham gia kênh',
+  'btn.force_join_done': '✅ Xong',
+  'btn.force_join_skip': '🔕 Bỏ qua',
+  'btn.cryptobot_open_invoice': '💳 Mở hóa đơn',
+  'btn.cryptobot_check': '✅ Đã thanh toán / Kiểm tra',
   'api.price_alert.up':
     '{notify_bell} Thân gửi người dùng API, giá *{product}* hiện đã *tăng* lên {price}. Vui lòng cập nhật giá của bạn cho sản phẩm này.',
   'api.price_alert.down':
