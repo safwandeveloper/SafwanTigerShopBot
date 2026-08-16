@@ -826,6 +826,11 @@ export type SessionData = {
    * being re-prompted if Telegram's member API is briefly flaky.
    */
   forceJoinUnlocked?: boolean;
+  /**
+   * Set when a newly registered user must join the configured channel
+   * before accessing bot features.
+   */
+  forceJoinRequired?: boolean;
 };
 
 export type SessionCtx = Context & SessionFlavor<SessionData>;
