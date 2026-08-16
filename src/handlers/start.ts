@@ -364,15 +364,8 @@ export function registerStart(bot: Composer<AppCtx>): void {
   });
 
   bot.callbackQuery('forcejoin:skip', async (ctx) => {
-    if (ctx.session.forceJoinRequired) {
-      await ctx.answerCallbackQuery({
-        text: 'Please join the channel before continuing.',
-        show_alert: true,
-      });
-      await sendForceJoinPrompt(ctx);
-      return;
-    }
     ctx.session.forceJoinUnlocked = true;
+    ctx.session.forceJoinRequired = false;
     await ctx.answerCallbackQuery({ text: 'Skipped.' });
     await showMainMenu(ctx);
   });
