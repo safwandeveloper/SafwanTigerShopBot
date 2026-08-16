@@ -180,6 +180,7 @@ import {
   canbosoSupplierConfig,
   fetchSupplierProducts,
   importSupplierProduct,
+  insightxSupplierConfig,
   parseSupplierLinkConfig,
   parseSupplierSourceConfig,
   supabaseResellerSupplierConfig,
@@ -1260,6 +1261,9 @@ function supplierListKeyboard(
   kb.text('Add Canboso', 'adm:api:supplier:add:canboso');
   apiPremiumButton(kb, 'api_key', 'primary');
   kb.row();
+  kb.text('Add InsightX Store', 'adm:api:supplier:add:insightx');
+  apiPremiumButton(kb, 'api_key', 'primary');
+  kb.row();
   kb.text('Advanced JSON', 'adm:api:supplier:add');
   apiPremiumButton(kb, 'orders_note', 'primary');
   kb.text('Map Product', 'adm:api:supplier:map');
@@ -1675,6 +1679,36 @@ adminBot.callbackQuery('adm:api:supplier:add:canboso', async (ctx) => {
       '',
       'Example:',
       '`tgb_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`',
+      '',
+      'After saving, open *Browse Products* and import by button.',
+      '',
+      'Send `/cancel` to abort.',
+    ].join('\n'),
+    {
+      parse_mode: 'Markdown',
+      reply_markup: backRow(new InlineKeyboard()),
+      link_preview_options: { is_disabled: true },
+    },
+  );
+});
+
+adminBot.callbackQuery('adm:api:supplier:add:insightx', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = { type: 'supplier_insightx_add', step: 'key', data: {} };
+  await ctx.editMessageText(
+    [
+      '🔑 *Add InsightX Store Supplier*',
+      '',
+      'This preset uses the InsightX Store API:',
+      'GET `/api/v1/products`',
+      'GET `/api/v1/balance`',
+      'POST `/api/v1/orders`',
+      '',
+      'Auth: `Authorization: Bearer YOUR_API_KEY`',
+      'Orders include an `Idempotency-Key` automatically.',
+      '',
+      'Example:',
+      '`isk_live_xxxxxxxxxxxxxxxxxxxxxxxx`',
       '',
       'After saving, open *Browse Products* and import by button.',
       '',
@@ -8160,6 +8194,34 @@ adminBot.on('message:text', async (ctx, next) => {
       return;
     }
 
+    if (flow.type === 'supplier_insightx_add') {
+      const rawKey = ctx.message.text.trim();
+      const key = rawKey.match(/\b(isk_live_[a-zA-Z0-9_-]{12,})\b/)?.[1] ?? rawKey;
+      if (key.length < 20) {
+        await ctx.reply('❌ Send the full InsightX Store API key, or `/cancel`.', {
+          parse_mode: 'Markdown',
+        });
+        return;
+      }
+      const source = await createSupplierApiSource(insightxSupplierConfig(key));
+      ctx.session.adminFlow = undefined;
+      let testLine = 'Saved. Tap Test Connection if you want to retry the live check.';
+      try {
+        const test = await testSupplierConnection(source);
+        testLine = test.ok
+          ? `Live test OK: ${test.balance === null ? 'balance unknown' : `balance ${apiMoney(test.balance)}`} · ${test.productsSeen} products`
+          : `Saved, but live test needs attention: ${test.error ?? 'unknown error'}`;
+      } catch (err) {
+        testLine = `Saved, but live test failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      await ctx.reply(
+        `✅ InsightX Store supplier saved: *${escapeMd(source.name)}* (#${source.id})\n\n${escapeMd(testLine)}\n\nTap *Browse Products* to import by button.`,
+        { parse_mode: 'Markdown' },
+      );
+      await showSupplierDetail(ctx, source.id);
+      return;
+    }
+
     if (flow.type === 'supplier_vex_add') {
       const rawKey = ctx.message.text.trim();
       const key =
@@ -10131,6 +10193,7 @@ adminBot.on('message:text', async (ctx, next) => {
     if (
       flow.type === 'supplier_api_add' ||
       flow.type === 'supplier_canboso_add' ||
+      flow.type === 'supplier_insightx_add' ||
       flow.type === 'supplier_reseller_add' ||
       flow.type === 'supplier_product_link_add'
     ) {

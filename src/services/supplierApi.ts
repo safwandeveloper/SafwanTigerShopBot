@@ -140,6 +140,35 @@ export function canbosoSupplierConfig(apiKey: string): SupplierSourceConfig {
     notes: 'One-click Canboso v2 telegram-buyer supplier connector.',
   };
 }
+export function insightxSupplierConfig(apiKey: string): SupplierSourceConfig {
+  return {
+    name: 'InsightX Store',
+    base_url: 'https://insightxstore-bot-production.up.railway.app',
+    api_key: apiKey.trim(),
+    auth_mode: 'bearer',
+    products_path: '/api/v1/products',
+    balance_path: '/api/v1/balance',
+    order_path: '/api/v1/orders',
+    order_method: 'POST',
+    products_json_path: 'products',
+    balance_json_path: 'balance_usdt',
+    product_id_json_path: 'id',
+    product_name_json_path: 'name',
+    product_price_json_path: 'price_usdt',
+    product_stock_json_path: 'stock',
+    order_request_template: {
+      product_id: '{{supplier_product_id}}',
+      quantity: '{{qty}}',
+    },
+    markup_percent: 25,
+    fixed_markup: 0,
+    low_balance_threshold: 5,
+    auto_import_new_products: false,
+    auto_import_active: false,
+    import_category_name: 'InsightX Store Supplier',
+    notes: 'One-click InsightX Store supplier connector.',
+  };
+}
 
 export function supabaseResellerSupplierConfig(apiKey: string): SupplierSourceConfig {
   return {
@@ -476,6 +505,17 @@ export async function fetchSupplierProducts(
   return arr
     .map((p) => normalizeCatalogProduct(source, p))
     .filter((p): p is SupplierCatalogProduct => p !== null);
+}
+
+export async function fetchSupplierOrders(
+  source: DBSupplierApiSource,
+  orderId?: string,
+): Promise<unknown> {
+  const basePath = cleanPath(source.order_path, '/orders');
+  const path = orderId
+    ? `${basePath.replace(/\/+$/, '')}/${encodeURIComponent(orderId)}`
+    : basePath;
+  return supplierFetch(source, path);
 }
 
 export function supplierSellPrice(
