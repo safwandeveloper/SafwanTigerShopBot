@@ -161,7 +161,7 @@ import { notifyApiPriceChange } from '../../services/priceAlert.js';
 import { describeMailerStatus, sendWelcomeEmail } from '../../services/mailer.js';
 import { fulfillPendingPreordersForProduct } from '../../services/preorder.js';
 import { buildOrderDeliveredChunks } from '../../services/orderRender.js';
-import { publicOrderId } from '../../services/orderId.js';
+import { parsePublicOrderId, publicOrderId } from '../../services/orderId.js';
 import {
   completeManualDelivery,
   maybeStartDeliveryFormFromApi,
@@ -2272,6 +2272,31 @@ function isPendingPreorderOrder(order: DBOrder): boolean {
   );
 }
 
+async function showFoundOrder(ctx: AppCtx, order: DBOrder): Promise<void> {
+  const buyer = await findUserById(order.user_id);
+  const delivered = order.delivered_items ?? order.delivery ?? null;
+  const lines = [
+    `🧾 <b>Order #${order.id}</b>`,
+    '',
+    `<b>Public ID:</b> <code>${publicOrderId(order)}</code>`,
+    `<b>Product:</b> ${escapeHtml(order.product_name)}` +
+      (order.product_id !== null ? ` <code>(#${order.product_id})</code>` : ''),
+    `<b>Quantity:</b> ${order.qty}`,
+    `<b>Total:</b> $${Number(order.total).toFixed(2)}`,
+    `<b>Status:</b> ${escapeHtml(order.status)}`,
+    `<b>Buyer:</b> ${escapeHtml(buyerHandle(buyer, order.user_id))} <code>${order.user_id}</code>`,
+  ];
+  if (delivered && delivered.trim().length > 0) {
+    let body = delivered;
+    if (body.length > 3000) body = body.slice(0, 2950) + '\n…(truncated)';
+    lines.push('', '<b>Delivered Items:</b>', `<pre>${escapeHtml(body)}</pre>`);
+  }
+  await ctx.reply(lines.join('\n'), {
+    parse_mode: 'HTML',
+    reply_markup: new InlineKeyboard().text('⬅️ Back to orders', 'adm:ord:0'),
+  });
+}
+
 /**
  * Render a paginated orders list. `scope` controls the header label
  * and the callback-data prefix used by the pagination + row buttons
@@ -2315,7 +2340,9 @@ async function showOrdersList(
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const page = scope.kind === 'all' ? scope.page : scope.page;
   if (rows.length === 0) {
-    const kb = new InlineKeyboard().text('⬅️ Back', backCb);
+    const kb = new InlineKeyboard();
+    if (scope.kind === 'all') kb.text('🔍 Find Order', 'adm:ord:find').row();
+    kb.text('⬅️ Back', backCb);
     await ctx.editMessageText(`${header}\n\n<i>No orders yet.</i>`, {
       parse_mode: 'HTML',
       reply_markup: kb,
@@ -2355,7 +2382,9 @@ async function showOrdersList(
   }
   if (page > 0) kb.text('◀️ Prev', `${pagePrefix}:${page - 1}`);
   if (page + 1 < totalPages) kb.text('Next ▶️', `${pagePrefix}:${page + 1}`);
-  kb.row().text('⬅️ Back', backCb);
+  kb.row();
+  if (scope.kind === 'all') kb.text('🔍 Find Order', 'adm:ord:find').row();
+  kb.text('⬅️ Back', backCb);
   await ctx.editMessageText(lines.join('\n'), {
     parse_mode: 'HTML',
     reply_markup: kb,
@@ -2365,6 +2394,15 @@ async function showOrdersList(
 adminBot.callbackQuery(/^adm:ord:(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   await showOrdersList(ctx, { kind: 'all', page: Number(ctx.match[1]) });
+});
+
+adminBot.callbackQuery('adm:ord:find', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = { type: 'find_order', step: 'query', data: {} };
+  await ctx.editMessageText(
+    '🔍 *Find Order*\n\nSend the numeric order ID or public ID like `ORD...` (or `/cancel`).',
+    { parse_mode: 'Markdown', reply_markup: backRow(new InlineKeyboard()) },
+  );
 });
 
 adminBot.callbackQuery(/^adm:ord:u:(\d+):(\d+)$/, async (ctx) => {
@@ -2672,15 +2710,11 @@ async function showProductList(ctx: AppCtx, page: number): Promise<void> {
       .text(`🆔 ID #${p.id}`, `adm:prod:id:set:${p.id}:${page}`)
       .text(`🗑 #${p.id}`, `adm:prod:del:${p.id}:${page}`)
       .row();
-    // Per-product Add Items / Edit Pool shortcuts. Both reuse the
-    // existing handlers — `📦 Add Items #N` arms the bulk-paste flow
-    // for that product, `🔎 Edit Pool #N` opens the Stock Items
-    // inspector (page 0). Saves the admin a hop through the per-
-    // product editor card when they just want to top up or audit
-    // the items pool for one product among several on a page.
-    kb.text(`📦 Add Items #${p.id}`, `adm:prod:items:add:${p.id}:${page}`)
-      .text(`🔎 Edit Pool #${p.id}`, `adm:prod:items:view:${p.id}:${page}:0`)
-      .row();
+    if (!p.delivery_form_enabled) {
+      kb.text(`📦 Add Items #${p.id}`, `adm:prod:items:add:${p.id}:${page}`)
+        .text(`🔎 Edit Pool #${p.id}`, `adm:prod:items:view:${p.id}:${page}:0`)
+        .row();
+    }
   }
   if (page > 0) kb.text('◀️ Prev', `adm:prod:list:${page - 1}`);
   if (page + 1 < totalPages) kb.text('Next ▶️', `adm:prod:list:${page + 1}`);
@@ -2841,6 +2875,9 @@ async function showProductEditor(
     logger.warn({ err, product_id }, 'showProductEditor supplier link lookup failed');
     return null;
   });
+  const usesManualDeliveryStock = Boolean(
+    (await getProduct(product_id))?.delivery_form_enabled,
+  );
   // Re-align `products.stock` with the live pool count before reading
   // the product so the editor card always reflects reality.
   // `addProductItems()` already calls `syncProductStockToPool` after a
@@ -2852,7 +2889,7 @@ async function showProductEditor(
   // Doing the sync here is idempotent and cheap (two indexed queries),
   // and guarantees the admin-facing card and the buyer-facing stock
   // gate stay consistent after every bulk-add Confirm.
-  if (!supplierLink) {
+  if (!supplierLink && !usesManualDeliveryStock) {
     await syncProductStockToPool(product_id).catch((err) => {
       logger.error(
         { err, product_id },
@@ -2875,7 +2912,12 @@ async function showProductEditor(
   // product isn't unlimited — the products.stock column is just a
   // denormalised mirror, the truth is `countAvailableProductItems()`.
   // This keeps the card honest even if a sync ever misses.
-  const stockCell = p.unlimited_stock ? '∞' : supplierLink ? String(p.stock) : String(itemsCount);
+  const stockCell =
+    p.unlimited_stock
+      ? '∞'
+      : supplierLink || usesManualDeliveryStock
+        ? String(p.stock)
+        : String(itemsCount);
   // Per-product custom-price override count — surfaced inline + drives
   // the "Clear all custom prices" button label. Cheap (one head-count
   // query) and lets the admin see at a glance whether any user has a
@@ -2925,7 +2967,9 @@ async function showProductEditor(
     `*Tutorial Text:* ${p.tutorial_text ? '`set`' : '_unset_'}`,
     `*Tutorial File:* ${p.tutorial_file_id ? '`' + p.tutorial_file_type + '`' : '_unset_'}`,
     `*Tutorial URL:* ${p.tutorial_url ? '`' + p.tutorial_url + '`' : '_unset_'}`,
-    `*Items pool:* ${itemsCount} unconsumed`,
+    usesManualDeliveryStock
+      ? '*Delivery form stock:* edit the quantity with 🔢 Edit Stock'
+      : `*Items pool:* ${itemsCount} unconsumed`,
     `*Custom prices:* ${overrideCount} user override${overrideCount === 1 ? '' : 's'}`,
     `*Delivery form:* ${deliveryStateLabel}`,
     `*Delivery vendor:* ${deliveryVendorLabel}`,
@@ -2957,17 +3001,21 @@ async function showProductEditor(
     .text('🔗 Tutorial URL', `adm:prod:tut:seturl:${p.id}:${page}`)
     .row();
   kb.text('🧹 Clear Tutorial', `adm:prod:tut:clr:${p.id}:${page}`).row();
-  kb.text(`📦 Add Items (pool: ${itemsCount})`, `adm:prod:items:add:${p.id}:${page}`)
-    .text('🧹 Clear Pool', `adm:prod:items:clr:${p.id}:${page}`)
-    .row();
+  if (!usesManualDeliveryStock) {
+    kb.text(`📦 Add Items (pool: ${itemsCount})`, `adm:prod:items:add:${p.id}:${page}`)
+      .text('🧹 Clear Pool', `adm:prod:items:clr:${p.id}:${page}`)
+      .row();
+  }
   // Stock Inspection — bot-owner asked for a way to audit remaining
   // accounts / links / codes per product. Disabled when the pool is
   // empty so the admin doesn't tap into a dead end (we still ack the
   // tap with a popup explaining the empty state).
-  kb.text(
-    `🔎 View Stock Items (${itemsCount})`,
-    `adm:prod:items:view:${p.id}:${page}:0`,
-  ).row();
+  if (!usesManualDeliveryStock) {
+    kb.text(
+      `🔎 View Stock Items (${itemsCount})`,
+      `adm:prod:items:view:${p.id}:${page}:0`,
+    ).row();
+  }
   kb.text(
     p.unlimited_stock ? '♾ Unlimited: ON' : '♾ Unlimited: OFF',
     `adm:prod:unl:tog:${p.id}:${page}`,
@@ -5923,9 +5971,16 @@ adminBot.callbackQuery(/^adm:usr:(\d+)$/, async (ctx) => {
   await showUserList(ctx, Number(ctx.match[1]));
 });
 
+adminBot.callbackQuery(/^adm:usr:balance:(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await showUserList(ctx, Number(ctx.match[1]));
+});
+
 async function showUserList(ctx: AppCtx, page: number): Promise<void> {
+  const sort: 'recent' | 'balance' =
+    ctx.callbackQuery?.data?.startsWith('adm:usr:balance:') ? 'balance' : 'recent';
   ctx.session.adminFlow = undefined;
-  const { rows, total } = await listRecentUsers(page, PER_PAGE);
+  const { rows, total } = await listRecentUsers(page, PER_PAGE, sort);
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
   // Rendered in HTML rather than Markdown V1 — the row text splices
   // raw `username` / `first_name` into the body, and V1 treats `_`
@@ -5936,7 +5991,7 @@ async function showUserList(ctx: AppCtx, page: number): Promise<void> {
   // the loading spinner. HTML side-steps that — every user-supplied
   // string just goes through `escapeHtml`.
   const lines = [
-    `👥 <b>Users</b> — page ${page + 1}/${totalPages}  (total ${total})`,
+    `👥 <b>Users</b> — ${sort === 'balance' ? 'highest balance first' : 'recent activity'} · page ${page + 1}/${totalPages}  (total ${total})`,
     '',
   ];
   const kb = new InlineKeyboard();
@@ -5952,7 +6007,14 @@ async function showUserList(ctx: AppCtx, page: number): Promise<void> {
   }
   if (page > 0) kb.text('◀️ Prev', `adm:usr:${page - 1}`);
   if (page + 1 < totalPages) kb.text('Next ▶️', `adm:usr:${page + 1}`);
-  kb.row().text('🔍 Find user', 'adm:usr:find').row().text('⬅️ Back', 'adm:root');
+  kb.row()
+    .text(
+      sort === 'balance' ? '🕘 Recent activity' : '💰 Highest balance',
+      sort === 'balance' ? 'adm:usr:0' : 'adm:usr:balance:0',
+    )
+    .text('🔍 Find user', 'adm:usr:find')
+    .row()
+    .text('⬅️ Back', 'adm:root');
   await ctx.editMessageText(lines.join('\n'), { parse_mode: 'HTML', reply_markup: kb });
 }
 
@@ -9624,6 +9686,23 @@ adminBot.on('message:text', async (ctx, next) => {
         return;
       }
       await showUserCard(ctx, user);
+      return;
+    }
+
+    if (flow.type === 'find_order') {
+      const query = text.trim();
+      const parsedId = /^\d+$/.test(query)
+        ? Number(query)
+        : parsePublicOrderId(query);
+      const order = parsedId !== null && Number.isInteger(parsedId) && parsedId > 0
+        ? await getOrder(parsedId)
+        : null;
+      ctx.session.adminFlow = undefined;
+      if (!order) {
+        await ctx.reply('No order found.', { reply_markup: rootMenu() });
+        return;
+      }
+      await showFoundOrder(ctx, order);
       return;
     }
 

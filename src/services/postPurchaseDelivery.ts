@@ -287,22 +287,30 @@ async function sendVendorMessage(args: {
   const handle = args.buyer.username
     ? `@${args.buyer.username}`
     : args.buyer.first_name ?? String(args.buyer.telegram_id);
-  const buyerStr = `${handle} (${args.buyer.telegram_id})`;
   const detailsBlock = renderPayloadBlock(args.fields, args.submission.payload);
-  const key = args.isResubmit
-    ? 'shop.delivery.vendor.resubmit'
-    : 'shop.delivery.vendor.new';
-  const body = t(key, {
-    order_tag: buildOrderTag(args.orderPublicId),
-    product_name: args.product.name,
-    qty: args.qty,
-    buyer: buyerStr,
-    details: detailsBlock,
-    revision: args.submission.revision,
-  });
   const targets = new Set<number>([env.ADMIN_USER_ID]);
   if (vendorId !== null && vendorId !== undefined) targets.add(vendorId);
   for (const target of targets) {
+    const isAdmin = target === env.ADMIN_USER_ID;
+    const key = isAdmin
+      ? args.isResubmit
+        ? 'shop.delivery.vendor.resubmit'
+        : 'shop.delivery.vendor.new'
+      : args.isResubmit
+        ? 'shop.delivery.vendor.resubmit_private'
+        : 'shop.delivery.vendor.new_private';
+    const body = t(key, {
+      order_tag: buildOrderTag(args.orderPublicId),
+      product_name: args.product.name,
+      qty: args.qty,
+      ...(isAdmin
+        ? {
+            buyer: `${handle} (${args.buyer.telegram_id})`,
+          }
+        : {}),
+      details: detailsBlock,
+      revision: args.submission.revision,
+    });
     const kb = new InlineKeyboard();
     if (target === env.ADMIN_USER_ID) {
       kb.text(btn(env.DEFAULT_LANG, 'delivery_done'), `adm:delivery:complete:${args.submission.id}`);
