@@ -4569,7 +4569,20 @@ adminBot.callbackQuery('adm:dep', async (ctx) => {
 });
 
 async function showDepositList(ctx: AppCtx): Promise<void> {
-  const deps = await listPendingDeposits();
+  const [deps, methods] = await Promise.all([
+    listPendingDeposits(),
+    listPaymentMethods(),
+  ]);
+  const usdtMethodNames = new Set(
+    methods
+      .filter(
+        (method) =>
+          method.provider === 'usdt_trc20' ||
+          method.provider === 'usdt_bep20' ||
+          method.provider === 'usdt_ton',
+      )
+      .map((method) => method.name),
+  );
   if (deps.length === 0) {
     await ctx.editMessageText('No pending deposits.', {
       reply_markup: backRow(new InlineKeyboard()),
@@ -4579,11 +4592,12 @@ async function showDepositList(ctx: AppCtx): Promise<void> {
   const lines = ['💰 *Pending Deposits*', ''];
   const kb = new InlineKeyboard();
   for (const d of deps) {
-    const displayAmount = d.expected_amount ?? d.amount;
+    const displayExpected = usdtMethodNames.has(d.method) && d.expected_amount !== null;
+    const displayAmount = displayExpected ? d.expected_amount : d.amount;
     const amountStr =
       Number(displayAmount) <= 0.01
         ? `_(amount not set)_`
-        : `$${Number(d.expected_amount ?? d.amount).toFixed(d.expected_amount === null ? 2 : 4)}`;
+        : `$${Number(displayAmount).toFixed(displayExpected ? 4 : 2)}`;
     const refLine = d.reference ? `\n     ref: \`${d.reference}\`` : '';
     const txLine = d.tx_hash && d.tx_hash !== d.reference ? `\n     tx: \`${d.tx_hash}\`` : '';
     const noteLine = d.note ? `\n     ${d.note}` : '';
