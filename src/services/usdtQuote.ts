@@ -48,6 +48,10 @@ export function roundUsdtBase(amount: number): number {
   return Math.round((amount + Number.EPSILON) * 100) / 100;
 }
 
+export function ceilUsdtBase(amount: number): number {
+  return Math.ceil((amount - Number.EPSILON) * 100) / 100;
+}
+
 export function uniqueUsdtAmount(baseAmount: number, uniquifier: number): number {
   if (!Number.isInteger(uniquifier) || uniquifier < 1 || uniquifier > 99) {
     throw new Error('USDT uniquifier must be an integer from 1 to 99');

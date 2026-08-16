@@ -66,7 +66,7 @@ import type {
 } from '../types.js';
 import { renderPaymentMethodTutorial } from '../services/payMethodTutorialView.js';
 import { createInvoice } from '../services/cryptoPay.js';
-import { reserveUniqueUsdtAmount, roundUsdtBase } from '../services/usdtQuote.js';
+import { ceilUsdtBase, reserveUniqueUsdtAmount } from '../services/usdtQuote.js';
 
 const LTC_QUOTE_TTL_MIN = 10;
 
@@ -321,7 +321,7 @@ export function registerDirectPay(bot: Composer<AppCtx>): void {
       let expiresAtMs: number;
       try {
         const quote = await reserveUniqueUsdtAmount({
-          baseAmount: intent.total,
+          baseAmount: ceilUsdtBase(intent.total),
           provider: m.provider,
         });
         if (!quote) {
@@ -334,7 +334,7 @@ export function registerDirectPay(bot: Composer<AppCtx>): void {
         const dep = await createDeposit({
           user_id: ctx.user.telegram_id,
           method: m.name,
-          amount: roundUsdtBase(intent.total),
+          amount: ceilUsdtBase(intent.total),
           expected_amount: quote.amount,
           quote_expires_at: quote.expiresAt.toISOString(),
           note: `Direct-pay USDT unique amount quote: ${quote.amount.toFixed(4)} USDT`,
