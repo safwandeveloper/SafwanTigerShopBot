@@ -67,6 +67,7 @@ export type SupplierSourceConfig = {
   auth_mode?: SupplierAuthMode;
   key_header?: string;
   key_query_param?: string;
+  health_path?: string;
   products_path?: string;
   balance_path?: string;
   order_path?: string;
@@ -138,6 +139,38 @@ export function canbosoSupplierConfig(apiKey: string): SupplierSourceConfig {
     auto_import_active: false,
     import_category_name: 'Canboso Supplier',
     notes: 'One-click Canboso v2 telegram-buyer supplier connector.',
+  };
+}
+
+
+export function insightxSupplierConfig(apiKey: string): SupplierSourceConfig {
+  return {
+    name: 'InsightX Store',
+    base_url: 'https://insightxstore-bot-production.up.railway.app',
+    api_key: apiKey.trim(),
+    auth_mode: 'bearer',
+    health_path: '/api/v1/health',
+    products_path: '/api/v1/products',
+    balance_path: '/api/v1/balance',
+    order_path: '/api/v1/orders',
+    order_method: 'POST',
+    products_json_path: 'products',
+    balance_json_path: 'balance_usdt',
+    product_id_json_path: 'id',
+    product_name_json_path: 'name',
+    product_price_json_path: 'price_usdt',
+    product_stock_json_path: 'stock',
+    order_request_template: {
+      product_id: '{{supplier_product_id}}',
+      quantity: '{{qty}}',
+    },
+    markup_percent: 25,
+    fixed_markup: 0,
+    low_balance_threshold: 5,
+    auto_import_new_products: false,
+    auto_import_active: false,
+    import_category_name: 'InsightX Store Supplier',
+    notes: 'One-click InsightX Store supplier connector.',
   };
 }
 
@@ -462,6 +495,14 @@ export async function fetchSupplierBalance(
   );
 }
 
+export async function fetchSupplierHealth(
+  source: DBSupplierApiSource,
+): Promise<boolean> {
+  if (!source.health_path) return true;
+  await supplierFetch(source, source.health_path);
+  return true;
+}
+
 export async function fetchSupplierProducts(
   source: DBSupplierApiSource,
 ): Promise<SupplierCatalogProduct[]> {
@@ -476,6 +517,17 @@ export async function fetchSupplierProducts(
   return arr
     .map((p) => normalizeCatalogProduct(source, p))
     .filter((p): p is SupplierCatalogProduct => p !== null);
+}
+
+export async function fetchSupplierOrders(
+  source: DBSupplierApiSource,
+  orderId?: string,
+): Promise<unknown> {
+  const basePath = cleanPath(source.order_path, '/orders');
+  const path = orderId
+    ? `${basePath.replace(/\/+$/, '')}/${encodeURIComponent(orderId)}`
+    : basePath;
+  return supplierFetch(source, path);
 }
 
 export function supplierSellPrice(
@@ -547,6 +599,12 @@ export async function importSupplierProduct(args: {
 export async function testSupplierConnection(
   source: DBSupplierApiSource,
 ): Promise<SupplierConnectionTest> {
+  const healthResult = source.health_path
+    ? await fetchSupplierHealth(source).then(
+        () => ({ ok: true as const }),
+        (err: unknown) => ({ ok: false as const, error: err }),
+      )
+    : { ok: true as const };
   const balanceResult = await fetchSupplierBalance(source).then(
     (balance) => ({ ok: true as const, balance }),
     (err: unknown) => ({ ok: false as const, error: err }),
@@ -556,6 +614,7 @@ export async function testSupplierConnection(
     (err: unknown) => ({ ok: false as const, error: err }),
   );
   const errors: string[] = [];
+  if (!healthResult.ok) errors.push(`health: ${errorMessage(healthResult.error)}`);
   if (!balanceResult.ok) errors.push(`balance: ${errorMessage(balanceResult.error)}`);
   if (!productsResult.ok) errors.push(`products: ${errorMessage(productsResult.error)}`);
   const products = productsResult.ok ? productsResult.products : [];
@@ -919,6 +978,7 @@ export function parseSupplierSourceConfig(text: string): SupplierSourceConfig {
     auth_mode: authMode as SupplierAuthMode,
     key_header: asString(cfg.key_header ?? cfg.keyHeader) ?? 'x-api-key',
     key_query_param: asString(cfg.key_query_param ?? cfg.keyQueryParam) ?? 'api_key',
+    health_path: asString(cfg.health_path ?? cfg.healthPath) ?? '',
     products_path: asString(cfg.products_path ?? cfg.productsPath) ?? '/products',
     balance_path: asString(cfg.balance_path ?? cfg.balancePath) ?? '/balance',
     order_path: asString(cfg.order_path ?? cfg.orderPath) ?? '/order',

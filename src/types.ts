@@ -185,6 +185,7 @@ export type DBSupplierApiSource = {
   auth_mode: SupplierAuthMode;
   key_header: string;
   key_query_param: string;
+  health_path: string;
   products_path: string;
   balance_path: string;
   order_path: string;
