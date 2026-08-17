@@ -20,6 +20,13 @@ Open `http://localhost:8787`.
 Deploy `web-admin/` as a separate Railway service. Configure the four variables
 from `.env.example`; do not reuse the bot's start command or service.
 
-The dashboard intentionally exposes read-only data in this first version:
-overview metrics, users, products, orders, and deposits. The Supabase service
-role key stays on the server and is never sent to the browser.
+The dashboard provides the main Telegram admin areas through the browser:
+overview, users, admins, categories, products, orders, deposits, payment
+methods, settings, announcements, referrals, gift codes, promotions, supplier
+APIs, supplier links, and user price overrides. Sensitive bot state is
+view-only. Controlled add/edit forms are limited to catalog and configuration
+areas; deletion, raw JSON writes, balance edits, order status edits, and
+deposit status edits are disabled. Changes made through an approved form use
+the server-side Supabase connection and therefore appear to the bot
+immediately. The Supabase service-role key stays on the server and is never
+sent to the browser. The Telegram bot source code is not imported or modified.
