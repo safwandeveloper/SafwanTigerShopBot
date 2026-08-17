@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SafwanTiger Admin</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="login-view" class="login-shell">
+      <form id="login-form" class="login-card">
+        <div class="brand-mark">ST</div>
+        <p class="eyebrow">PRIVATE CONTROL ROOM</p>
+        <h1>SafwanTiger Admin</h1>
+        <p class="muted">Separate web dashboard. Telegram bot behavior is untouched.</p>
+        <label>Username<input name="username" autocomplete="username" required /></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+        <button class="primary" type="submit">Sign in</button>
+        <p id="login-error" class="error"></p>
+      </form>
+    </div>
+
+    <div id="app-view" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark small">ST</span><span>SafwanTiger</span></div>
+        <p class="eyebrow">WEB ADMIN</p>
+        <nav>
+          <button class="nav-item active" data-section="overview">◈ <span>Overview</span></button>
+          <button class="nav-item" data-section="users">♙ <span>Users</span></button>
+          <button class="nav-item" data-section="orders">▣ <span>Orders</span></button>
+          <button class="nav-item" data-section="products">⌘ <span>Products</span></button>
+          <button class="nav-item" data-section="deposits">◉ <span>Deposits</span></button>
+        </nav>
+        <div class="sidebar-footer"><span class="status-dot"></span> Read-only mode<button id="logout">Log out</button></div>
+      </aside>
+      <main class="main">
+        <header class="topbar"><div><p class="eyebrow">CONTROL CENTER</p><h1 id="page-title">Overview</h1></div><button id="refresh" class="ghost">↻ Refresh</button></header>
+        <div id="content"></div>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>
