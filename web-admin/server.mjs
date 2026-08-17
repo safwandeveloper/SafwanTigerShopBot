@@ -70,7 +70,16 @@ const tables = {
   user_price_overrides: { label: 'Price overrides', icon: '$', idField: 'id', fields: [
     ['id', 'ID', 'number', true], ['user_id', 'User ID', 'number'], ['product_id', 'Product ID', 'number'], ['price', 'Price', 'number'], ['created_at', 'Created at', 'datetime-local', true],
   ] },
+  wallet_ledger: { label: 'Wallet ledger', icon: '↕', idField: 'id', order: 'created_at.desc', fields: [] },
+  product_items: { label: 'Product items', icon: '▤', idField: 'id', fields: [] },
+  order_delivery_submissions: { label: 'Delivery submissions', icon: '⌁', idField: 'id', fields: [] },
+  reseller_api_orders: { label: 'Reseller API orders', icon: '⇥', idField: 'id', order: 'created_at.desc', fields: [] },
+  supplier_order_logs: { label: 'Supplier order logs', icon: '≋', idField: 'id', order: 'created_at.desc', fields: [] },
+  promo_tiers: { label: 'Promo tiers', icon: '⊞', idField: 'id', fields: [] },
+  referral_redemptions: { label: 'Referral redemptions', icon: '↪', idField: 'id', order: 'created_at.desc', fields: [] },
+  referral_milestones: { label: 'Referral milestones', icon: '★', idField: 'id', order: 'created_at.desc', fields: [] },
 };
+const writableTables = new Set(['categories', 'products', 'payment_methods', 'gift_codes', 'promos', 'supplier_api_sources', 'supplier_product_links', 'user_price_overrides']);
 
 if (!username || !password || !supabaseUrl || !serviceRoleKey) throw new Error('WEB_ADMIN_USERNAME, WEB_ADMIN_PASSWORD, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
 
@@ -105,9 +114,10 @@ const supabase = async (table, query = '', options = {}) => {
   return text ? JSON.parse(text) : null;
 };
 const cleanPayload = (config, payload, isInsert) => {
-  const allowed = new Set(config.fields.filter((field) => !field[3] || (isInsert && field[3] && field[0] === config.idField)).map((field) => field[0]));
-  return Object.fromEntries(Object.entries(payload).filter(([key, value]) => allowed.has(key) && value !== ''));
+  const allowed = new Set(config.fields.map((field) => field[0]));
+  return Object.fromEntries(Object.entries(payload).filter(([key, value]) => allowed.has(key) && (isInsert || key !== config.idField) && value !== ''));
 };
+const serializedTables = Object.fromEntries(Object.entries(tables).map(([key, config]) => [key, { ...config, writable: writableTables.has(key) }]));
 const dashboardData = async () => {
   const [userCount, orderCount, productCount, pendingDeposits, users, orders, products, deposits] = await Promise.all([
     supabase('users', '', { head: true }), supabase('orders', '', { head: true }), supabase('products', '', { head: true }), supabase('deposits?status=eq.pending', '', { head: true }),
@@ -153,7 +163,7 @@ createServer(async (req, res) => {
     }
     if (pathname === '/api/session') return authorized(req) ? json(res, 200, { authenticated: true }) : json(res, 401, { authenticated: false });
     if (!authorized(req) && pathname.startsWith('/api/')) return json(res, 401, { error: 'Unauthorized' });
-    if (pathname === '/api/admin-config') return json(res, 200, { tables });
+    if (pathname === '/api/admin-config') return json(res, 200, { tables: serializedTables });
     if (pathname === '/api/dashboard') return json(res, 200, await dashboardData());
 
     const match = pathname.match(/^\/api\/tables\/([a-z_]+)(?:\/([^/]+))?$/);
@@ -168,12 +178,10 @@ createServer(async (req, res) => {
         return json(res, 200, { rows, count: await supabase(table, '', { head: true }), limit, offset });
       }
       const filter = `${config.idField}=eq.${encodeURIComponent(decodeURIComponent(id ?? ''))}`;
+      if ((req.method === 'POST' || req.method === 'PATCH') && !writableTables.has(table)) return json(res, 403, { error: 'This data area is view-only for safety' });
+      if (req.method === 'DELETE') return json(res, 405, { error: 'Delete is disabled in the web dashboard' });
       if (req.method === 'POST' && !id) return json(res, 201, await supabase(table, '', { method: 'POST', body: cleanPayload(config, JSON.parse(await readBody(req)), true) }));
       if (req.method === 'PATCH' && id) return json(res, 200, await supabase(table, `?${filter}`, { method: 'PATCH', body: cleanPayload(config, JSON.parse(await readBody(req)), false) }));
-      if (req.method === 'DELETE' && id) {
-        await supabase(table, `?${filter}`, { method: 'DELETE' });
-        return json(res, 200, { deleted: true });
-      }
     }
     return serveStatic(req, res);
   } catch (error) {

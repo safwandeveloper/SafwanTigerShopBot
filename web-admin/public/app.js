@@ -36,10 +36,12 @@ function valueFor(row, field) {
 
 function renderTable() {
   const config = state.config[state.section];
-  const columns = config.fields.filter((field) => !['textarea', 'datetime-local'].includes(field[2])).slice(0, 7).map((field) => ({ label: field[1], render: (row) => valueFor(row, field) }));
-  columns.push({ label: 'Actions', render: (row) => `<div class="actions"><button class="icon-button" data-edit="${escapeHtml(String(row[config.idField]))}">Edit</button><button class="icon-button danger" data-delete="${escapeHtml(String(row[config.idField]))}">Delete</button></div>` });
+  const visibleFields = config.fields.length ? config.fields.filter((field) => !['textarea', 'datetime-local'].includes(field[2])).slice(0, 7) : Object.keys(state.rows[0] ?? {}).slice(0, 7).map((key) => [key, key, 'text']);
+  const columns = visibleFields.map((field) => ({ label: field[1], render: (row) => valueFor(row, field) }));
+  columns.push({ label: 'Actions', render: (row) => `<div class="actions"><button class="icon-button" data-view="${escapeHtml(String(row[config.idField]))}">View</button>${config.writable ? `<button class="icon-button" data-edit="${escapeHtml(String(row[config.idField]))}">Edit</button>` : '<span class="muted">View only</span>'}</div>` });
   const visibleRows = state.search ? state.rows.filter((row) => JSON.stringify(row).toLowerCase().includes(state.search)) : state.rows;
-  return `<section class="panel"><div class="panel-head"><div><p class="eyebrow">LIVE DATABASE</p><h2>${config.label}</h2><p class="muted">Edits save to the same Supabase records used by the bot. Telegram bot code is untouched.</p></div><button class="primary compact" data-add>Add ${config.label.replace(/s$/, '')}</button></div><div class="toolbar"><input id="table-search" placeholder="Search this page..." value="${escapeHtml(state.search)}" /><span class="muted">${visibleRows.length} of ${state.total} records</span></div>${table(columns, visibleRows)}<div class="pagination"><button class="ghost small" data-page="-1" ${state.page === 0 ? 'disabled' : ''}>Previous</button><span>Page ${state.page + 1}</span><button class="ghost small" data-page="1" ${(state.page + 1) * 50 >= state.total ? 'disabled' : ''}>Next</button></div></section>`;
+  const addButton = config.writable ? `<button class="primary compact" data-add>Add ${config.label.replace(/s$/, '')}</button>` : '';
+  return `<section class="panel"><div class="panel-head"><div><p class="eyebrow">LIVE DATABASE</p><h2>${config.label}</h2><p class="muted">${config.writable ? 'Controlled edits save to the same Supabase records used by the bot.' : 'View-only area; sensitive bot state cannot be changed here.'} Telegram bot code is untouched.</p></div>${addButton}</div><div class="toolbar"><input id="table-search" placeholder="Search this page..." value="${escapeHtml(state.search)}" /><span class="muted">${visibleRows.length} of ${state.total} records</span></div>${table(columns, visibleRows)}<div class="pagination"><button class="ghost small" data-page="-1" ${state.page === 0 ? 'disabled' : ''}>Previous</button><span>Page ${state.page + 1}</span><button class="ghost small" data-page="1" ${(state.page + 1) * 50 >= state.total ? 'disabled' : ''}>Next</button></div></section>`;
 }
 
 function renderNavigation() {
@@ -61,7 +63,7 @@ function render() {
   document.querySelectorAll('[data-open-table]').forEach((button) => button.addEventListener('click', () => { state.section = button.dataset.openTable; state.page = 0; loadTable(); }));
   document.querySelectorAll('[data-add]').forEach((button) => button.addEventListener('click', () => openEditor(null)));
   document.querySelectorAll('[data-edit]').forEach((button) => button.addEventListener('click', () => openEditor(state.rows.find((row) => String(row[state.config[state.section].idField]) === button.dataset.edit))));
-  document.querySelectorAll('[data-delete]').forEach((button) => button.addEventListener('click', () => deleteRow(button.dataset.delete)));
+  document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => openViewer(state.rows.find((row) => String(row[state.config[state.section].idField]) === button.dataset.view))));
   document.querySelectorAll('[data-page]').forEach((button) => button.addEventListener('click', () => { state.page += Number(button.dataset.page); loadTable(); }));
   $('#table-search')?.addEventListener('input', (event) => { state.search = event.target.value.toLowerCase(); render(); });
 }
@@ -76,7 +78,9 @@ async function loadTable() {
 function openEditor(row) {
   state.editing = row;
   const config = state.config[state.section];
-  const fields = config.fields.map((field) => {
+  const knownKeys = new Set(config.fields.map((field) => field[0]));
+  const extraFields = Object.keys(row ?? {}).filter((key) => !knownKeys.has(key)).map((key) => [key, key, typeof row[key] === 'number' ? 'number' : 'text']);
+  const fields = [...config.fields, ...extraFields].map((field) => {
     const [key, label, type, readOnly, options] = field;
     const value = row?.[key] ?? (type === 'checkbox' ? false : '');
     const disabled = readOnly && row ? 'disabled' : '';
@@ -86,7 +90,7 @@ function openEditor(row) {
     const inputValue = type === 'datetime-local' && value ? new Date(value).toISOString().slice(0, 16) : value;
     return `<label>${label}<input name="${key}" type="${type === 'number' ? 'number' : type}" value="${escapeHtml(inputValue)}" ${disabled} /></label>`;
   }).join('');
-  $('#modal-root').innerHTML = `<div class="modal-backdrop"><form class="modal-card" id="editor-form"><div class="panel-head"><h2>${row ? `Edit ${config.label}` : `Add ${config.label}`}</h2><button type="button" class="ghost small" data-close>Close</button></div>${fields}<p id="form-error" class="error"></p><button class="primary" type="submit">Save changes</button></form></div>`;
+  $('#modal-root').innerHTML = `<div class="modal-backdrop"><form class="modal-card" id="editor-form"><div class="panel-head"><h2>${row ? `Edit ${config.label}` : `Add ${config.label}`}</h2><button type="button" class="ghost small" data-close>Close</button></div>${fields}<p class="muted">Only approved fields can be changed. Deletion and raw JSON editing are disabled.</p><p id="form-error" class="error"></p><button class="primary" type="submit">Save changes</button></form></div>`;
   $('#editor-form').addEventListener('submit', saveRow);
   $('[data-close]').addEventListener('click', closeEditor);
 }
@@ -94,7 +98,7 @@ function openEditor(row) {
 async function saveRow(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  const payload = {};
+  let payload = {};
   state.config[state.section].fields.forEach(([key, , type]) => {
     if (type === 'checkbox') payload[key] = form.has(key);
     else if (form.get(key) !== '') payload[key] = type === 'number' ? Number(form.get(key)) : form.get(key);
@@ -108,9 +112,9 @@ async function saveRow(event) {
   } catch (error) { $('#form-error').textContent = error.message; }
 }
 
-async function deleteRow(id) {
-  if (!confirm('Delete this record? This cannot be undone.')) return;
-  try { await request(`/api/tables/${state.section}/${encodeURIComponent(id)}`, { method: 'DELETE' }); await loadTable(); } catch (error) { alert(error.message); }
+function openViewer(row) {
+  $('#modal-root').innerHTML = `<div class="modal-backdrop"><section class="modal-card"><div class="panel-head"><h2>Full record</h2><button type="button" class="ghost small" data-close>Close</button></div><pre class="record-json">${escapeHtml(JSON.stringify(row, null, 2))}</pre></section></div>`;
+  $('[data-close]').addEventListener('click', closeEditor);
 }
 
 function closeEditor() { $('#modal-root').innerHTML = ''; state.editing = null; }
