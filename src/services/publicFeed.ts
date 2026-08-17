@@ -66,6 +66,13 @@ async function resolveApiSalesChat(api: Api): Promise<string | number | undefine
   const configured = env.API_SALES_CHAT_ID;
   if (!configured) return undefined;
   if (typeof configured === 'number') return configured;
+  if (/^https?:\/\/t\.me\/(?:\+|joinchat\/)/i.test(configured)) {
+    logger.warn(
+      { chat: configured },
+      'API sales feed requires a chat ID, not a private invite link; using public sales fallback',
+    );
+    return undefined;
+  }
   try {
     const chat = await api.getChat(configured);
     return chat.id;
@@ -175,7 +182,10 @@ async function sendSalesHtml(api: Api, html: string, button?: FeedButton): Promi
 
 async function sendApiSalesHtml(api: Api, html: string): Promise<void> {
   const chat = await resolveApiSalesChat(api);
-  if (!chat) return;
+  if (!chat) {
+    await sendSalesHtml(api, html);
+    return;
+  }
   await sendRenderedHtmlTo(api, chat, 'API sales group', html);
 }
 
