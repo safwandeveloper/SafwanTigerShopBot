@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const publicDir = join(root, 'public');
-const port = Number(process.env.WEB_ADMIN_PORT ?? 8787);
+const port = Number(process.env.PORT ?? process.env.WEB_ADMIN_PORT ?? 8787);
 const username = process.env.WEB_ADMIN_USERNAME ?? '';
 const password = process.env.WEB_ADMIN_PASSWORD ?? '';
 const supabaseUrl = process.env.SUPABASE_URL ?? '';
