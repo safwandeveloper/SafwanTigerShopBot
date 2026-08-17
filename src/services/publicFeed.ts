@@ -191,8 +191,9 @@ async function sendApiSalesHtml(api: Api, html: string): Promise<void> {
 
 function productIconHtml(product: { emoji?: string | null; emoji_id?: string | null } | null): string {
   const glyph = product?.emoji?.trim() ?? '';
-  if (product?.emoji_id) {
-    return `<tg-emoji emoji-id="${escapeAttr(product.emoji_id)}">${escapeAttr(glyph || PRODUCT_FALLBACK)}</tg-emoji>`;
+  const emojiId = product?.emoji_id?.trim() ?? '';
+  if (emojiId) {
+    return `<tg-emoji emoji-id="${escapeAttr(emojiId)}">${escapeAttr(glyph || PRODUCT_FALLBACK)}</tg-emoji>`;
   }
   if (glyph && glyph !== CART_FALLBACK) return escapeAttr(glyph);
   return PRODUCT_FALLBACK;
@@ -296,9 +297,9 @@ export async function notifySalesPurchase(api: Api, args: {
   const html = renderHtmlTemplate(args.isApiSale
     ? [
         `{broadcast_shop_now} <b>Someone just bought ${args.qty}x</b>`,
-        `${productIcon}<b>${escapeAttr(args.productName)}!</b>`,
+        `${productIcon} <b>${escapeAttr(args.productName)}!</b>`,
         `<tg-emoji emoji-id="${API_WALLET_EMOJI_ID}">👛</tg-emoji> <b>via Reseller API</b>`,
-      ].join(' ')
+      ].join('\n')
     : `{broadcast_shop_now} Someone just bought <b>${args.qty}x</b> ${productIcon} <b>${escapeAttr(args.productName)}!</b>`);
   if (args.isApiSale) {
     await sendApiSalesHtml(api, html);
