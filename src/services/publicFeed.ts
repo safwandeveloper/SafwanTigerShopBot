@@ -296,8 +296,8 @@ export async function notifySalesPurchase(api: Api, args: {
   const productIcon = productIconHtml(product);
   const html = renderHtmlTemplate(args.isApiSale
     ? [
-        `{broadcast_shop_now} <b>Someone just bought ${args.qty}x</b> ${productIcon}`,
-        `<b>${escapeAttr(args.productName)}!</b> <tg-emoji emoji-id="${API_WALLET_EMOJI_ID}">👛</tg-emoji> <b>via Reseller API</b>`,
+        `🛍 <b>Someone just bought ${args.qty}x</b> ${productIcon}`,
+        `<b>${escapeAttr(args.productName)}!</b><tg-emoji emoji-id="${API_WALLET_EMOJI_ID}">👛</tg-emoji> <b>via Reseller API</b>`,
       ].join('\n')
     : `{broadcast_shop_now} Someone just bought <b>${args.qty}x</b> ${productIcon} <b>${escapeAttr(args.productName)}!</b>`);
   if (args.isApiSale) {
