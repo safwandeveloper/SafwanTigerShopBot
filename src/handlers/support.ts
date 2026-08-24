@@ -637,6 +637,7 @@ export function registerSupport(bot: Composer<AppCtx>): void {
 
   // ------------------------------ Live Support ----------------------
   bot.callbackQuery('support:live:start', async (ctx) => {
+    let stale: LiveUser | null = null;
     if (liveUser !== null && liveUser.telegram_id !== ctx.user.telegram_id) {
       // Auto-takeover when the existing slot has been sitting around
       // for longer than the TTL — any session this old is almost
@@ -657,14 +658,10 @@ export function registerSupport(bot: Composer<AppCtx>): void {
           },
           'live-support: auto-clearing stale slot for new requester (TTL exceeded)',
         );
-        const stale = liveUser;
+        stale = liveUser;
         liveUser = null;
         sessionStartedAt = null;
         transcript = [];
-        await persistLiveUser();
-        await tryDeleteTopic(ctx, stale.telegram_id, stale.userTopicId);
-        await tryDeleteTopic(ctx, env.ADMIN_USER_ID, stale.adminTopicId);
-        await teardownPanel(ctx, stale.telegram_id, stale.panelMessageId);
         // fall through to start a fresh session for the new user
       } else {
         await ctx.answerCallbackQuery({
@@ -689,7 +686,7 @@ export function registerSupport(bot: Composer<AppCtx>): void {
       });
       return;
     }
-    await ctx.answerCallbackQuery();
+
     liveUser = {
       telegram_id: ctx.user.telegram_id,
       first_name: ctx.user.first_name ?? '—',
@@ -699,6 +696,14 @@ export function registerSupport(bot: Composer<AppCtx>): void {
     // end-of-session PDF only contains messages from THIS session.
     transcript = [];
     sessionStartedAt = new Date();
+    await ctx.answerCallbackQuery();
+
+    if (stale) {
+      await persistLiveUser();
+      await tryDeleteTopic(ctx, stale.telegram_id, stale.userTopicId);
+      await tryDeleteTopic(ctx, env.ADMIN_USER_ID, stale.adminTopicId);
+      await teardownPanel(ctx, stale.telegram_id, stale.panelMessageId);
+    }
 
     // Create a "Live Support" forum topic in the user's chat so they
     // get the dedicated tab at the top of the chat (matching the
