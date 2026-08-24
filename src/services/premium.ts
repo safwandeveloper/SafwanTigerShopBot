@@ -223,16 +223,8 @@ function autoScanPremiumEmojis(html: string): string {
  * `*`/`_`/`~~`.
  */
 function mdToHtml(md: string): string {
-  const escapedMarkdown: string[] = [];
-  const protectedMd = md.replace(
-    /\\([\\*_~[\]()>\u0060])/g,
-    (_match, char: string) => {
-      const index = escapedMarkdown.push(char) - 1;
-      return `\u{E000}TGMD${index}\u{E001}`;
-    },
-  );
   // 1) HTML-escape the whole input first.
-  let s = escapeHtml(protectedMd);
+  let s = escapeHtml(md);
 
   // 2) Triple-backtick code blocks (greedy across newlines).
   s = s.replace(/```([\s\S]+?)```/g, (_m, body: string) => `<pre>${body}</pre>`);
@@ -283,12 +275,6 @@ function mdToHtml(md: string): string {
       `<a href="${url.replace(/"/g, '&quot;')}">${label}</a>`,
   );
 
-  for (let i = 0; i < escapedMarkdown.length; i++) {
-    s = s.replace(
-      `\u{E000}TGMD${i}\u{E001}`,
-      escapeHtml(escapedMarkdown[i]!),
-    );
-  }
   return s;
 }
 

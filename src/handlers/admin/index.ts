@@ -8054,12 +8054,6 @@ type MarkdownEntityRange = {
   key: string;
 };
 
-function escapeTelegramMarkdownLiteral(text: string): string {
-  return text.replace(/[*_~[\]()>\u0060]/g, (char) =>
-    `\\${char}`,
-  );
-}
-
 function markdownEntitySpec(
   entity: MessageEntity,
   source: string,
@@ -8161,18 +8155,18 @@ export function telegramEntityToMarkdown(
       for (const emoji of customEmoji) {
         if (emoji.start < cursor || emoji.end > end) continue;
         if (emoji.start > cursor) {
-          out += escapeTelegramMarkdownLiteral(rawText.slice(cursor, emoji.start));
+          out += rawText.slice(cursor, emoji.start);
         }
         const glyph = rawText.slice(emoji.start, emoji.end);
         const safeGlyph = glyph.replace(/[|}\n]/g, '');
         const safeId = emoji.entity.custom_emoji_id.replace(/[|}\n]/g, '');
         out += safeGlyph && safeId
           ? `{{ce:${safeId}|${safeGlyph}}}`
-          : escapeTelegramMarkdownLiteral(glyph);
+          : glyph;
         cursor = emoji.end;
       }
       if (cursor < end) {
-        out += escapeTelegramMarkdownLiteral(rawText.slice(cursor, end));
+        out += rawText.slice(cursor, end);
       }
       return out;
     };
