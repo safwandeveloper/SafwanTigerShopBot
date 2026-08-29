@@ -49,12 +49,19 @@ async function resolveTigerStockChat(api: Api): Promise<string | number> {
   }
 }
 
-async function resolvePublicSalesChat(api: Api): Promise<string | number | undefined> {
+let resolvedSalesChatId: number | undefined;
+
+export async function resolvePublicSalesChat(api: Api): Promise<string | number | undefined> {
   const configured = publicSalesFeedChatId();
   if (!configured) return undefined;
-  if (typeof configured === 'number') return configured;
+  if (typeof configured === 'number') {
+    resolvedSalesChatId = configured;
+    return configured;
+  }
+  if (resolvedSalesChatId !== undefined) return resolvedSalesChatId;
   try {
     const chat = await api.getChat(configured);
+    resolvedSalesChatId = chat.id;
     return chat.id;
   } catch (err) {
     logger.warn({ err, chat: configured }, 'public sales feed getChat failed; using configured value');
@@ -428,6 +435,9 @@ export async function notifyStockAdded(api: Api, args: {
   });
 }
 
+const STOCK_ADDED_EMOJI_ID = '5397916757333654639';
+const CURRENT_STOCK_EMOJI_ID = '5884479287171485878';
+
 export async function notifySalesStockAdded(api: Api, args: {
   productId: number;
   productName: string;
@@ -438,20 +448,16 @@ export async function notifySalesStockAdded(api: Api, args: {
   unlimitedStock?: boolean;
 }): Promise<void> {
   const glyph = args.productEmoji?.trim() ?? '';
-  const productIcon =
-    glyph && args.productEmojiId
-      ? `<tg-emoji emoji-id="${escapeAttr(args.productEmojiId)}">${escapeAttr(glyph)}</tg-emoji> `
-      : glyph && glyph !== CART_FALLBACK
-        ? `${escapeAttr(glyph)} `
-        : '';
+  const emojiId = args.productEmojiId?.trim() ?? '';
+  const productIcon = emojiId
+    ? `<tg-emoji emoji-id="${escapeAttr(emojiId)}">${escapeAttr(glyph || PRODUCT_FALLBACK)}</tg-emoji> `
+    : glyph && glyph !== CART_FALLBACK
+      ? `${escapeAttr(glyph)} `
+      : '';
   const html = renderHtmlTemplate([
     `${productIcon}<b>${escapeAttr(args.productName)}</b>`,
-    `📈 <b>Added:</b> ${args.qtyAdded}`,
-    `👛 <b>Current Stock:</b> ${args.unlimitedStock ? 'Unlimited' : args.available}`,
+    `<tg-emoji emoji-id="${STOCK_ADDED_EMOJI_ID}">📈</tg-emoji> <b>Added:</b> ${args.qtyAdded}`,
+    `<tg-emoji emoji-id="${CURRENT_STOCK_EMOJI_ID}">👛</tg-emoji> <b>Current Stock:</b> ${args.unlimitedStock ? 'Unlimited' : args.available}`,
   ].join('\n'));
-  await sendSalesHtml(api, html, {
-    text: `Buy ${args.productName}`.replace(/\s+/g, ' ').trim().slice(0, 64),
-    iconKey: 'feed_buy_button',
-    url: publicFeedBotUrl(`prod_${args.productId}`),
-  });
+  await sendSalesHtml(api, html);
 }

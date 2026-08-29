@@ -5,6 +5,7 @@ import { listActiveProducts } from '../db/queries.js';
 import {
   publicFeedBotUrl,
   publicSalesFeedChatId,
+  resolvePublicSalesChat,
 } from '../services/publicFeed.js';
 import { escapeAttr, stripCustomEmojiTags } from '../services/premium.js';
 import { logger } from '../logger.js';
@@ -21,7 +22,7 @@ function normalized(text: string): string {
     .trim();
 }
 
-function isConfiguredFeedChat(ctx: AppCtx): boolean {
+async function isConfiguredFeedChat(ctx: AppCtx): Promise<boolean> {
   const chat = ctx.chat;
   if (!chat) return false;
   const configured = publicSalesFeedChatId();
@@ -29,7 +30,17 @@ function isConfiguredFeedChat(ctx: AppCtx): boolean {
   const username = 'username' in chat ? chat.username?.toLowerCase() : undefined;
   if (typeof configured === 'number') return chat.id === configured;
   const wanted = String(configured).replace(/^@/, '').toLowerCase();
-  return username === wanted;
+  if (username === wanted) return true;
+  // The configured value may be a username/link whose chat has since
+  // changed, or a form Telegram only resolves via getChat. Compare
+  // against the resolved numeric id (cached inside publicFeed) so the
+  // group matcher agrees with wherever announcements are delivered.
+  try {
+    const resolved = await resolvePublicSalesChat(ctx.api);
+    return typeof resolved === 'number' && chat.id === resolved;
+  } catch {
+    return false;
+  }
 }
 
 function productIconHtml(product: { emoji?: string | null; emoji_id?: string | null }): string {
@@ -46,7 +57,7 @@ export function registerPublicGroup(bot: Bot<AppCtx>): void {
   bot.on('message:text', async (ctx, next) => {
     const chatType = ctx.chat?.type;
     if (chatType !== 'group' && chatType !== 'supergroup') return next();
-    if (!isConfiguredFeedChat(ctx)) return next();
+    if (!(await isConfiguredFeedChat(ctx))) return next();
 
     const text = ctx.message.text.trim();
     if (text.startsWith('/')) return next();

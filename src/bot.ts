@@ -28,13 +28,16 @@ export async function buildBot(): Promise<Bot<AppCtx>> {
   bot.use(forceJoinMiddleware);
 
   registerStart(bot);
+  // Group-scoped product-name matcher runs before the private-chat
+  // flows so no earlier message:text handler can swallow feed-group
+  // messages; it always defers (next()) outside the configured group.
+  registerPublicGroup(bot);
   registerShop(bot);
   registerProfile(bot);
   registerSupport(bot);
   registerTopup(bot);
   registerDirectPay(bot);
   registerResellerApi(bot);
-  registerPublicGroup(bot);
   bot.use(adminBot);
 
   bot.catch(async (err) => {
