@@ -437,11 +437,13 @@ export async function notifySalesStockAdded(api: Api, args: {
   available: number;
   unlimitedStock?: boolean;
 }): Promise<void> {
-  const icon = productIconHtml({
-    emoji: args.productEmoji,
-    emoji_id: args.productEmojiId,
-  });
-  const productIcon = icon === PRODUCT_FALLBACK ? '' : `${icon} `;
+  const glyph = args.productEmoji?.trim() ?? '';
+  const productIcon =
+    glyph && args.productEmojiId
+      ? `<tg-emoji emoji-id="${escapeAttr(args.productEmojiId)}">${escapeAttr(glyph)}</tg-emoji> `
+      : glyph && glyph !== CART_FALLBACK
+        ? `${escapeAttr(glyph)} `
+        : '';
   const html = renderHtmlTemplate([
     `${productIcon}<b>${escapeAttr(args.productName)}</b>`,
     `📈 <b>Added:</b> ${args.qtyAdded}`,
