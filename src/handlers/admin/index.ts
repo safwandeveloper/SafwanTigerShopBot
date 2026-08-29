@@ -232,6 +232,15 @@ async function notifyPublicStockAdded(
     available: product.stock,
     price: product.price,
   });
+  await publicFeed.notifySalesStockAdded(ctx.api, {
+    productId,
+    productName: product.name,
+    productEmoji: product.emoji,
+    productEmojiId: product.emoji_id,
+    qtyAdded,
+    available: product.stock,
+    unlimitedStock: product.unlimited_stock,
+  });
 }
 
 /**

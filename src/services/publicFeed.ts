@@ -427,3 +427,31 @@ export async function notifyStockAdded(api: Api, args: {
     url: publicFeedBotUrl(`prod_${args.productId}`),
   });
 }
+
+export async function notifySalesStockAdded(api: Api, args: {
+  productId: number;
+  productName: string;
+  productEmoji?: string | null;
+  productEmojiId?: string | null;
+  qtyAdded: number;
+  available: number;
+  unlimitedStock?: boolean;
+}): Promise<void> {
+  const glyph = args.productEmoji?.trim() ?? '';
+  const productIcon =
+    glyph && args.productEmojiId
+      ? `<tg-emoji emoji-id="${escapeAttr(args.productEmojiId)}">${escapeAttr(glyph)}</tg-emoji> `
+      : glyph && glyph !== CART_FALLBACK
+        ? `${escapeAttr(glyph)} `
+        : '';
+  const html = renderHtmlTemplate([
+    `${productIcon}<b>${escapeAttr(args.productName)}</b>`,
+    `📈 <b>Added:</b> ${args.qtyAdded}`,
+    `👛 <b>Current Stock:</b> ${args.unlimitedStock ? 'Unlimited' : args.available}`,
+  ].join('\n'));
+  await sendSalesHtml(api, html, {
+    text: `Buy ${args.productName}`.replace(/\s+/g, ' ').trim().slice(0, 64),
+    iconKey: 'feed_buy_button',
+    url: publicFeedBotUrl(`prod_${args.productId}`),
+  });
+}
