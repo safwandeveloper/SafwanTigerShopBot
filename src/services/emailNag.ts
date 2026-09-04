@@ -17,6 +17,7 @@
  * input).
  */
 import type { AppCtx } from '../middleware/user.js';
+import { GrammyError } from 'grammy';
 import { markEmailNagSent } from '../db/queries.js';
 import { renderMdHtml } from './premium.js';
 import { logger } from '../logger.js';
@@ -45,6 +46,10 @@ export async function maybeSendEmailNag(ctx: AppCtx): Promise<void> {
     await markEmailNagSent(ctx.user.telegram_id);
     ctx.user.last_email_nag_at = new Date(now).toISOString();
   } catch (err) {
+    if (err instanceof GrammyError && err.error_code === 403) {
+      logger.debug({ telegram_id: ctx.user.telegram_id }, 'email nag skipped for blocked user');
+      return;
+    }
     // Telegram blocks (e.g. user blocked the bot) and DB errors
     // should never break the parent handler — just log and move on.
     logger.warn({ err, telegram_id: ctx.user.telegram_id }, 'email nag failed');

@@ -5959,9 +5959,7 @@ adminBot.callbackQuery('adm:ann:send', async (ctx) => {
         fail++;
         logger.warn({ err, user: r.telegram_id }, 'announce send failed');
       }
-      if ((ok + fail) % 25 === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 750));
-      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
     if (statusChatId && statusMessageId) {
       await api.editMessageText(
