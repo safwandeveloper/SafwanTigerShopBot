@@ -66,11 +66,12 @@ async function main() {
     const me = await bot.api.getMe();
     logger.info({ username: me.username }, 'Bot is online');
     const runner = run(bot);
-    const stop = () => {
-      if (runner.isRunning()) void runner.stop();
+    const stop = async () => {
+      if (runner.isRunning()) await runner.stop();
+      process.exit(0);
     };
-    process.once('SIGINT', stop);
-    process.once('SIGTERM', stop);
+    process.once('SIGINT', () => void stop());
+    process.once('SIGTERM', () => void stop());
     await runner.task();
   }
 }
