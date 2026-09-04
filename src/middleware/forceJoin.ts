@@ -1,4 +1,4 @@
-import { InlineKeyboard, type MiddlewareFn } from 'grammy';
+import { GrammyError, InlineKeyboard, type MiddlewareFn } from 'grammy';
 import type { AppCtx } from './user.js';
 import { logger } from '../logger.js';
 import {
@@ -57,7 +57,15 @@ async function showForceJoinPrompt(ctx: AppCtx, channelUrl: string): Promise<voi
     '',
     `Or tap <b>"Skip <tg-emoji emoji-id="${SKIP_EMOJI_ID}">🔕</tg-emoji>"</b> to continue without joining.`,
   ].join('\n');
-  await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+  try {
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+  } catch (err) {
+    if (err instanceof GrammyError && err.error_code === 403) {
+      logger.debug({ telegram_id: ctx.from?.id }, 'force-join prompt skipped for blocked user');
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function checkForceJoinStatus(ctx: AppCtx): Promise<ForceJoinStatus> {
@@ -104,5 +112,13 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
       show_alert: true,
     });
   }
-  await sendForceJoinPrompt(ctx);
+  try {
+    await sendForceJoinPrompt(ctx);
+  } catch (err) {
+    if (err instanceof GrammyError && err.error_code === 403) {
+      logger.debug({ telegram_id: ctx.from.id }, 'force-join prompt skipped for blocked user');
+      return;
+    }
+    throw err;
+  }
 };

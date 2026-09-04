@@ -28,6 +28,28 @@ type AttemptFailure = {
   reason: string;
 };
 
+const PROXY_COOLDOWN_MS = 10 * 60_000;
+const proxyCooldownUntil = new Map<string, number>();
+
+function isProxyInCooldown(label: string): boolean {
+  const until = proxyCooldownUntil.get(label);
+  if (until === undefined) return false;
+  if (until > Date.now()) return true;
+  proxyCooldownUntil.delete(label);
+  return false;
+}
+
+function markProxyCooldown(label: string): void {
+  proxyCooldownUntil.set(label, Date.now() + PROXY_COOLDOWN_MS);
+}
+
+function isDnsOrConnectionFailure(err: unknown): boolean {
+  if (!(err instanceof Error)) return /ENOTFOUND|ECONNREFUSED/.test(String(err));
+  const cause = (err as Error & { cause?: unknown }).cause;
+  const causeMessage = cause instanceof Error ? cause.message : String(cause ?? '');
+  return /ENOTFOUND|ECONNREFUSED/.test(`${err.message} ${causeMessage}`);
+}
+
 export type BybitInternalDepositRecord = {
   id?: string;
   coin?: string;
@@ -203,6 +225,13 @@ async function bybitGet<T>(
   for (const proxy of proxyRoutes) {
     for (const baseUrl of baseUrls) {
       const route = routeLabel(baseUrl, proxy);
+      if (proxy.dispatcher && isProxyInCooldown(proxy.label)) {
+        failures.push({
+          route,
+          reason: 'proxy in cooldown after DNS/connection failure',
+        });
+        continue;
+      }
       if (proxy.initError) {
         failures.push({ route, reason: `proxy misconfigured: ${proxy.initError}` });
         continue;
@@ -220,16 +249,31 @@ async function bybitGet<T>(
       };
       const url = `${baseUrl}${path}${query ? `?${query}` : ''}`;
       let res: Response;
+      let timedOut = false;
+      const ctl = new AbortController();
+      const timer = setTimeout(() => {
+        timedOut = true;
+        ctl.abort();
+      }, 5_000);
       try {
         res = await fetch(url, {
           headers,
           ...(proxy.dispatcher ? { dispatcher: proxy.dispatcher } : {}),
+          signal: ctl.signal,
         });
       } catch (err) {
-        const reason = `fetch failed: ${(err as Error)?.message ?? String(err)}`;
+        const message = err instanceof Error ? err.message : String(err);
+        const reason = timedOut
+          ? 'fetch failed: timeout after 5000ms'
+          : `fetch failed: ${message}`;
+        if (proxy.dispatcher && isDnsOrConnectionFailure(err)) {
+          markProxyCooldown(proxy.label);
+        }
         logger.warn({ err, route }, 'bybit: fetch threw, trying next route');
         failures.push({ route, reason });
         continue;
+      } finally {
+        clearTimeout(timer);
       }
 
       const text = await res.text();
