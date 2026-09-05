@@ -187,6 +187,7 @@ import {
   supplierSellPrice,
   syncSupplierProductLink,
   testSupplierConnection,
+  tunVnMmoSupplierConfig,
   vexResellerSupplierConfig,
   type SupplierCatalogProduct,
 } from '../../services/supplierApi.js';
@@ -1273,6 +1274,9 @@ function supplierListKeyboard(
   kb.text('Add InsightX Store', 'adm:api:supplier:add:insightx');
   apiPremiumButton(kb, 'api_key', 'primary');
   kb.row();
+  kb.text('Add TunVN MMO', 'adm:api:supplier:add:tunvn');
+  apiPremiumButton(kb, 'api_key', 'primary');
+  kb.row();
   kb.text('Advanced JSON', 'adm:api:supplier:add');
   apiPremiumButton(kb, 'orders_note', 'primary');
   kb.text('Map Product', 'adm:api:supplier:map');
@@ -1718,6 +1722,32 @@ adminBot.callbackQuery('adm:api:supplier:add:insightx', async (ctx) => {
       '',
       'Example:',
       '`isk_live_xxxxxxxxxxxxxxxxxxxxxxxx`',
+      '',
+      'After saving, open *Browse Products* and import by button.',
+      '',
+      'Send `/cancel` to abort.',
+    ].join('\n'),
+    {
+      parse_mode: 'Markdown',
+      reply_markup: backRow(new InlineKeyboard()),
+      link_preview_options: { is_disabled: true },
+    },
+  );
+});
+
+adminBot.callbackQuery('adm:api:supplier:add:tunvn', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = { type: 'supplier_tunvn_mmo_add', step: 'key', data: {} };
+  await ctx.editMessageText(
+    [
+      '🔑 *Add TunVN MMO Supplier*',
+      '',
+      'This preset uses the TunVN MMO Shop Bot API:',
+      'GET `/api/products`',
+      'GET `/api/balance`',
+      'POST `/api/buy` using the supplier USDT wallet',
+      '',
+      'Auth: `X-API-Key: YOUR_API_KEY`',
       '',
       'After saving, open *Browse Products* and import by button.',
       '',
@@ -8502,6 +8532,33 @@ adminBot.on('message:text', async (ctx, next) => {
       return;
     }
 
+    if (flow.type === 'supplier_tunvn_mmo_add') {
+      const key = ctx.message.text.trim();
+      if (key.length < 12) {
+        await ctx.reply('❌ Send the full TunVN MMO API key, or `/cancel`.', {
+          parse_mode: 'Markdown',
+        });
+        return;
+      }
+      const source = await createSupplierApiSource(tunVnMmoSupplierConfig(key));
+      ctx.session.adminFlow = undefined;
+      let testLine = 'Saved. Tap Test Connection if you want to retry the live check.';
+      try {
+        const test = await testSupplierConnection(source);
+        testLine = test.ok
+          ? `Live test OK: ${test.balance === null ? 'balance unknown' : `balance ${apiMoney(test.balance)}`} · ${test.productsSeen} products`
+          : `Saved, but live test needs attention: ${test.error ?? 'unknown error'}`;
+      } catch (err) {
+        testLine = `Saved, but live test failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      await ctx.reply(
+        `✅ TunVN MMO supplier saved: *${escapeMd(source.name)}* (#${source.id})\n\n${escapeMd(testLine)}\n\nTap *Browse Products* to import by button.`,
+        { parse_mode: 'Markdown' },
+      );
+      await showSupplierDetail(ctx, source.id);
+      return;
+    }
+
     if (flow.type === 'supplier_vex_add') {
       const rawKey = ctx.message.text.trim();
       const key =
@@ -10504,6 +10561,7 @@ adminBot.on('message:text', async (ctx, next) => {
       flow.type === 'supplier_api_add' ||
       flow.type === 'supplier_canboso_add' ||
       flow.type === 'supplier_insightx_add' ||
+      flow.type === 'supplier_tunvn_mmo_add' ||
       flow.type === 'supplier_reseller_add' ||
       flow.type === 'supplier_product_link_add'
     ) {

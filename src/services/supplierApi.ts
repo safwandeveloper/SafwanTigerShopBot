@@ -170,6 +170,40 @@ export function insightxSupplierConfig(apiKey: string): SupplierSourceConfig {
   };
 }
 
+export function tunVnMmoSupplierConfig(apiKey: string): SupplierSourceConfig {
+  return {
+    name: 'TunVN MMO',
+    base_url: 'https://tunvnmmo.duckdns.org',
+    api_key: apiKey.trim(),
+    auth_mode: 'x-api-key',
+    key_header: 'X-API-Key',
+    products_path: '/api/products',
+    balance_path: '/api/balance',
+    order_path: '/api/buy',
+    order_method: 'POST',
+    products_json_path: 'products',
+    balance_json_path: 'balance_usdt',
+    product_id_json_path: 'id',
+    product_name_json_path: 'name',
+    product_price_json_path: 'price_usdt',
+    product_stock_json_path: 'stock',
+    order_items_json_path: 'items',
+    order_status_json_path: 'success',
+    order_request_template: {
+      product_id: '{{supplier_product_id}}',
+      quantity: '{{qty}}',
+      currency: 'usdt',
+    },
+    markup_percent: 25,
+    fixed_markup: 0,
+    low_balance_threshold: 5,
+    auto_import_new_products: false,
+    auto_import_active: false,
+    import_category_name: 'TunVN MMO Products',
+    notes: 'One-click connector for the TunVN MMO Shop Bot API.',
+  };
+}
+
 export function supabaseResellerSupplierConfig(apiKey: string): SupplierSourceConfig {
   return {
     name: 'Safwan Reseller API',
