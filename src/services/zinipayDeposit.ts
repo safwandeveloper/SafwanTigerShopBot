@@ -18,8 +18,9 @@ export async function processZiniPayPaidInvoice(
   const txHash = `zinipay:${invoiceId}`;
   const deposit = await findDepositByTxHash(txHash);
   if (!deposit || deposit.id !== depositId) return false;
-  if (Math.abs(Number(invoice.amount) - Number(deposit.amount)) > 0.000001) {
-    logger.warn({ depositId, invoiceId, expected: deposit.amount, actual: invoice.amount }, 'ZiniPay invoice amount mismatch');
+  const expectedInvoiceAmount = Number(deposit.expected_amount ?? deposit.amount);
+  if (Math.abs(Number(invoice.amount) - expectedInvoiceAmount) > 0.000001) {
+    logger.warn({ depositId, invoiceId, expected: expectedInvoiceAmount, actual: invoice.amount }, 'ZiniPay invoice amount mismatch');
     return false;
   }
 

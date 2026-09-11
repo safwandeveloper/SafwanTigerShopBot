@@ -297,6 +297,7 @@ const schema = z.object({
   ZINIPAY_API_BASE_URL: z.string().url().default('https://api.zinipay.com'),
   ZINIPAY_REDIRECT_URL: z.string().url().optional().or(z.literal('')),
   ZINIPAY_CANCEL_URL: z.string().url().optional().or(z.literal('')),
+  ZINIPAY_BDT_PER_USDT: z.coerce.number().positive().default(130),
 });
 
 // Provide a stable alias `BOT_TOKEN` on the parsed env for consumers.

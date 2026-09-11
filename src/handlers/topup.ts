@@ -1725,11 +1725,13 @@ async function handleZiniPayUsdAmount(
     return;
   }
   let dep;
+  const invoiceAmountBdt = Math.round(amount * env.ZINIPAY_BDT_PER_USDT);
   try {
     dep = await createDeposit({
       user_id: from.id,
       method: flow.data.method_name,
       amount,
+      expected_amount: invoiceAmountBdt,
       note: 'ZiniPay bKash invoice awaiting payment',
     });
   } catch (err) {
@@ -1747,9 +1749,14 @@ async function handleZiniPayUsdAmount(
   }
   const webhookUrl = `${env.PUBLIC_BASE_URL.replace(/\/+$/, '')}/zinipay/webhook`;
   const invoiceResult = await createZiniPayInvoice({
-    amount,
+    amount: invoiceAmountBdt,
     customerName: [from.first_name, from.last_name].filter(Boolean).join(' ') || undefined,
-    metadata: { deposit_id: String(dep.id), telegram_id: String(from.id) },
+    metadata: {
+      deposit_id: String(dep.id),
+      telegram_id: String(from.id),
+      wallet_amount_usdt: String(amount),
+      invoice_amount_bdt: String(invoiceAmountBdt),
+    },
     webhookUrl,
   });
   if (!invoiceResult.ok) {
@@ -1785,7 +1792,7 @@ async function handleZiniPayUsdAmount(
   inlineBtn(keyboard, ctx.lang, 'cryptobot_check', `zinipay:check:${dep.id}`).row();
   inlineBtn(keyboard, ctx.lang, 'back', topupRootCallback(ctx));
   await ctx.reply(
-    renderMdHtml(`🇧🇩 *bKash invoice ready*\n\nAmount: *${formatUsdtAmount(amount)}*\n\nOpen the payment page, complete bKash payment, and your wallet will be credited automatically.`),
+    renderMdHtml(`🇧🇩 *bKash invoice ready*\n\nWallet credit: *${formatUsdtAmount(amount)} USDT*\nPay bKash: *${invoiceAmountBdt} BDT*\n\nOpen the payment page, complete bKash payment, and your wallet will be credited automatically.`),
     { parse_mode: 'HTML', reply_markup: keyboard },
   );
 }
