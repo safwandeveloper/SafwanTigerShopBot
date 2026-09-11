@@ -32,6 +32,10 @@ async function request<T>(
     });
     const body = (await response.json()) as T & { message?: string };
     if (!response.ok) {
+      logger.warn(
+        { status: response.status, body },
+        'ZiniPay API rejected request',
+      );
       return { ok: false, reason: body.message ?? `ZiniPay HTTP ${response.status}` };
     }
     return { ok: true, data: body };
@@ -72,6 +76,14 @@ export async function createZiniPayInvoice(args: {
       ? result.data.payment_url?.split('/').filter(Boolean).pop() ?? ''
       : String(result.data.invoice_id);
   if (!result.data.status || !invoiceId || !result.data.payment_url) {
+    logger.warn(
+      {
+        amount: args.amount,
+        validationId: args.validationId,
+        response: result.data,
+      },
+      'ZiniPay invoice response was incomplete',
+    );
     return { ok: false, reason: result.data.message ?? 'ZiniPay invoice response was incomplete' };
   }
   return {
