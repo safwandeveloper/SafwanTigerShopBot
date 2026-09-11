@@ -285,7 +285,7 @@ export function registerTopup(bot: Composer<AppCtx>): void {
     }
 
     if (m.provider === 'zinipay') {
-      const minimum = Math.max(1, Number(m.min_amount) || 0);
+      const minimum = 0.1;
       ctx.session.userFlow = {
         type: 'zinipay_topup',
         step: 'usd_amount',
@@ -298,7 +298,17 @@ export function registerTopup(bot: Composer<AppCtx>): void {
       };
       await ctx.editMessageText(
         renderMdHtml(
-          `🇧🇩 *bKash Top-Up*\n\nEnter the amount to add to your wallet.\nMinimum: *${formatUsdtAmount(minimum)}*`,
+          [
+            '🇧🇩 *bKash Top-Up*',
+            '',
+            'Dollar Rate: *1 USD = 130 BDT*',
+            'Example: *$10 = ৳1,300*',
+            '',
+            '━━━━━━━━━━━━━━━━',
+            'Enter the amount in USDT (e.g. 10).',
+            'You will receive a bKash payment link.',
+            `Minimum: *${formatUsdtAmount(minimum)}*`,
+          ].join('\n'),
         ),
         {
           parse_mode: 'HTML',
@@ -1717,12 +1727,27 @@ async function handleZiniPayUsdAmount(
 ): Promise<void> {
   const from = ctx.from;
   if (!from) return;
-  const amount = parseCryptoPayAmount(text, Math.max(1, Number(flow.data.min_amount) || 0));
+  const userMessageId = ctx.message?.message_id;
+  if (userMessageId !== undefined && ctx.chat) {
+    void ctx.api.deleteMessage(ctx.chat.id, userMessageId).catch((err) =>
+      logger.warn({ err, messageId: userMessageId }, 'ZiniPay amount message delete failed'),
+    );
+  }
+  const minimum = 0.1;
+  const amount = parseCryptoPayAmount(text, minimum);
   if (amount === null) {
-    await ctx.reply(renderMdHtml(`⚠️ Enter a valid amount. Minimum: *${formatUsdtAmount(Math.max(1, Number(flow.data.min_amount) || 0))}*`), {
+    await ctx.reply(renderMdHtml(`⚠️ Enter a valid amount. Minimum: *${formatUsdtAmount(minimum)}*`), {
       parse_mode: 'HTML',
     });
     return;
+  }
+  if (ctx.chat && flow.data.instruction_message_id) {
+    void ctx.api.deleteMessage(ctx.chat.id, flow.data.instruction_message_id).catch((err) =>
+      logger.warn(
+        { err, messageId: flow.data.instruction_message_id },
+        'ZiniPay amount prompt delete failed',
+      ),
+    );
   }
   let dep;
   const invoiceAmountBdt = Math.round(amount * env.ZINIPAY_BDT_PER_USDT);
@@ -1793,10 +1818,20 @@ async function handleZiniPayUsdAmount(
   inlineUrl(keyboard, ctx.lang, 'cryptobot_open_invoice', invoiceResult.invoice.payment_url).row();
   inlineBtn(keyboard, ctx.lang, 'cryptobot_check', `zinipay:check:${dep.id}`).row();
   inlineBtn(keyboard, ctx.lang, 'back', topupRootCallback(ctx));
-  await ctx.reply(
+  const message = await ctx.reply(
     renderMdHtml(`🇧🇩 *bKash invoice ready*\n\nWallet credit: *${formatUsdtAmount(amount)} USDT*\nPay bKash: *${invoiceAmountBdt} BDT*\n\nOpen the payment page, complete bKash payment, and your wallet will be credited automatically.`),
     { parse_mode: 'HTML', reply_markup: keyboard },
   );
+  await setCryptoPayNotificationMessage(dep.id, ctx.chat!.id, message.message_id).catch((err) =>
+    logger.warn(
+      { err, depositId: dep.id, messageId: message.message_id },
+      'ZiniPay invoice message persistence failed',
+    ),
+  );
+  const current = ctx.session.userFlow;
+  if (current?.type === 'zinipay_topup' && current.step === 'awaiting_payment') {
+    current.data.instruction_message_id = message.message_id;
+  }
 }
 
 export async function showTopupMenu(ctx: AppCtx, asEdit = false) {
