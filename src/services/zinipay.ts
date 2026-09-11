@@ -44,6 +44,7 @@ async function request<T>(
 export async function createZiniPayInvoice(args: {
   amount: number;
   customerName?: string;
+  validationId: string;
   metadata: Record<string, string>;
   webhookUrl: string;
 }): Promise<
@@ -61,6 +62,7 @@ export async function createZiniPayInvoice(args: {
       metadata: args.metadata,
       redirect_url: env.ZINIPAY_REDIRECT_URL,
       cancel_url: env.ZINIPAY_CANCEL_URL || env.ZINIPAY_REDIRECT_URL,
+      val_id: args.validationId,
       webhook_url: args.webhookUrl,
     }),
   });
