@@ -48,6 +48,7 @@ async function request<T>(
 export async function createZiniPayInvoice(args: {
   amount: number;
   customerName?: string;
+  customerEmail: string;
   validationId: string;
   metadata: Record<string, string>;
   webhookUrl: string;
@@ -61,7 +62,8 @@ export async function createZiniPayInvoice(args: {
   const result = await request<CreateResponse>('/v1/payment/create', {
     method: 'POST',
     body: JSON.stringify({
-      cus_name: args.customerName,
+      cus_name: args.customerName || 'Telegram Customer',
+      cus_email: args.customerEmail,
       amount: args.amount,
       metadata: args.metadata,
       redirect_url: env.ZINIPAY_REDIRECT_URL,
