@@ -2,9 +2,9 @@ import type { Api } from 'grammy';
 import { formatPriceWithCurrency } from '../../config/currencies.js';
 import { creditZiniPayDeposit, findDepositByTxHash, getUserByTelegramId } from '../db/queries.js';
 import { logger } from '../logger.js';
-import { t } from '../i18n/index.js';
 import { renderMdHtml } from './premium.js';
 import { fulfilOrderForDeposit } from './orderFulfill.js';
+import { notifySalesBikashDeposit } from './publicFeed.js';
 import { credit } from './wallet.js';
 import type { ZiniPayInvoice } from './zinipay.js';
 
@@ -76,9 +76,16 @@ export async function processZiniPayPaidInvoice(
   await api
     .sendMessage(
       user.telegram_id,
-      renderMdHtml(`✅ *Payment received*\n\n${t(user.language, 'topup.cryptobot.success', { amount, balance })}`),
+      renderMdHtml(
+        `{deposits_wallet} *Payment received*\n\n{paymethod_others} *bKash payment confirmed!*\n\n{gift_usdt} Credited: *${amount}*\n{prod_wallet} New balance: *${balance}*`,
+      ),
       { parse_mode: 'HTML' },
     )
     .catch((err) => logger.warn({ err, userId: user.telegram_id }, 'ZiniPay success DM failed'));
+  void notifySalesBikashDeposit(api, {
+    userId: user.telegram_id,
+    amount: result.amount,
+    method: deposit.method,
+  }).catch((err) => logger.warn({ err, depositId: deposit.id }, 'ZiniPay sales announcement failed'));
   return true;
 }
