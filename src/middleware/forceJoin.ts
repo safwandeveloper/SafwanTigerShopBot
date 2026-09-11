@@ -1,17 +1,11 @@
-import { GrammyError, InlineKeyboard, type MiddlewareFn } from 'grammy';
+import { InlineKeyboard, type MiddlewareFn } from 'grammy';
 import type { AppCtx } from './user.js';
 import { logger } from '../logger.js';
-import {
-  clearForceJoinPending,
-  getChannelUrl,
-  getForceJoinEnabled,
-} from '../services/settings.js';
-import { inlineBtn, inlineUrl } from '../keyboards/helpers.js';
+import { getChannelUrl, getForceJoinEnabled } from '../services/settings.js';
 
 const DEFAULT_FORCE_JOIN_CHANNEL = '@SafwanTigerStore';
 const BELL_EMOJI_ID = '5798670723975221399';
 const DONE_EMOJI_ID = '6170055790146098906';
-const SKIP_EMOJI_ID = '5843822645711212265';
 
 export type ForceJoinStatus = 'disabled' | 'joined' | 'not_joined' | 'unknown';
 
@@ -46,26 +40,18 @@ async function checkChannelMembership(ctx: AppCtx, channelUrl: string): Promise<
 }
 
 async function showForceJoinPrompt(ctx: AppCtx, channelUrl: string): Promise<void> {
-  const kb = new InlineKeyboard();
-  inlineUrl(kb, ctx.lang, 'force_join', forceJoinUrl(channelUrl)).row();
-  inlineBtn(kb, ctx.lang, 'force_join_done', 'forcejoin:done').row();
-  inlineBtn(kb, ctx.lang, 'force_join_skip', 'forcejoin:skip');
+  const kb = new InlineKeyboard()
+    .url('📢 Join Channel', forceJoinUrl(channelUrl))
+    .row()
+    .text('✅ Done', 'forcejoin:done')
+    .row()
+    .text('⏭ Skip', 'forcejoin:skip');
   const text = [
     `<tg-emoji emoji-id="${BELL_EMOJI_ID}">🔔</tg-emoji> <b>Please join our Channel to continue using this bot.</b>`,
     '',
     `After joining, tap <b>"Done <tg-emoji emoji-id="${DONE_EMOJI_ID}">✅</tg-emoji>"</b> below.`,
-    '',
-    `Or tap <b>"Skip <tg-emoji emoji-id="${SKIP_EMOJI_ID}">🔕</tg-emoji>"</b> to continue without joining.`,
   ].join('\n');
-  try {
-    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
-  } catch (err) {
-    if (err instanceof GrammyError && err.error_code === 403) {
-      logger.debug({ telegram_id: ctx.from?.id }, 'force-join prompt skipped for blocked user');
-      return;
-    }
-    throw err;
-  }
+  await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
 }
 
 export async function checkForceJoinStatus(ctx: AppCtx): Promise<ForceJoinStatus> {
@@ -73,11 +59,7 @@ export async function checkForceJoinStatus(ctx: AppCtx): Promise<ForceJoinStatus
   if (ctx.session.forceJoinUnlocked) return 'joined';
   const channelUrl = getChannelUrl() ?? DEFAULT_FORCE_JOIN_CHANNEL;
   const status = await checkChannelMembership(ctx, channelUrl);
-  if (status === 'joined') {
-    ctx.session.forceJoinUnlocked = true;
-    ctx.session.forceJoinRequired = false;
-    await clearForceJoinPending(ctx.user.telegram_id);
-  }
+  if (status === 'joined') ctx.session.forceJoinUnlocked = true;
   return status;
 }
 
@@ -97,10 +79,7 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   if (ctx.callbackQuery?.data === 'forcejoin:done') return next();
   if (ctx.callbackQuery?.data === 'forcejoin:skip') return next();
   if (ctx.from.id === Number(process.env.ADMIN_USER_ID || 0)) return next();
-  if (
-    !(ctx.session.forceJoinRequired ||
-      (ctx.user as typeof ctx.user & { __just_created?: boolean }).__just_created)
-  ) {
+  if (!(ctx.user as typeof ctx.user & { __just_created?: boolean }).__just_created) {
     return next();
   }
 
@@ -112,13 +91,5 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
       show_alert: true,
     });
   }
-  try {
-    await sendForceJoinPrompt(ctx);
-  } catch (err) {
-    if (err instanceof GrammyError && err.error_code === 403) {
-      logger.debug({ telegram_id: ctx.from.id }, 'force-join prompt skipped for blocked user');
-      return;
-    }
-    throw err;
-  }
+  await sendForceJoinPrompt(ctx);
 };

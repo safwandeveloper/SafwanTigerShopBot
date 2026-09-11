@@ -1,6 +1,4 @@
-import { autoRetry } from '@grammyjs/auto-retry';
-import { sequentialize } from '@grammyjs/runner';
-import { Bot, GrammyError } from 'grammy';
+import { Bot } from 'grammy';
 import { env } from './env.js';
 import { logger } from './logger.js';
 import { sessionMiddleware, type SessionCtx } from './middleware/session.js';
@@ -21,15 +19,6 @@ import { listAdminTelegramIds } from './db/queries.js';
 
 export async function buildBot(): Promise<Bot<AppCtx>> {
   const bot = new Bot<AppCtx>(env.BOT_TOKEN);
-  bot.api.config.use(autoRetry({ maxRetryAttempts: 2, maxDelaySeconds: 30 }));
-
-  bot.use(sequentialize<AppCtx>((ctx) => {
-    const chat = ctx.chat?.id;
-    const user = ctx.from?.id;
-    return [chat, user]
-      .filter((value) => value !== undefined)
-      .map(String);
-  }));
 
   // Order matters: session → user (which depends on session) → ban
   // (which depends on the loaded user row) → handlers.
@@ -39,34 +28,20 @@ export async function buildBot(): Promise<Bot<AppCtx>> {
   bot.use(forceJoinMiddleware);
 
   registerStart(bot);
-  // Group-scoped product-name matcher runs before the private-chat
-  // flows so no earlier message:text handler can swallow feed-group
-  // messages; it always defers (next()) outside the configured group.
-  registerPublicGroup(bot);
   registerShop(bot);
   registerProfile(bot);
   registerSupport(bot);
   registerTopup(bot);
   registerDirectPay(bot);
   registerResellerApi(bot);
+  registerPublicGroup(bot);
   bot.use(adminBot);
 
   bot.catch(async (err) => {
-    if (err.error instanceof GrammyError && err.error.error_code === 403) {
-      logger.warn(
-        { userId: err.ctx.from?.id },
-        'Bot blocked by user; skipping fallback',
-      );
-      return;
-    }
     // "message is not modified" fires whenever the user taps a button
     // that re-renders the exact same screen — purely cosmetic and harmless.
     const msg = (err.error as { description?: string } | undefined)?.description ?? '';
     if (msg.includes('message is not modified')) return;
-    if (msg.includes('query is too old')) {
-      logger.warn({ userId: err.ctx.from?.id }, 'Stale callback query; skipping fallback');
-      return;
-    }
     logger.error(
       {
         err: err.error,

@@ -119,10 +119,8 @@ type TranscriptEntry = {
 };
 let transcript: TranscriptEntry[] = [];
 let sessionStartedAt: Date | null = null;
-let lastActivityAt: Date | null = null;
 
 function pushTranscript(entry: TranscriptEntry): void {
-  lastActivityAt = new Date();
   // Cap so a runaway / huge conversation doesn't OOM the bot.
   if (transcript.length >= 5000) return;
   transcript.push(entry);
@@ -209,7 +207,6 @@ async function persistLiveUser(): Promise<void> {
       // before `sessionStartedAt` is set; restore treats null as
       // expired so the slot is dropped on next boot.
       started_at: sessionStartedAt?.toISOString() ?? null,
-      last_activity_at: lastActivityAt?.toISOString() ?? null,
     });
   } catch (err) {
     logger.warn({ err }, 'live-support: failed to persist session');
@@ -223,7 +220,7 @@ async function persistLiveUser(): Promise<void> {
  * handlers would see `liveUser === null`.
  *
  * Drops the persisted row entirely when the session is older than
- * `LIVE_SUPPORT_MAX_AGE_MS` (or has no valid activity stamp because it
+ * `LIVE_SUPPORT_MAX_AGE_MS` (or has no `started_at` stamp because it
  * was persisted by an old build). This is the self-heal path that
  * fixes orphaned-slot bugs across deploys without admin intervention.
  */
@@ -239,25 +236,14 @@ export async function restoreLiveSupportSession(): Promise<void> {
       typeof startedAtRaw === 'string'
         ? new Date(startedAtRaw).getTime()
         : NaN;
-    const lastActivityRaw = obj.last_activity_at;
-    const lastActivityMs =
-      typeof lastActivityRaw === 'string'
-        ? new Date(lastActivityRaw).getTime()
-        : NaN;
-    const activityStamps = [startedAtMs, lastActivityMs].filter(Number.isFinite);
-    const latestActivityMs = activityStamps.length
-      ? Math.max(...activityStamps)
-      : NaN;
-    const ageMs = Number.isFinite(latestActivityMs)
-      ? Date.now() - latestActivityMs
+    const ageMs = Number.isFinite(startedAtMs)
+      ? Date.now() - startedAtMs
       : Number.POSITIVE_INFINITY;
     if (ageMs > LIVE_SUPPORT_MAX_AGE_MS) {
       logger.warn(
         {
           telegramId,
           startedAt: typeof startedAtRaw === 'string' ? startedAtRaw : null,
-          lastActivityAt:
-            typeof lastActivityRaw === 'string' ? lastActivityRaw : null,
           ageMs,
         },
         'live-support: dropping stale persisted session on boot (TTL expired)',
@@ -278,19 +264,13 @@ export async function restoreLiveSupportSession(): Promise<void> {
     };
     sessionStartedAt = Number.isFinite(startedAtMs)
       ? new Date(startedAtMs)
-      : Number.isFinite(latestActivityMs)
-        ? new Date(latestActivityMs)
-        : null;
-    lastActivityAt = Number.isFinite(lastActivityMs)
-      ? new Date(lastActivityMs)
-      : sessionStartedAt;
+      : new Date();
     logger.info(
       {
         telegramId,
         userTopicId: liveUser.userTopicId,
         adminTopicId: liveUser.adminTopicId,
-        startedAt: sessionStartedAt?.toISOString() ?? null,
-        lastActivityAt: lastActivityAt?.toISOString() ?? null,
+        startedAt: sessionStartedAt.toISOString(),
       },
       'live-support: restored persisted session from DB',
     );
@@ -313,7 +293,6 @@ export async function forceClearLiveSupport(
   const target = liveUser;
   liveUser = null;
   sessionStartedAt = null;
-  lastActivityAt = null;
   transcript = [];
   await persistLiveUser();
   if (!target) return { cleared: false, userId: null };
@@ -483,7 +462,6 @@ async function endSession(
   liveUser = null;
   transcript = [];
   sessionStartedAt = null;
-  lastActivityAt = null;
   await persistLiveUser();
   if (!target) return;
   // Clear the user's session flow so subsequent messages stop being
@@ -659,7 +637,6 @@ export function registerSupport(bot: Composer<AppCtx>): void {
 
   // ------------------------------ Live Support ----------------------
   bot.callbackQuery('support:live:start', async (ctx) => {
-    let stale: LiveUser | null = null;
     if (liveUser !== null && liveUser.telegram_id !== ctx.user.telegram_id) {
       // Auto-takeover when the existing slot has been sitting around
       // for longer than the TTL — any session this old is almost
@@ -668,9 +645,8 @@ export function registerSupport(bot: Composer<AppCtx>): void {
       // Letting it block every other user forever was the root cause
       // of the "⏳ The admin is currently helping another user" popup
       // nobody could escape from.
-      const activityAt = lastActivityAt ?? sessionStartedAt;
-      const ageMs = activityAt
-        ? Date.now() - activityAt.getTime()
+      const ageMs = sessionStartedAt
+        ? Date.now() - sessionStartedAt.getTime()
         : Number.POSITIVE_INFINITY;
       if (ageMs > LIVE_SUPPORT_MAX_AGE_MS) {
         logger.warn(
@@ -681,11 +657,14 @@ export function registerSupport(bot: Composer<AppCtx>): void {
           },
           'live-support: auto-clearing stale slot for new requester (TTL exceeded)',
         );
-        stale = liveUser;
+        const stale = liveUser;
         liveUser = null;
         sessionStartedAt = null;
-        lastActivityAt = null;
         transcript = [];
+        await persistLiveUser();
+        await tryDeleteTopic(ctx, stale.telegram_id, stale.userTopicId);
+        await tryDeleteTopic(ctx, env.ADMIN_USER_ID, stale.adminTopicId);
+        await teardownPanel(ctx, stale.telegram_id, stale.panelMessageId);
         // fall through to start a fresh session for the new user
       } else {
         await ctx.answerCallbackQuery({
@@ -710,7 +689,7 @@ export function registerSupport(bot: Composer<AppCtx>): void {
       });
       return;
     }
-
+    await ctx.answerCallbackQuery();
     liveUser = {
       telegram_id: ctx.user.telegram_id,
       first_name: ctx.user.first_name ?? '—',
@@ -720,36 +699,6 @@ export function registerSupport(bot: Composer<AppCtx>): void {
     // end-of-session PDF only contains messages from THIS session.
     transcript = [];
     sessionStartedAt = new Date();
-    lastActivityAt = sessionStartedAt;
-    await ctx.answerCallbackQuery();
-
-    if (stale) {
-      await persistLiveUser();
-      try {
-        await ctx.api.sendMessage(
-          stale.telegram_id,
-          renderMdHtml(ctx.t('support.live.user_ended')),
-          { parse_mode: 'HTML' },
-        );
-      } catch (err) {
-        logger.warn(
-          { err, target: stale.telegram_id },
-          'live-support: failed to notify stale user of takeover',
-        );
-      }
-      try {
-        await ctx.api.sendMessage(
-          env.ADMIN_USER_ID,
-          renderMdHtml(ctx.t('support.live.admin_ended')),
-          { parse_mode: 'HTML' },
-        );
-      } catch (err) {
-        logger.warn({ err }, 'live-support: failed to notify admin of takeover');
-      }
-      await tryDeleteTopic(ctx, stale.telegram_id, stale.userTopicId);
-      await tryDeleteTopic(ctx, env.ADMIN_USER_ID, stale.adminTopicId);
-      await teardownPanel(ctx, stale.telegram_id, stale.panelMessageId);
-    }
 
     // Create a "Live Support" forum topic in the user's chat so they
     // get the dedicated tab at the top of the chat (matching the
@@ -877,7 +826,6 @@ export function registerSupport(bot: Composer<AppCtx>): void {
       const aborted = liveUser;
       liveUser = null;
       sessionStartedAt = null;
-      lastActivityAt = null;
       transcript = [];
       await persistLiveUser();
       if (aborted) {

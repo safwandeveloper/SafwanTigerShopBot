@@ -187,7 +187,6 @@ import {
   supplierSellPrice,
   syncSupplierProductLink,
   testSupplierConnection,
-  tunVnMmoSupplierConfig,
   vexResellerSupplierConfig,
   type SupplierCatalogProduct,
 } from '../../services/supplierApi.js';
@@ -232,15 +231,6 @@ async function notifyPublicStockAdded(
     qtyAdded,
     available: product.stock,
     price: product.price,
-  });
-  await publicFeed.notifySalesStockAdded(ctx.api, {
-    productId,
-    productName: product.name,
-    productEmoji: product.emoji,
-    productEmojiId: product.emoji_id,
-    qtyAdded,
-    available: product.stock,
-    unlimitedStock: product.unlimited_stock,
   });
 }
 
@@ -1274,9 +1264,6 @@ function supplierListKeyboard(
   kb.text('Add InsightX Store', 'adm:api:supplier:add:insightx');
   apiPremiumButton(kb, 'api_key', 'primary');
   kb.row();
-  kb.text('Add TunVN MMO', 'adm:api:supplier:add:tunvn');
-  apiPremiumButton(kb, 'api_key', 'primary');
-  kb.row();
   kb.text('Advanced JSON', 'adm:api:supplier:add');
   apiPremiumButton(kb, 'orders_note', 'primary');
   kb.text('Map Product', 'adm:api:supplier:map');
@@ -1722,32 +1709,6 @@ adminBot.callbackQuery('adm:api:supplier:add:insightx', async (ctx) => {
       '',
       'Example:',
       '`isk_live_xxxxxxxxxxxxxxxxxxxxxxxx`',
-      '',
-      'After saving, open *Browse Products* and import by button.',
-      '',
-      'Send `/cancel` to abort.',
-    ].join('\n'),
-    {
-      parse_mode: 'Markdown',
-      reply_markup: backRow(new InlineKeyboard()),
-      link_preview_options: { is_disabled: true },
-    },
-  );
-});
-
-adminBot.callbackQuery('adm:api:supplier:add:tunvn', async (ctx) => {
-  await ctx.answerCallbackQuery();
-  ctx.session.adminFlow = { type: 'supplier_tunvn_mmo_add', step: 'key', data: {} };
-  await ctx.editMessageText(
-    [
-      '🔑 *Add TunVN MMO Supplier*',
-      '',
-      'This preset uses the TunVN MMO Shop Bot API:',
-      'GET `/api/products`',
-      'GET `/api/balance`',
-      'POST `/api/buy` using the supplier USDT wallet',
-      '',
-      'Auth: `X-API-Key: YOUR_API_KEY`',
       '',
       'After saving, open *Browse Products* and import by button.',
       '',
@@ -6014,7 +5975,9 @@ adminBot.callbackQuery('adm:ann:send', async (ctx) => {
         fail++;
         logger.warn({ err, user: r.telegram_id }, 'announce send failed');
       }
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      if ((ok + fail) % 25 === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 750));
+      }
     }
     if (statusChatId && statusMessageId) {
       await api.editMessageText(
@@ -8109,202 +8072,6 @@ function captureTelegramRichText(
   }
 }
 
-type MarkdownEntityRange = {
-  entity: MessageEntity;
-  start: number;
-  end: number;
-  key: string;
-};
-
-function markdownEntitySpec(
-  entity: MessageEntity,
-  source: string,
-): { open: string; close: string; priority: number } | null {
-  switch (entity.type) {
-    case 'bold':
-      return { open: '*', close: '*', priority: 20 };
-    case 'italic':
-      return { open: '_', close: '_', priority: 20 };
-    case 'strikethrough':
-      return { open: '~~', close: '~~', priority: 20 };
-    case 'code':
-      return { open: '\u0060', close: '\u0060', priority: 30 };
-    case 'pre':
-      return { open: '\u0060\u0060\u0060\n', close: '\n\u0060\u0060\u0060', priority: 10 };
-    case 'text_link': {
-      const url = entity.url;
-      if (!url || !/^(?:https?:\/\/|tg:\/\/)[^\s)]+$/.test(url)) return null;
-      return { open: '[', close: `](${url})`, priority: 15 };
-    }
-    case 'url': {
-      const url = source.slice(entity.offset, entity.offset + entity.length);
-      if (!/^(?:https?:\/\/|tg:\/\/)[^\s)]+$/.test(url)) return null;
-      return { open: '[', close: `](${url})`, priority: 15 };
-    }
-    case 'blockquote':
-    case 'expandable_blockquote':
-      return { open: '> ', close: '', priority: 0 };
-    default:
-      return null;
-  }
-}
-
-export function telegramEntityToMarkdown(
-  rawText: string,
-  entities: ReadonlyArray<MessageEntity> | undefined | null,
-  markerText: string,
-): string {
-  const entityList = entities ?? [];
-  const hasMarkdownEntities = entityList.some((entity) =>
-    markdownEntitySpec(entity, rawText),
-  );
-  if (!hasMarkdownEntities) return markerText;
-
-  try {
-    const ranges: MarkdownEntityRange[] = [];
-    const customEmoji = entityList
-      .filter(
-        (entity): entity is MessageEntity & {
-          type: 'custom_emoji';
-          custom_emoji_id: string;
-        } =>
-          entity.type === 'custom_emoji' &&
-          typeof entity.custom_emoji_id === 'string',
-      )
-      .map((entity) => {
-        const start = Math.max(0, Math.min(entity.offset, rawText.length));
-        const end = Math.max(
-          start,
-          Math.min(entity.offset + entity.length, rawText.length),
-        );
-        return { entity, start, end };
-      })
-      .filter(({ start, end }) => start < end)
-      .sort((a, b) => a.start - b.start || a.end - b.end);
-
-    for (const [index, entity] of entityList.entries()) {
-      if (entity.type === 'custom_emoji') continue;
-      const spec = markdownEntitySpec(entity, rawText);
-      if (!spec) continue;
-      const start = Math.max(0, Math.min(entity.offset, rawText.length));
-      const end = Math.max(
-        start,
-        Math.min(entity.offset + entity.length, rawText.length),
-      );
-      if (start < end) {
-        ranges.push({
-          entity,
-          start,
-          end,
-          key: `${entity.type}:${start}:${end}:${index}`,
-        });
-      }
-    }
-
-    const boundaries = new Set<number>([0, rawText.length]);
-    for (const range of ranges) {
-      boundaries.add(range.start);
-      boundaries.add(range.end);
-    }
-    for (const emoji of customEmoji) {
-      boundaries.add(emoji.start);
-      boundaries.add(emoji.end);
-    }
-    const points = [...boundaries].sort((a, b) => a - b);
-    const renderPlainSlice = (start: number, end: number): string => {
-      let cursor = start;
-      let out = '';
-      for (const emoji of customEmoji) {
-        if (emoji.start < cursor || emoji.end > end) continue;
-        if (emoji.start > cursor) {
-          out += rawText.slice(cursor, emoji.start);
-        }
-        const glyph = rawText.slice(emoji.start, emoji.end);
-        const safeGlyph = glyph.replace(/[|}\n]/g, '');
-        const safeId = emoji.entity.custom_emoji_id.replace(/[|}\n]/g, '');
-        out += safeGlyph && safeId
-          ? `{{ce:${safeId}|${safeGlyph}}}`
-          : glyph;
-        cursor = emoji.end;
-      }
-      if (cursor < end) {
-        out += rawText.slice(cursor, end);
-      }
-      return out;
-    };
-
-    let active: MarkdownEntityRange[] = [];
-    let out = '';
-    for (let i = 0; i < points.length - 1; i++) {
-      const start = points[i]!;
-      const end = points[i + 1]!;
-      const candidates = ranges
-        .filter((range) => range.start <= start && range.end >= end)
-        .sort((a, b) => {
-          const aSpec = markdownEntitySpec(a.entity, rawText)!;
-          const bSpec = markdownEntitySpec(b.entity, rawText)!;
-          return (
-            aSpec.priority - bSpec.priority ||
-            b.end - a.end ||
-            a.start - b.start ||
-            a.key.localeCompare(b.key)
-          );
-        });
-      const next: MarkdownEntityRange[] = [];
-      const seenTypes = new Set<MessageEntity['type']>();
-      for (const range of candidates) {
-        if (seenTypes.has(range.entity.type)) continue;
-        seenTypes.add(range.entity.type);
-        next.push(range);
-      }
-      let common = 0;
-      while (common < active.length && common < next.length) {
-        const oldSpec = markdownEntitySpec(active[common]!.entity, rawText)!;
-        const newSpec = markdownEntitySpec(next[common]!.entity, rawText)!;
-        if (
-          active[common]!.key !== next[common]!.key ||
-          oldSpec.open !== newSpec.open ||
-          oldSpec.close !== newSpec.close
-        ) {
-          break;
-        }
-        common++;
-      }
-      for (let j = active.length - 1; j >= common; j--) {
-        out += markdownEntitySpec(active[j]!.entity, rawText)!.close;
-      }
-      if (active.length > 0 && next.length > 0 && common === 0) {
-        out += '\u200B';
-      }
-      for (let j = common; j < next.length; j++) {
-        out += markdownEntitySpec(next[j]!.entity, rawText)!.open;
-      }
-      let piece = renderPlainSlice(start, end);
-      if (
-        next.some(
-          (range) =>
-            range.entity.type === 'blockquote' ||
-            range.entity.type === 'expandable_blockquote',
-        )
-      ) {
-        piece = piece.replace(/\n/g, '\n> ');
-      }
-      out += piece;
-      active = next;
-    }
-    for (let i = active.length - 1; i >= 0; i--) {
-      out += markdownEntitySpec(active[i]!.entity, rawText)!.close;
-    }
-    return out.trim();
-  } catch (err) {
-    logger.warn(
-      { err },
-      'admin markdown capture failed; falling back to custom emoji markers',
-    );
-    return markerText;
-  }
-}
-
 adminBot.on('message:text', async (ctx, next) => {
   const flow = ctx.session.adminFlow;
   if (!flow) return next();
@@ -8557,33 +8324,6 @@ adminBot.on('message:text', async (ctx, next) => {
       return;
     }
 
-    if (flow.type === 'supplier_tunvn_mmo_add') {
-      const key = ctx.message.text.trim();
-      if (key.length < 12) {
-        await ctx.reply('❌ Send the full TunVN MMO API key, or `/cancel`.', {
-          parse_mode: 'Markdown',
-        });
-        return;
-      }
-      const source = await createSupplierApiSource(tunVnMmoSupplierConfig(key));
-      ctx.session.adminFlow = undefined;
-      let testLine = 'Saved. Tap Test Connection if you want to retry the live check.';
-      try {
-        const test = await testSupplierConnection(source);
-        testLine = test.ok
-          ? `Live test OK: ${test.balance === null ? 'balance unknown' : `balance ${apiMoney(test.balance)}`} · ${test.productsSeen} products`
-          : `Saved, but live test needs attention: ${test.error ?? 'unknown error'}`;
-      } catch (err) {
-        testLine = `Saved, but live test failed: ${err instanceof Error ? err.message : String(err)}`;
-      }
-      await ctx.reply(
-        `✅ TunVN MMO supplier saved: *${escapeMd(source.name)}* (#${source.id})\n\n${escapeMd(testLine)}\n\nTap *Browse Products* to import by button.`,
-        { parse_mode: 'Markdown' },
-      );
-      await showSupplierDetail(ctx, source.id);
-      return;
-    }
-
     if (flow.type === 'supplier_vex_add') {
       const rawKey = ctx.message.text.trim();
       const key =
@@ -8772,14 +8512,7 @@ adminBot.on('message:text', async (ctx, next) => {
         ctx.session.adminFlow = {
           type: 'add_product',
           step: 'description',
-          data: {
-            ...flow.data,
-            warranty: telegramEntityToMarkdown(
-              ctx.message.text,
-              ctx.message.entities,
-              text,
-            ),
-          },
+          data: { ...flow.data, warranty: text },
         };
         const kb = new InlineKeyboard().text('Skip', 'adm:prod:skip:description');
         await ctx.reply('Send the *description* (or Skip).', {
@@ -8880,13 +8613,7 @@ adminBot.on('message:text', async (ctx, next) => {
       return;
     }
     if (flow.type === 'edit_product_warranty') {
-      await updateProduct(flow.data.product_id, {
-        warranty: telegramEntityToMarkdown(
-          ctx.message.text,
-          ctx.message.entities,
-          text,
-        ),
-      });
+      await updateProduct(flow.data.product_id, { warranty: text });
       ctx.session.adminFlow = undefined;
       await ctx.reply('✅ Warranty saved.');
       await showProductEditor(ctx, flow.data.product_id, flow.data.page);
@@ -10611,7 +10338,6 @@ adminBot.on('message:text', async (ctx, next) => {
       flow.type === 'supplier_api_add' ||
       flow.type === 'supplier_canboso_add' ||
       flow.type === 'supplier_insightx_add' ||
-      flow.type === 'supplier_tunvn_mmo_add' ||
       flow.type === 'supplier_reseller_add' ||
       flow.type === 'supplier_product_link_add'
     ) {

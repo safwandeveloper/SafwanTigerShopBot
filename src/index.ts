@@ -1,5 +1,4 @@
 import http from 'node:http';
-import { run } from '@grammyjs/runner';
 import { buildBot } from './bot.js';
 import { env } from './env.js';
 import { logger } from './logger.js';
@@ -64,17 +63,10 @@ async function main() {
     startHttpServer();
     await bot.api.deleteWebhook({ drop_pending_updates: true });
 
-    logger.info('Starting bot with long-polling (concurrent runner)…');
-    const me = await bot.api.getMe();
-    logger.info({ username: me.username }, 'Bot is online');
-    const runner = run(bot);
-    const stop = async () => {
-      if (runner.isRunning()) await runner.stop();
-      process.exit(0);
-    };
-    process.once('SIGINT', () => void stop());
-    process.once('SIGTERM', () => void stop());
-    await runner.task();
+    logger.info('Starting bot with long-polling…');
+    await bot.start({
+      onStart: (info) => logger.info({ username: info.username }, 'Bot is online'),
+    });
   }
 }
 
@@ -82,3 +74,6 @@ main().catch((err) => {
   logger.fatal({ err }, 'Fatal error during startup');
   process.exit(1);
 });
+
+process.once('SIGINT', () => process.exit(0));
+process.once('SIGTERM', () => process.exit(0));

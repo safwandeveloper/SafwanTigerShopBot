@@ -138,10 +138,7 @@ export async function showMainMenu(
 }
 
 async function maybeGateForceJoin(ctx: AppCtx): Promise<boolean> {
-  if (
-    !ctx.session.forceJoinRequired &&
-    !(ctx.user as typeof ctx.user & { __just_created?: boolean }).__just_created
-  ) {
+  if (!(ctx.user as typeof ctx.user & { __just_created?: boolean }).__just_created) {
     return false;
   }
   if (await isForceJoinSatisfied(ctx)) return false;
@@ -365,7 +362,6 @@ export function registerStart(bot: Composer<AppCtx>): void {
 
   bot.callbackQuery('forcejoin:skip', async (ctx) => {
     ctx.session.forceJoinUnlocked = true;
-    ctx.session.forceJoinRequired = false;
     await ctx.answerCallbackQuery({ text: 'Skipped.' });
     await showMainMenu(ctx);
   });

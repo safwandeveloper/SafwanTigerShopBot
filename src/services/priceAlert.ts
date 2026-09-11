@@ -51,7 +51,9 @@ export async function notifyApiPriceChange(
         'API price alert send failed',
       );
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    if ((delivered + failed) % 25 === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+    }
   }
   logger.info(
     { productId: product.id, oldPrice, newPrice, delivered, failed },
