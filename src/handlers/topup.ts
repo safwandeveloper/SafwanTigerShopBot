@@ -6,6 +6,7 @@ import {
   getDeposit,
   listPaymentMethods,
   setCryptoPayInvoiceId,
+  setZiniPayInvoiceId,
   setCryptoPayNotificationMessage,
   setDepositNote,
   setDepositStatus,
@@ -32,6 +33,9 @@ import { renderPaymentMethodTutorial } from '../services/payMethodTutorialView.j
 import { PE } from './paymentInstructionEmojis.js';
 import { createInvoice, getInvoices } from '../services/cryptoPay.js';
 import { processCryptoPayPaidInvoice } from '../services/cryptoPayDeposit.js';
+import { createZiniPayInvoice, verifyZiniPayInvoice } from '../services/zinipay.js';
+import { processZiniPayPaidInvoice } from '../services/zinipayDeposit.js';
+import { env } from '../env.js';
 import { reserveUniqueUsdtAmount, roundUsdtBase } from '../services/usdtQuote.js';
 
 const LTC_QUOTE_TTL_MIN = 10;
@@ -280,6 +284,30 @@ export function registerTopup(bot: Composer<AppCtx>): void {
       return;
     }
 
+    if (m.provider === 'zinipay') {
+      const minimum = Math.max(1, Number(m.min_amount) || 0);
+      ctx.session.userFlow = {
+        type: 'zinipay_topup',
+        step: 'usd_amount',
+        data: {
+          method_id: m.id,
+          method_name: m.name,
+          min_amount: Number(m.min_amount ?? 0),
+          instruction_message_id: ctx.callbackQuery?.message?.message_id,
+        },
+      };
+      await ctx.editMessageText(
+        renderMdHtml(
+          `🇧🇩 *bKash Top-Up*\n\nEnter the amount to add to your wallet.\nMinimum: *${formatUsdtAmount(minimum)}*`,
+        ),
+        {
+          parse_mode: 'HTML',
+          reply_markup: new InlineKeyboard().text(btn(ctx.lang, 'back'), topupRootCallback(ctx)),
+        },
+      );
+      return;
+    }
+
     if (m.provider === 'bybit_pay') {
       if (!m.address) {
         await ctx.editMessageText(
@@ -456,6 +484,10 @@ export function registerTopup(bot: Composer<AppCtx>): void {
       await handleCryptoBotUsdAmount(ctx, flow, text);
       return;
     }
+    if (flow.type === 'zinipay_topup' && flow.step === 'usd_amount') {
+      await handleZiniPayUsdAmount(ctx, flow, text);
+      return;
+    }
     return next();
   });
 
@@ -495,6 +527,30 @@ export function registerTopup(bot: Composer<AppCtx>): void {
       await ctx.answerCallbackQuery({
         text: ctx.t('topup.cryptobot.finalize_failed'),
       });
+    }
+  });
+
+  bot.callbackQuery(/^zinipay:check:(\d+)$/, async (ctx) => {
+    const depositId = Number(ctx.match[1]);
+    const dep = await getDeposit(depositId);
+    if (!dep || dep.status !== 'pending' || !dep.tx_hash?.startsWith('zinipay:')) {
+      await ctx.answerCallbackQuery({ text: 'This payment is no longer pending.' });
+      return;
+    }
+    const invoiceId = dep.tx_hash.slice('zinipay:'.length);
+    const result = await verifyZiniPayInvoice(invoiceId);
+    if (!result.ok) {
+      await ctx.answerCallbackQuery({ text: 'Could not verify the payment right now.' });
+      return;
+    }
+    try {
+      const credited = await processZiniPayPaidInvoice(ctx.api, dep.id, result.invoice);
+      await ctx.answerCallbackQuery({
+        text: credited ? 'Payment verified and wallet credited.' : 'Payment is still pending.',
+      });
+    } catch (err) {
+      logger.warn({ err, depositId }, 'ZiniPay check processing failed');
+      await ctx.answerCallbackQuery({ text: 'Payment verification failed.' });
     }
   });
 }
@@ -1652,6 +1708,86 @@ async function handleCryptoBotUsdAmount(
   if (current?.type === 'cryptobot_topup' && current.step === 'awaiting_payment') {
     current.data.instruction_message_id = message.message_id;
   }
+}
+
+async function handleZiniPayUsdAmount(
+  ctx: AppCtx,
+  flow: Extract<NonNullable<AppCtx['session']['userFlow']>, { type: 'zinipay_topup'; step: 'usd_amount' }>,
+  text: string,
+): Promise<void> {
+  const from = ctx.from;
+  if (!from) return;
+  const amount = parseCryptoPayAmount(text, Math.max(1, Number(flow.data.min_amount) || 0));
+  if (amount === null) {
+    await ctx.reply(renderMdHtml(`⚠️ Enter a valid amount. Minimum: *${formatUsdtAmount(Math.max(1, Number(flow.data.min_amount) || 0))}*`), {
+      parse_mode: 'HTML',
+    });
+    return;
+  }
+  let dep;
+  try {
+    dep = await createDeposit({
+      user_id: from.id,
+      method: flow.data.method_name,
+      amount,
+      note: 'ZiniPay bKash invoice awaiting payment',
+    });
+  } catch (err) {
+    logger.error({ err }, 'ZiniPay deposit insert failed');
+    await ctx.reply('⚠️ Could not start the bKash top-up. Please try again.');
+    ctx.session.userFlow = undefined;
+    return;
+  }
+
+  if (!env.PUBLIC_BASE_URL) {
+    await setDepositStatus(dep.id, 'rejected').catch(() => undefined);
+    await ctx.reply('⚠️ ZiniPay needs a public webhook URL. Please contact the administrator.');
+    ctx.session.userFlow = undefined;
+    return;
+  }
+  const webhookUrl = `${env.PUBLIC_BASE_URL.replace(/\/+$/, '')}/zinipay/webhook`;
+  const invoiceResult = await createZiniPayInvoice({
+    amount,
+    customerName: [from.first_name, from.last_name].filter(Boolean).join(' ') || undefined,
+    metadata: { deposit_id: String(dep.id), telegram_id: String(from.id) },
+    webhookUrl,
+  });
+  if (!invoiceResult.ok) {
+    await setDepositStatus(dep.id, 'rejected').catch(() => undefined);
+    logger.warn({ reason: invoiceResult.reason, depositId: dep.id }, 'ZiniPay invoice creation failed');
+    await ctx.reply('⚠️ Could not create the bKash payment invoice. Please try again later.');
+    ctx.session.userFlow = undefined;
+    return;
+  }
+  try {
+    await setZiniPayInvoiceId(dep.id, invoiceResult.invoice.invoice_id);
+  } catch (err) {
+    await setDepositStatus(dep.id, 'rejected').catch(() => undefined);
+    logger.error({ err, depositId: dep.id }, 'ZiniPay invoice persistence failed');
+    await ctx.reply('⚠️ Could not save the bKash invoice. Please try again later.');
+    ctx.session.userFlow = undefined;
+    return;
+  }
+  ctx.session.userFlow = {
+    type: 'zinipay_topup',
+    step: 'awaiting_payment',
+    data: {
+      method_id: flow.data.method_id,
+      method_name: flow.data.method_name,
+      deposit_id: dep.id,
+      invoice_id: invoiceResult.invoice.invoice_id,
+      amount,
+      invoice_url: invoiceResult.invoice.payment_url,
+    },
+  };
+  const keyboard = new InlineKeyboard();
+  inlineUrl(keyboard, ctx.lang, 'cryptobot_open_invoice', invoiceResult.invoice.payment_url).row();
+  inlineBtn(keyboard, ctx.lang, 'cryptobot_check', `zinipay:check:${dep.id}`).row();
+  inlineBtn(keyboard, ctx.lang, 'back', topupRootCallback(ctx));
+  await ctx.reply(
+    renderMdHtml(`🇧🇩 *bKash invoice ready*\n\nAmount: *${formatUsdtAmount(amount)}*\n\nOpen the payment page, complete bKash payment, and your wallet will be credited automatically.`),
+    { parse_mode: 'HTML', reply_markup: keyboard },
+  );
 }
 
 export async function showTopupMenu(ctx: AppCtx, asEdit = false) {

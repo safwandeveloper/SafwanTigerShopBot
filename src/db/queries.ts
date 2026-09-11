@@ -2810,6 +2810,18 @@ export async function setCryptoPayInvoiceId(
   if (error) throw error;
 }
 
+export async function setZiniPayInvoiceId(
+  id: number,
+  invoiceId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('deposits')
+    .update({ tx_hash: `zinipay:${invoiceId}` })
+    .eq('id', id)
+    .eq('status', 'pending');
+  if (error) throw error;
+}
+
 export type CryptoPayCreditResult = {
   credited: boolean;
   user_id: number | null;
@@ -2833,6 +2845,18 @@ export async function creditCryptoPayDeposit(
   txHash: string,
 ): Promise<CryptoPayCreditResult> {
   const { data, error } = await supabase.rpc('credit_cryptopay_deposit', {
+    p_deposit_id: depositId,
+    p_tx_hash: txHash,
+  });
+  if (error) throw error;
+  return unwrapCryptoPayCreditResult(data);
+}
+
+export async function creditZiniPayDeposit(
+  depositId: number,
+  txHash: string,
+): Promise<CryptoPayCreditResult> {
+  const { data, error } = await supabase.rpc('credit_zinipay_deposit', {
     p_deposit_id: depositId,
     p_tx_hash: txHash,
   });

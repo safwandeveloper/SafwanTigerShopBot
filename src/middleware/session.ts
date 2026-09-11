@@ -451,6 +451,11 @@ export type AdminFlow =
       type: 'add_cryptobot_payment';
       step: 'name';
       data: Record<string, never>;
+    }
+  | {
+      type: 'add_zinipay_payment';
+      step: 'name';
+      data: Record<string, never>;
     };
 
 /**
@@ -638,6 +643,29 @@ export type UserFlow =
         method_id: number;
         method_name: string;
         min_amount: number;
+        instruction_message_id?: number;
+      };
+    }
+  | {
+      type: 'zinipay_topup';
+      step: 'usd_amount';
+      data: {
+        method_id: number;
+        method_name: string;
+        min_amount: number;
+        instruction_message_id?: number;
+      };
+    }
+  | {
+      type: 'zinipay_topup';
+      step: 'awaiting_payment';
+      data: {
+        method_id: number;
+        method_name: string;
+        deposit_id: number;
+        invoice_id: string;
+        amount: number;
+        invoice_url: string;
         instruction_message_id?: number;
       };
     }

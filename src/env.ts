@@ -289,6 +289,14 @@ const schema = z.object({
   // ----------------------------------------------------------------
   CRYPTOBOT_API_TOKEN: z.string().optional().or(z.literal('')),
   CRYPTOBOT_API_BASE_URL: z.string().url().default('https://pay.crypt.bot'),
+
+  // ----------------------------------------------------------------
+  //  ZiniPay bKash / personal-number invoice payments
+  // ----------------------------------------------------------------
+  ZINIPAY_API_KEY: z.string().optional().or(z.literal('')),
+  ZINIPAY_API_BASE_URL: z.string().url().default('https://api.zinipay.com'),
+  ZINIPAY_REDIRECT_URL: z.string().url().optional().or(z.literal('')),
+  ZINIPAY_CANCEL_URL: z.string().url().optional().or(z.literal('')),
 });
 
 // Provide a stable alias `BOT_TOKEN` on the parsed env for consumers.
