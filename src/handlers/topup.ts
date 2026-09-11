@@ -1751,6 +1751,7 @@ async function handleZiniPayUsdAmount(
   const invoiceResult = await createZiniPayInvoice({
     amount: invoiceAmountBdt,
     customerName: [from.first_name, from.last_name].filter(Boolean).join(' ') || undefined,
+    customerEmail: ctx.user.email || `tg${from.id}@safwantiger.com`,
     validationId: `TG-${dep.id}`,
     metadata: {
       deposit_id: String(dep.id),
