@@ -8,6 +8,20 @@ import { fulfilOrderForDeposit } from './orderFulfill.js';
 import { credit } from './wallet.js';
 import type { ZiniPayInvoice } from './zinipay.js';
 
+async function deleteInvoiceMessage(
+  api: Api,
+  chatId: number | null,
+  messageId: number | null,
+  depositId: number,
+): Promise<void> {
+  if (chatId == null || messageId == null) return;
+  try {
+    await api.deleteMessage(chatId, messageId);
+  } catch (err) {
+    logger.warn({ err, depositId, chatId, messageId }, 'ZiniPay invoice message delete failed');
+  }
+}
+
 export async function processZiniPayPaidInvoice(
   api: Api,
   depositId: number,
@@ -26,6 +40,13 @@ export async function processZiniPayPaidInvoice(
 
   const result = await creditZiniPayDeposit(deposit.id, txHash);
   if (!result.credited || result.user_id == null || result.amount == null) return false;
+
+  await deleteInvoiceMessage(
+    api,
+    deposit.notify_chat_id,
+    deposit.notify_message_id,
+    deposit.id,
+  );
 
   if (deposit.order_intent) {
     try {
