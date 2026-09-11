@@ -335,6 +335,23 @@ export async function notifyTopup(api: Api, args: {
   });
 }
 
+export async function notifySalesBikashDeposit(api: Api, args: {
+  userId: number;
+  amount: number;
+  method: string;
+}): Promise<void> {
+  const html = renderHtmlTemplate([
+    '<blockquote>',
+    '{feed_title} <b>New bKash Payment!</b>',
+    '',
+    `{refer_user} <b>User:</b> <b>${maskId(args.userId)}</b>`,
+    `{gift_usdt} <b>Amount:</b> <b>+${money(args.amount)} USDT</b>`,
+    `{paymethod_others} <b>Method:</b> <b>${escapeAttr(args.method)}</b>`,
+    '</blockquote>',
+  ].join('\n'));
+  await sendSalesHtml(api, html);
+}
+
 export async function notifyWalletCredit(api: Api, args: {
   userId: number;
   amount: number;

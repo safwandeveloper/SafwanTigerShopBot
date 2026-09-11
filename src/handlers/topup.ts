@@ -299,13 +299,13 @@ export function registerTopup(bot: Composer<AppCtx>): void {
       await ctx.editMessageText(
         renderMdHtml(
           [
-            '🇧🇩 *bKash Top-Up*',
+            `${PE.bkash_title} *bKash Top-Up*`,
             '',
-            'Dollar Rate: *1 USD = 130 BDT*',
-            'Example: *$10 = ৳1,300*',
+            `${PE.bkash_rate} Dollar Rate: *1 USD = 130 BDT*`,
+            `${PE.bkash_example} Example: *$10 = ৳1,300*`,
             '',
             '━━━━━━━━━━━━━━━━',
-            'Enter the amount in USDT (e.g. 10).',
+            `${PE.bkash_enter} Enter the amount in USDT (e.g. 10).`,
             'You will receive a bKash payment link.',
             `Minimum: *${formatUsdtAmount(minimum)}*`,
           ].join('\n'),
@@ -1819,7 +1819,7 @@ async function handleZiniPayUsdAmount(
   inlineBtn(keyboard, ctx.lang, 'cryptobot_check', `zinipay:check:${dep.id}`).row();
   inlineBtn(keyboard, ctx.lang, 'back', topupRootCallback(ctx));
   const message = await ctx.reply(
-    renderMdHtml(`🇧🇩 *bKash invoice ready*\n\nWallet credit: *${formatUsdtAmount(amount)} USDT*\nPay bKash: *${invoiceAmountBdt} BDT*\n\nOpen the payment page, complete bKash payment, and your wallet will be credited automatically.`),
+    renderMdHtml(`${PE.bkash_title} *bKash invoice ready*\n\nWallet credit: *${formatUsdtAmount(amount)} USDT*\nPay bKash: *${invoiceAmountBdt} BDT*\n\nOpen the payment page, complete bKash payment, and your wallet will be credited automatically.`),
     { parse_mode: 'HTML', reply_markup: keyboard },
   );
   await setCryptoPayNotificationMessage(dep.id, ctx.chat!.id, message.message_id).catch((err) =>

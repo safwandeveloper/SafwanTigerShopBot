@@ -17,6 +17,11 @@ const ce = (id: string, unicode: string): string =>
   `{{ce:${id}|${unicode}}}`;
 
 export const PE = {
+  /** bKash hosted-invoice title and instruction-screen premium glyphs. */
+  bkash_title: ce('4913863819836523928', '🇧🇩'),
+  bkash_rate: ce('5884161133174067365', '💱'),
+  bkash_example: ce('5278223861404421915', '💵'),
+  bkash_enter: ce('5386367538735104399', '💳'),
   /** Yellow Binance-style logo glyph in front of the "Binance Pay Deposit" header. */
   binance_title: ce('5875443023873053217', '🟡'),
   /** USDT/coin glyph used for the BEP-20 / TRC-20 deposit headers. */
