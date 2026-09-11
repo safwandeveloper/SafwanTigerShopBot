@@ -419,6 +419,8 @@ export type DBWalletLedger = {
  *                    quote LTC amount, then tx hash)
  *   - `cryptobot`    Telegram Crypto Pay API invoice lookup/webhook
  *                    (USDT wallet top-up; invoice id is stored in tx_hash)
+ *   - `zinipay`      ZiniPay hosted invoice/webhook verification
+ *                    (bKash wallet top-up; invoice id is stored in tx_hash)
  *
  * `manual` skips auto-verification and falls back to the
  * legacy admin-approval flow.
@@ -431,7 +433,8 @@ export type PaymentProvider =
   | 'usdt_bep20'
   | 'usdt_ton'
   | 'ltc'
-  | 'cryptobot';
+  | 'cryptobot'
+  | 'zinipay';
 
 export type DBPaymentMethod = {
   id: number;

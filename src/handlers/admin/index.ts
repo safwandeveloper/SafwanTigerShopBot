@@ -4262,7 +4262,9 @@ adminBot.callbackQuery('adm:pay', async (ctx) => {
     .text('🟡 Add Binance Pay', 'adm:pay:add:binance_pay')
     .text('Add Bybit Pay', 'adm:pay:add:bybit_pay')
     .row()
-    .text('💳 Add CryptoBot', 'adm:pay:add:cryptobot');
+    .text('💳 Add CryptoBot', 'adm:pay:add:cryptobot')
+    .row()
+    .text('🇧🇩 Add ZiniPay bKash', 'adm:pay:add:zinipay');
   backRow(kb);
   await ctx.editMessageText(
     [
@@ -4403,6 +4405,27 @@ adminBot.callbackQuery('adm:pay:add:cryptobot', async (ctx) => {
   );
 });
 
+adminBot.callbackQuery('adm:pay:add:zinipay', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = {
+    type: 'add_zinipay_payment',
+    step: 'name',
+    data: {},
+  };
+  await ctx.editMessageText(
+    [
+      '🇧🇩 *Add ZiniPay bKash*',
+      '',
+      'Send the display name shown in the user-facing top-up menu (e.g. `bKash via ZiniPay`).',
+      '',
+      'The bot creates a hosted invoice, verifies it server-side, and credits the wallet once.',
+      '',
+      'Or `/cancel` to abort.',
+    ].join('\n'),
+    { parse_mode: 'Markdown', reply_markup: backRow(new InlineKeyboard()) },
+  );
+});
+
 adminBot.callbackQuery('adm:pay:list', async (ctx) => {
   await ctx.answerCallbackQuery();
   await showPaymentList(ctx);
@@ -4434,6 +4457,8 @@ async function showPaymentList(ctx: AppCtx): Promise<void> {
                   ? 'auto • Bybit Pay'
                   : m.provider === 'cryptobot'
                     ? 'auto • CryptoBot USDT'
+                    : m.provider === 'zinipay'
+                      ? 'auto • ZiniPay bKash'
                 : 'auto • Binance Pay';
     lines.push(`#${m.id}  ${m.name} — _${tag}_`);
     if (m.address) {
@@ -9288,6 +9313,31 @@ adminBot.on('message:text', async (ctx, next) => {
           '',
           'Set `CRYPTOBOT_API_TOKEN` in Railway before users pay with it.',
           'The webhook path is `/cryptobot/webhook`.',
+        ].join('\n'),
+        { parse_mode: 'Markdown', reply_markup: rootMenu() },
+      );
+      return;
+    }
+
+    if (flow.type === 'add_zinipay_payment' && flow.step === 'name') {
+      if (!text || text.length < 2 || text.length > 60) {
+        await ctx.reply('❌ Name must be 2–60 chars. Try again or `/cancel`.');
+        return;
+      }
+      const m = await addPaymentMethod({
+        name: text,
+        instructions: '(auto-verify — ZiniPay bKash invoice instructions are rendered by the bot)',
+        min_amount: 0,
+        provider: 'zinipay',
+      });
+      ctx.session.adminFlow = undefined;
+      await ctx.reply(
+        [
+          `✅ *${m.name}* added (id=${m.id})`,
+          'Provider: `zinipay`',
+          '',
+          'Set `ZINIPAY_API_KEY`, `ZINIPAY_REDIRECT_URL`, `ZINIPAY_CANCEL_URL`, and `PUBLIC_BASE_URL` in Railway.',
+          'The webhook path is `/zinipay/webhook`.',
         ].join('\n'),
         { parse_mode: 'Markdown', reply_markup: rootMenu() },
       );

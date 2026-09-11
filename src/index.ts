@@ -9,6 +9,7 @@ import {
   handleResellerApiRequest,
 } from './services/resellerApiHttp.js';
 import { handleCryptoPayWebhook } from './services/cryptoPayWebhookHttp.js';
+import { handleZiniPayWebhook } from './services/zinipayWebhookHttp.js';
 import { startSupplierStockSyncLoop } from './services/supplierAutoSync.js';
 import { startCryptoPayReconciliationLoop } from './services/cryptoPayReconcile.js';
 
@@ -24,6 +25,7 @@ async function main() {
         if (handleHealthRequest(req, res)) return;
         if (await handleResellerApiRequest(req, res, bot.api)) return;
         if (await handleCryptoPayWebhook(req, res, bot.api)) return;
+        if (await handleZiniPayWebhook(req, res, bot.api)) return;
         if (telegramHandler) {
           telegramHandler(req, res);
           return;
