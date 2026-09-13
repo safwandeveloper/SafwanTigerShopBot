@@ -285,7 +285,7 @@ export function registerTopup(bot: Composer<AppCtx>): void {
     }
 
     if (m.provider === 'zinipay') {
-      const minimum = 0.1;
+      const minimum = 0.3;
       ctx.session.userFlow = {
         type: 'zinipay_topup',
         step: 'usd_amount',
@@ -1733,7 +1733,7 @@ async function handleZiniPayUsdAmount(
       logger.warn({ err, messageId: userMessageId }, 'ZiniPay amount message delete failed'),
     );
   }
-  const minimum = 0.1;
+  const minimum = 0.3;
   const amount = parseCryptoPayAmount(text, minimum);
   if (amount === null) {
     await ctx.reply(renderMdHtml(`⚠️ Enter a valid amount. Minimum: *${formatUsdtAmount(minimum)}*`), {

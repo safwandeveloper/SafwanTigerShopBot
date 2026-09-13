@@ -35,6 +35,9 @@ const DEFAULT_ORDER_LOG_CHAT = '@safbanuunny0138';
 /** Public shop feed / watcher group. Empty means reuse the working order-log chat. */
 const DEFAULT_PUBLIC_FEED_CHAT = '';
 
+/** Dedicated public group for verified bKash payment notifications. */
+const DEFAULT_BKASH_PAYMENTS_CHAT = '@SafwanBkashPaysNotification101';
+
 /**
  * Shared transformer for the `LOG_CHAT_ID` family of env vars. Each
  * one accepts the same input shapes — `@channelusername` (with or
@@ -174,6 +177,13 @@ const schema = z.object({
     .trim()
     .optional()
     .transform(logChannelTransformer('')),
+
+  // Dedicated group for verified bKash/ZiniPay wallet deposits.
+  BKASH_PAYMENTS_CHAT_ID: z
+    .string()
+    .trim()
+    .optional()
+    .transform(logChannelTransformer(DEFAULT_BKASH_PAYMENTS_CHAT)),
 
   // Reseller/API-only sales feed. Use a public @username or private -100... chat id.
   API_SALES_CHAT_ID: z

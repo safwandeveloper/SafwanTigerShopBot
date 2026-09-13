@@ -86,6 +86,9 @@ export async function processZiniPayPaidInvoice(
     userId: user.telegram_id,
     amount: result.amount,
     method: deposit.method,
+    invoiceAmountBdt: Number(invoice.amount),
+    invoiceId,
+    transactionId: invoice.transaction_id,
   }).catch((err) => logger.warn({ err, depositId: deposit.id }, 'ZiniPay sales announcement failed'));
   return true;
 }
