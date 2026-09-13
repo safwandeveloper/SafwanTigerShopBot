@@ -368,14 +368,23 @@ export async function notifySalesBikashDeposit(api: Api, args: {
   userId: number;
   amount: number;
   method: string;
+  invoiceAmountBdt: number;
+  invoiceId: string;
+  transactionId?: string;
 }): Promise<void> {
   const html = renderHtmlTemplate([
     '<blockquote>',
     '{feed_title} <b>New bKash Payment!</b>',
     '',
     `{refer_user} <b>User:</b> <b>${maskId(args.userId)}</b>`,
-    `{gift_usdt} <b>Amount:</b> <b>+${money(args.amount)} USDT</b>`,
+    `{gift_usdt} <b>Wallet credit:</b> <b>+${money(args.amount)} USDT</b>`,
+    `{gift_usdt} <b>Paid:</b> <b>৳${money(args.invoiceAmountBdt)} BDT</b>`,
     `{paymethod_others} <b>Method:</b> <b>${escapeAttr(args.method)}</b>`,
+    `<b>Invoice:</b> <code>${escapeAttr(args.invoiceId)}</code>`,
+    args.transactionId
+      ? `<b>Transaction:</b> <code>${escapeAttr(args.transactionId)}</code>`
+      : '<b>Transaction:</b> <i>Confirmed by ZiniPay</i>',
+    `<b>Time:</b> <code>${escapeAttr(new Date().toISOString().replace('T', ' ').replace('Z', ' UTC'))}</code>`,
     '</blockquote>',
   ].join('\n'));
   await sendBikashPaymentsHtml(api, html);
