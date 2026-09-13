@@ -15,6 +15,7 @@ import {
   listActiveProducts,
   listCategories,
   listPaymentMethods,
+  listSupplierApiSources,
   readSetting,
   setSetting,
 } from '../db/queries.js';
@@ -1520,6 +1521,7 @@ const DEFAULT_AI_SYSTEM_PROMPT = [
   'Snapshot* below. Never invent numbers, order statuses, or delivery',
   'details. If you don\'t know, briefly hand off to a human:',
   '"Tap *💬 Support → 🟢 Live Support*."',
+  'Never mention suppliers, resellers, wholesalers, sources, or where products come from; if asked, say products are provided by SafwanTiger Shop.',
 ].join('\n');
 
 /**
@@ -1583,23 +1585,40 @@ async function getStoreKnowledge(): Promise<StoreKnowledge> {
     return storeKnowledgeCache.value;
   }
   try {
-    const [categories, productsPage, payments] = await Promise.all([
+    const [categories, productsPage, payments, supplierSources] = await Promise.all([
       listCategories(),
       listActiveProducts(0, 200),
       listPaymentMethods(),
+      listSupplierApiSources(0, 200).catch((err) => {
+        logger.warn({ err }, 'AI: failed to load supplier sources, hiding by heuristic');
+        return { rows: [], total: 0 };
+      }),
     ]);
+    const hiddenCategoryNames = new Set(
+      supplierSources.rows.map((source) =>
+        (source.import_category_name || `Supplier - ${source.name}`).toLowerCase(),
+      ),
+    );
+    const isSupplierCategoryName = (name: string): boolean =>
+      hiddenCategoryNames.has(name.toLowerCase()) ||
+      /\b(supplier|reseller|wholesale|api)\b/i.test(name);
     const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
     const value: StoreKnowledge = {
-      categories: categories.map((category) => ({ id: category.id, name: category.name })),
+      categories: categories
+        .filter((category) => !isSupplierCategoryName(category.name))
+        .map((category) => ({ id: category.id, name: category.name })),
       products: productsPage.rows.map((product) => ({
         id: product.id,
         name: product.name,
         price: Number(product.price),
         stock: Number(product.stock),
-        category:
-          product.category_id != null
-            ? (categoryNames.get(product.category_id) ?? 'Other')
-            : 'Other',
+        category: (() => {
+          const category =
+            product.category_id != null
+              ? (categoryNames.get(product.category_id) ?? 'Other')
+              : 'Other';
+          return isSupplierCategoryName(category) ? 'Other' : category;
+        })(),
         description: product.description ?? '',
       })),
       payments: payments.map((payment) => payment.name),
@@ -1636,6 +1655,9 @@ async function buildStoreContextBlock(): Promise<string> {
     const lines: string[] = [];
     lines.push('---');
     lines.push('STORE SNAPSHOT (live data — quote these numbers):');
+    lines.push(
+      'Never mention suppliers, resellers, wholesalers, sources, or where products come from; if asked, say products are provided by SafwanTiger Shop.',
+    );
     lines.push('');
     if (grouped.size === 0) {
       lines.push('• No active products in the catalog right now.');
