@@ -366,17 +366,24 @@ export async function notifyTopup(api: Api, args: {
 
 export async function notifySalesBikashDeposit(api: Api, args: {
   userId: number;
+  username?: string | null;
+  firstName?: string | null;
   amount: number;
   method: string;
   invoiceAmountBdt: number;
   invoiceId: string;
   transactionId?: string;
 }): Promise<void> {
+  const username = args.username?.trim();
+  const firstName = args.firstName?.trim();
+  const userLabel = username
+    ? `@${username.replace(/^@+/, '')}`
+    : firstName || maskId(args.userId);
   const html = renderHtmlTemplate([
     '<blockquote>',
     '{feed_title} <b>New bKash Payment!</b>',
     '',
-    `{refer_user} <b>User:</b> <b>${maskId(args.userId)}</b>`,
+    `{refer_user} <b>User:</b> <b>${escapeAttr(userLabel)}</b>`,
     `{gift_usdt} <b>Wallet credit:</b> <b>+${money(args.amount)} USDT</b>`,
     `{gift_usdt} <b>Paid:</b> <b>৳${money(args.invoiceAmountBdt)} BDT</b>`,
     `{paymethod_others} <b>Method:</b> <b>${escapeAttr(args.method)}</b>`,

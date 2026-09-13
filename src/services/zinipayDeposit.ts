@@ -84,6 +84,8 @@ export async function processZiniPayPaidInvoice(
     .catch((err) => logger.warn({ err, userId: user.telegram_id }, 'ZiniPay success DM failed'));
   void notifySalesBikashDeposit(api, {
     userId: user.telegram_id,
+    username: user.username,
+    firstName: user.first_name,
     amount: result.amount,
     method: deposit.method,
     invoiceAmountBdt: Number(invoice.amount),
