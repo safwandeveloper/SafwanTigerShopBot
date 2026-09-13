@@ -37,6 +37,10 @@ export function publicSalesFeedChatId(): number | string | undefined {
   return env.PUBLIC_SALES_CHAT_ID;
 }
 
+export function bkashPaymentsChatId(): number | string | undefined {
+  return env.BKASH_PAYMENTS_CHAT_ID;
+}
+
 async function resolveTigerStockChat(api: Api): Promise<string | number> {
   if (resolvedTigerStockChatId !== undefined) return resolvedTigerStockChatId;
   try {
@@ -50,6 +54,7 @@ async function resolveTigerStockChat(api: Api): Promise<string | number> {
 }
 
 let resolvedSalesChatId: number | undefined;
+let resolvedBikashPaymentsChatId: number | undefined;
 
 export async function resolvePublicSalesChat(api: Api): Promise<string | number | undefined> {
   const configured = publicSalesFeedChatId();
@@ -65,6 +70,24 @@ export async function resolvePublicSalesChat(api: Api): Promise<string | number 
     return chat.id;
   } catch (err) {
     logger.warn({ err, chat: configured }, 'public sales feed getChat failed; using configured value');
+    return configured;
+  }
+}
+
+export async function resolveBikashPaymentsChat(api: Api): Promise<string | number | undefined> {
+  const configured = bkashPaymentsChatId();
+  if (!configured) return undefined;
+  if (typeof configured === 'number') {
+    resolvedBikashPaymentsChatId = configured;
+    return configured;
+  }
+  if (resolvedBikashPaymentsChatId !== undefined) return resolvedBikashPaymentsChatId;
+  try {
+    const chat = await api.getChat(configured);
+    resolvedBikashPaymentsChatId = chat.id;
+    return chat.id;
+  } catch (err) {
+    logger.warn({ err, chat: configured }, 'bKash payments feed getChat failed; using configured value');
     return configured;
   }
 }
@@ -185,6 +208,12 @@ async function sendSalesHtml(api: Api, html: string, button?: FeedButton): Promi
   const chat = await resolvePublicSalesChat(api);
   if (!chat) return;
   await sendRenderedHtmlTo(api, chat, 'Public sales group', html, button);
+}
+
+async function sendBikashPaymentsHtml(api: Api, html: string): Promise<void> {
+  const chat = await resolveBikashPaymentsChat(api);
+  if (!chat) return;
+  await sendRenderedHtmlTo(api, chat, 'bKash payments group', html);
 }
 
 async function sendApiSalesHtml(api: Api, html: string): Promise<void> {
@@ -349,7 +378,7 @@ export async function notifySalesBikashDeposit(api: Api, args: {
     `{paymethod_others} <b>Method:</b> <b>${escapeAttr(args.method)}</b>`,
     '</blockquote>',
   ].join('\n'));
-  await sendSalesHtml(api, html);
+  await sendBikashPaymentsHtml(api, html);
 }
 
 export async function notifyWalletCredit(api: Api, args: {
