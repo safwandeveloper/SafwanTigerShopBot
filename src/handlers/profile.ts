@@ -352,7 +352,7 @@ async function showCurrencyPicker(ctx: AppCtx, page = 0) {
 
 async function showShopListMode(ctx: AppCtx) {
   const selected = await getUserShopListMode(ctx.user.telegram_id);
-  const modeLabel = selected === 'all' ? 'All products list' : '10 per page';
+  const modeLabel = selected === 'all' ? 'All products list' : '15 per page';
   const text = [
     ctx.t('profile.shop_view.title'),
     '',
