@@ -90,7 +90,7 @@ function cleanDisplayName(value: string): string {
  */
 export async function activateReferralForUser(ctx: AppCtx): Promise<void> {
   if (!ctx.user?.referred_by || !ctx.from) return;
-  const { activateReferralRecord } = await import('../db/queries.js');
+  const { activateReferralRecord, awardReferralMilestones } = await import('../db/queries.js');
   const activated = await activateReferralRecord(ctx.user.referred_by, ctx.user.telegram_id);
   if (!activated) return;
   await sendReferralNotification(
@@ -100,6 +100,16 @@ export async function activateReferralForUser(ctx: AppCtx): Promise<void> {
     ctx.from.username ?? null,
     ctx.from.first_name ?? null,
   );
+  const reward = await awardReferralMilestones(ctx.user.referred_by);
+  if (reward.awardedAmount <= 0) return;
+  await ctx.api
+    .sendMessage(
+      ctx.user.referred_by,
+      `🎉 Referral reward: $${reward.awardedAmount.toFixed(2)} USDT was added to your wallet.\n` +
+        `You reached another 3 active referrals.\n` +
+        `New balance: $${reward.newBalance.toFixed(2)} USDT`,
+    )
+    .catch(() => {});
 }
 
 async function sendReferralNotification(
