@@ -16,6 +16,7 @@ type FeedButton = {
   url: string;
   iconKey: string;
 };
+type FeedLink = { text: string; url: string };
 
 const CART_FALLBACK = '\u{1F6D2}';
 const PRODUCT_FALLBACK = '\u{1F4E6}';
@@ -127,22 +128,40 @@ function premiumIconId(key: string): string | undefined {
   return typeof spec === 'object' && spec.custom_emoji_id ? spec.custom_emoji_id : undefined;
 }
 
-function feedKeyboard(button?: FeedButton): InlineKeyboard | undefined {
-  if (!button) return undefined;
-  const kb = new InlineKeyboard().url(button.text, button.url);
-  const iconId = premiumIconId(button.iconKey);
-  if (iconId) kb.icon(iconId);
-  kb.style('primary');
+function feedKeyboard(button?: FeedButton, links: FeedLink[] = []): InlineKeyboard | undefined {
+  if (!button && links.length === 0) return undefined;
+  const kb = new InlineKeyboard();
+  if (button) {
+    kb.url(button.text, button.url);
+    const iconId = premiumIconId(button.iconKey);
+    if (iconId) kb.icon(iconId);
+    kb.style('primary');
+    if (links.length > 0) kb.row();
+  }
+  links.forEach((link, index) => {
+    kb.url(link.text, link.url);
+    if (index % 2 === 1 && index + 1 < links.length) kb.row();
+  });
   return kb;
 }
 
-function plainFeedKeyboard(button?: FeedButton): InlineKeyboard | undefined {
-  return button ? new InlineKeyboard().url(button.text, button.url) : undefined;
+function plainFeedKeyboard(button?: FeedButton, links: FeedLink[] = []): InlineKeyboard | undefined {
+  if (!button && links.length === 0) return undefined;
+  const kb = new InlineKeyboard();
+  if (button) {
+    kb.url(button.text, button.url);
+    if (links.length > 0) kb.row();
+  }
+  links.forEach((link, index) => {
+    kb.url(link.text, link.url);
+    if (index % 2 === 1 && index + 1 < links.length) kb.row();
+  });
+  return kb;
 }
 
-async function sendRenderedHtml(api: Api, html: string, button?: FeedButton): Promise<void> {
+async function sendRenderedHtml(api: Api, html: string, button?: FeedButton, links?: FeedLink[]): Promise<void> {
   const chat = await resolveTigerStockChat(api);
-  await sendRenderedHtmlTo(api, chat, 'TigerStockChat', html, button);
+  await sendRenderedHtmlTo(api, chat, 'TigerStockChat', html, button, links);
 }
 
 async function sendRenderedHtmlTo(
@@ -151,9 +170,10 @@ async function sendRenderedHtmlTo(
   label: string,
   html: string,
   button?: FeedButton,
+  links?: FeedLink[],
 ): Promise<void> {
-  const premiumKeyboard = feedKeyboard(button);
-  const plainKeyboard = plainFeedKeyboard(button);
+  const premiumKeyboard = feedKeyboard(button, links);
+  const plainKeyboard = plainFeedKeyboard(button, links);
   const plainHtml = stripCustomEmojiTags(html);
   try {
     await api.sendMessage(chat, html, {
@@ -204,10 +224,10 @@ async function sendRenderedHtmlTo(
   }
 }
 
-async function sendSalesHtml(api: Api, html: string, button?: FeedButton): Promise<void> {
+async function sendSalesHtml(api: Api, html: string, button?: FeedButton, links?: FeedLink[]): Promise<void> {
   const chat = await resolvePublicSalesChat(api);
   if (!chat) return;
-  await sendRenderedHtmlTo(api, chat, 'Public sales group', html, button);
+  await sendRenderedHtmlTo(api, chat, 'Public sales group', html, button, links);
 }
 
 async function sendBikashPaymentsHtml(api: Api, html: string): Promise<void> {
@@ -424,6 +444,7 @@ export async function notifyAnnouncement(api: Api, args: {
   text: string;
   format: 'md' | 'html';
   button?: { text: string; productId: number; iconKey?: string };
+  links?: FeedLink[];
 }): Promise<void> {
   const html =
     args.format === 'html'
@@ -438,7 +459,8 @@ export async function notifyAnnouncement(api: Api, args: {
           iconKey: args.button.iconKey ?? 'broadcast_shop_now',
           url: publicFeedBotUrl(`prod_${args.button.productId}`),
         }
-      : undefined,
+    : undefined,
+    args.links,
   );
 }
 
@@ -446,6 +468,7 @@ export async function notifySalesAnnouncement(api: Api, args: {
   text: string;
   format: 'md' | 'html';
   button?: { text: string; productId: number; iconKey?: string };
+  links?: FeedLink[];
 }): Promise<void> {
   const html =
     args.format === 'html'
@@ -460,7 +483,8 @@ export async function notifySalesAnnouncement(api: Api, args: {
           iconKey: args.button.iconKey ?? 'broadcast_shop_now',
           url: publicFeedBotUrl(`prod_${args.button.productId}`),
         }
-      : undefined,
+    : undefined,
+    args.links,
   );
 }
 

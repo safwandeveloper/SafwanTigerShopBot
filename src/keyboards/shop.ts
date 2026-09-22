@@ -221,15 +221,15 @@ export function productVariantKeyboard(
   return kb;
 }
 
-export function productVariantPage(products: DBProduct[], page: number): {
+export function productVariantPage(products: DBProduct[], page: number, pageSize = PRODUCTS_PER_PAGE): {
   rows: DBProduct[];
   page: number;
   totalPages: number;
 } {
-  const totalPages = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(products.length / pageSize));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
   return {
-    rows: products.slice(safePage * PRODUCTS_PER_PAGE, (safePage + 1) * PRODUCTS_PER_PAGE),
+    rows: products.slice(safePage * pageSize, (safePage + 1) * pageSize),
     page: safePage,
     totalPages,
   };

@@ -211,7 +211,7 @@ function docsText(): string {
   ].join('\n');
 }
 
-async function showApiPanel(ctx: AppCtx, newKey?: string): Promise<void> {
+export async function showApiPanel(ctx: AppCtx, newKey?: string): Promise<void> {
   try {
     const status = await getApiStatus(ctx.user.telegram_id);
     const html = renderMdHtml(apiPanelText(status, newKey));

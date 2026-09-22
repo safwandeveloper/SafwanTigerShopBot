@@ -46,11 +46,14 @@ export function profileKeyboard(lang: Lang): InlineKeyboard {
 
 export function shopListModeKeyboard(
   lang: Lang,
-  selected: 'paged' | 'all',
+  selected: 'paged' | 'paged10' | 'all',
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
   inlineBtn(kb, lang, 'shop_view_paged', 'profile:shopview:set:paged');
   kb.style(selected === 'paged' ? 'success' : 'primary');
+  kb.row();
+  inlineBtn(kb, lang, 'shop_view_paged10', 'profile:shopview:set:paged10');
+  kb.style(selected === 'paged10' ? 'success' : 'primary');
   kb.row();
   inlineBtn(kb, lang, 'shop_view_all', 'profile:shopview:set:all');
   kb.style(selected === 'all' ? 'success' : 'primary');

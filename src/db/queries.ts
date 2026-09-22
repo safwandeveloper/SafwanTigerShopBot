@@ -2912,12 +2912,14 @@ export async function readSetting(key: string): Promise<unknown> {
   return (data as { value: unknown } | null)?.value ?? null;
 }
 
-export type ShopListMode = 'paged' | 'all';
+export type ShopListMode = 'paged' | 'paged10' | 'all';
 export type ShopGroupMode = 'grouped' | 'ungrouped';
 
 export async function getUserShopListMode(telegram_id: number): Promise<ShopListMode> {
   const value = await readSetting(`user.${telegram_id}.shop_list_mode`);
-  return value === 'all' ? 'all' : 'paged';
+  if (value === 'all') return 'all';
+  if (value === 'paged10') return 'paged10';
+  return 'paged';
 }
 
 export async function setUserShopListMode(

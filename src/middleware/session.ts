@@ -1,5 +1,11 @@
 import { session, type Context, type SessionFlavor } from 'grammy';
 
+export type AnnounceLink = {
+  kind: 'refer' | 'api' | 'settings' | 'shop' | 'topup' | 'support' | 'url';
+  label: string;
+  url: string;
+};
+
 /** Multi-step admin input flow state. */
 export type AdminFlow =
   | { type: 'add_category'; step: 'name'; data: { emoji?: string } }
@@ -210,6 +216,7 @@ export type AdminFlow =
         text: string;
         format?: 'md' | 'html';
         share_sales?: boolean;
+        links?: AnnounceLink[];
         buy?: {
           product_id: number;
           product_name: string;
@@ -230,6 +237,7 @@ export type AdminFlow =
         text: string;
         format?: 'md' | 'html';
         share_sales?: boolean;
+        links?: AnnounceLink[];
         buy: {
           product_id: number;
           product_name: string;
@@ -250,7 +258,26 @@ export type AdminFlow =
         text: string;
         format?: 'md' | 'html';
         share_sales?: boolean;
+        links?: AnnounceLink[];
         buy: {
+          product_id: number;
+          product_name: string;
+          label: string;
+          color: import('../../config/index.js').ColorMode;
+          icon_unicode?: string;
+          icon_custom_emoji_id?: string;
+        };
+      };
+    }
+  | {
+      type: 'announce';
+      step: 'link_url';
+      data: {
+        text: string;
+        format?: 'md' | 'html';
+        share_sales?: boolean;
+        links?: AnnounceLink[];
+        buy?: {
           product_id: number;
           product_name: string;
           label: string;
