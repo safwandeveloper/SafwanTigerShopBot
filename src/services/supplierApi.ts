@@ -89,6 +89,22 @@ export type SupplierSourceConfig = {
   notes?: string | null;
 };
 
+const LEGACY_SUPPLIER_HOSTS: Record<string, string> = {
+  'insightxstore-bot-production.up.railway.app': 'api.insightxpro.store',
+};
+
+export function resolveSupplierBaseUrl(baseUrl: string): string {
+  try {
+    const url = new URL(baseUrl);
+    const replacement = LEGACY_SUPPLIER_HOSTS[url.hostname.toLowerCase()];
+    if (!replacement) return baseUrl;
+    url.hostname = replacement;
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return baseUrl;
+  }
+}
+
 export type SupplierLinkConfig = {
   local_product_id: number;
   supplier_id: number;
@@ -143,7 +159,7 @@ export function canbosoSupplierConfig(apiKey: string): SupplierSourceConfig {
 export function insightxSupplierConfig(apiKey: string): SupplierSourceConfig {
   return {
     name: 'InsightX Store',
-    base_url: 'https://insightxstore-bot-production.up.railway.app',
+    base_url: 'https://api.insightxpro.store',
     api_key: apiKey.trim(),
     auth_mode: 'bearer',
     products_path: '/api/v1/products',
@@ -414,7 +430,7 @@ async function supplierFetch(
   payload?: Record<string, unknown>,
   extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
-  const url = joinUrl(source.base_url, path);
+  const url = joinUrl(resolveSupplierBaseUrl(source.base_url), path);
   if (source.auth_mode === 'query' && source.api_key.trim()) {
     url.searchParams.set(source.key_query_param || 'api_key', source.api_key.trim());
   }
