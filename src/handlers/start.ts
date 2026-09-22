@@ -23,6 +23,7 @@ import {
 import { showProfile, showReferScreen } from './profile.js';
 import { showTopupMenu } from './topup.js';
 import { showShopHome } from './shop.js';
+import { showApiPanel } from './resellerApi.js';
 import {
   checkForceJoinStatus,
   isForceJoinSatisfied,
@@ -266,6 +267,27 @@ async function handleTopupDeepLink(ctx: AppCtx): Promise<boolean> {
   return true;
 }
 
+async function handleApiDeepLink(ctx: AppCtx): Promise<boolean> {
+  const text = ctx.message?.text ?? '';
+  if (!/^\/start(?:@\S+)?\s+api\b/i.test(text)) return false;
+  await showApiPanel(ctx);
+  return true;
+}
+
+async function handleShopDeepLink(ctx: AppCtx): Promise<boolean> {
+  const text = ctx.message?.text ?? '';
+  if (!/^\/start(?:@\S+)?\s+shop\b/i.test(text)) return false;
+  await showShopHome(ctx);
+  return true;
+}
+
+async function handleSupportDeepLink(ctx: AppCtx): Promise<boolean> {
+  const text = ctx.message?.text ?? '';
+  if (!/^\/start(?:@\S+)?\s+support\b/i.test(text)) return false;
+  await showSupportMenu(ctx);
+  return true;
+}
+
 export function registerStart(bot: Composer<AppCtx>): void {
   bot.command('start', async (ctx) => {
     await clearOldReplyKeyboard(ctx);
@@ -295,6 +317,9 @@ export function registerStart(bot: Composer<AppCtx>): void {
     if (await handleReferDeepLink(ctx)) return;
     if (await handleSettingsDeepLink(ctx)) return;
     if (await handleTopupDeepLink(ctx)) return;
+    if (await handleApiDeepLink(ctx)) return;
+    if (await handleShopDeepLink(ctx)) return;
+    if (await handleSupportDeepLink(ctx)) return;
     if (await handleProductDeepLink(ctx)) return;
     if (await handleInvoiceDeepLink(ctx)) return;
     await showMainMenu(ctx, { fresh: true });

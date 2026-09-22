@@ -352,13 +352,15 @@ async function showCurrencyPicker(ctx: AppCtx, page = 0) {
 
 async function showShopListMode(ctx: AppCtx) {
   const selected = await getUserShopListMode(ctx.user.telegram_id);
-  const modeLabel = selected === 'all' ? 'All products list' : '15 per page';
+  const modeLabel =
+    selected === 'all' ? 'All products list' : selected === 'paged10' ? '10 per page' : '15 per page';
   const text = [
     ctx.t('profile.shop_view.title'),
     '',
     ctx.t('profile.shop_view.body'),
     '',
     ctx.t('profile.shop_view.paged'),
+    ctx.t('profile.shop_view.paged10'),
     ctx.t('profile.shop_view.all'),
     '',
     ctx.t('profile.shop_view.current', { mode: modeLabel }),
@@ -677,11 +679,17 @@ export function registerProfile(bot: Composer<AppCtx>): void {
     await showShopGroupMode(ctx);
   });
 
-  bot.callbackQuery(/^profile:shopview:set:(paged|all)$/, async (ctx) => {
-    const mode = ctx.match[1] as 'paged' | 'all';
+  bot.callbackQuery(/^profile:shopview:set:(paged|paged10|all)$/, async (ctx) => {
+    const mode = ctx.match[1] as 'paged' | 'paged10' | 'all';
     await setUserShopListMode(ctx.user.telegram_id, mode);
     await ctx.answerCallbackQuery({
-      text: ctx.t(mode === 'all' ? 'profile.shop_view.saved.all' : 'profile.shop_view.saved.paged'),
+      text: ctx.t(
+        mode === 'all'
+          ? 'profile.shop_view.saved.all'
+          : mode === 'paged10'
+            ? 'profile.shop_view.saved.paged10'
+            : 'profile.shop_view.saved.paged',
+      ),
     });
     await showShopListMode(ctx);
   });

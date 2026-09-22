@@ -123,6 +123,7 @@ export const BUTTON_KEYS = {
   shop_view: 'btn.shop_view',
   shop_grouping: 'btn.shop_grouping',
   shop_view_paged: 'btn.shop_view_paged',
+  shop_view_paged10: 'btn.shop_view_paged10',
   shop_view_all: 'btn.shop_view_all',
   shop_grouped: 'btn.shop_grouped',
   shop_ungrouped: 'btn.shop_ungrouped',
@@ -336,6 +337,7 @@ export const DEFAULT_BUTTON_COLORS: Record<keyof typeof BUTTON_KEYS, ColorMode> 
   shop_view: 'blue',
   shop_grouping: 'blue',
   shop_view_paged: 'blue',
+  shop_view_paged10: 'blue',
   shop_view_all: 'blue',
   shop_grouped: 'green',
   shop_ungrouped: 'blue',
@@ -855,6 +857,7 @@ export const BUTTON_ICONS: Partial<Record<keyof typeof BUTTON_KEYS, string>> = {
   shop_view: 'broadcast_shop_now',
   shop_grouping: 'prod_promo',
   shop_view_paged: 'orders_title',
+  shop_view_paged10: 'orders_title',
   shop_view_all: 'orders_product',
   shop_grouped: 'prod_promo',
   shop_ungrouped: 'orders_product',
@@ -1037,6 +1040,7 @@ export const MAIN_MENU_LAYOUT: ReadonlyArray<ReadonlyArray<keyof typeof BUTTON_K
 
 /** Shop pagination size — products per page */
 export const PRODUCTS_PER_PAGE = 15;
+export const PRODUCTS_PER_PAGE_COMPACT = 10;
 
 /** Categories pagination size — categories per page on the Shop home. */
 export const CATEGORIES_PER_PAGE = 9;

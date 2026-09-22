@@ -6,6 +6,7 @@
  */
 import { Composer, InlineKeyboard, InputFile, type MiddlewareFn } from 'grammy';
 import type { MessageEntity } from 'grammy/types';
+import type { AnnounceLink } from '../../middleware/session.js';
 import { inlineBtn } from '../../keyboards/helpers.js';
 import {
   addCategory,
@@ -5494,24 +5495,41 @@ type AnnounceBuy = {
   icon_custom_emoji_id?: string;
 };
 
+const ANNOUNCE_LINK_PRESETS: Array<AnnounceLink & { kind: Exclude<AnnounceLink['kind'], 'url'> }> = [
+  { kind: 'refer', label: '🎁 Refer & Earn', url: publicFeed.publicFeedBotUrl('refer') },
+  { kind: 'api', label: '🧑‍💻 API Key', url: publicFeed.publicFeedBotUrl('api') },
+  { kind: 'settings', label: '⚙️ Settings', url: publicFeed.publicFeedBotUrl('settings') },
+  { kind: 'shop', label: '🛍 Shop', url: publicFeed.publicFeedBotUrl('shop') },
+  { kind: 'topup', label: '💳 Top-Up', url: publicFeed.publicFeedBotUrl('topup') },
+  { kind: 'support', label: '💬 Support', url: publicFeed.publicFeedBotUrl('support') },
+];
+
 /**
  * Build the inline keyboard attached to a broadcast announcement.
  * Returns `undefined` when no Buy button is configured so the
  * announcement is sent as a plain message.
  */
-function announceBroadcastKeyboard(buy?: AnnounceBuy): InlineKeyboard | undefined {
-  if (!buy) return undefined;
+function announceBroadcastKeyboard(buy?: AnnounceBuy, links: AnnounceLink[] = []): InlineKeyboard | undefined {
+  if (!buy && links.length === 0) return undefined;
   const kb = new InlineKeyboard();
-  kb.url(buy.label, publicFeed.publicFeedBotUrl(`prod_${buy.product_id}`));
-  if (buy.icon_custom_emoji_id) kb.icon(buy.icon_custom_emoji_id);
-  const style = colorModeToStyle(buy.color);
-  if (style !== undefined) kb.style(style);
+  if (buy) {
+    kb.url(buy.label, publicFeed.publicFeedBotUrl(`prod_${buy.product_id}`));
+    if (buy.icon_custom_emoji_id) kb.icon(buy.icon_custom_emoji_id);
+    const style = colorModeToStyle(buy.color);
+    if (style !== undefined) kb.style(style);
+    if (links.length > 0) kb.row();
+  }
+  links.forEach((link, index) => {
+    kb.url(link.label, link.url);
+    if (index % 2 === 1 && index + 1 < links.length) kb.row();
+  });
   return kb;
 }
 
 function announceConfirmKeyboard(
   recipients: number,
   buy?: AnnounceBuy,
+  links: AnnounceLink[] = [],
   shareSales = false,
 ): InlineKeyboard {
   const kb = new InlineKeyboard()
@@ -5528,6 +5546,8 @@ function announceConfirmKeyboard(
   } else {
     kb.text('🛒 Add Buy Button', 'adm:ann:buy:add').row();
   }
+  kb.text('🔗 Add Link Button', 'adm:ann:link:add').row();
+  if (links.length > 0) kb.text('🗑 Clear Links', 'adm:ann:link:clear').row();
   kb.text('❌ Cancel', 'adm:root');
   return kb;
 }
@@ -5536,7 +5556,12 @@ async function showAnnounceConfirm(ctx: AppCtx): Promise<void> {
   const flow = ctx.session.adminFlow;
   if (
     flow?.type !== 'announce' ||
-    !(flow.step === 'confirm' || flow.step === 'buy_label' || flow.step === 'buy_icon')
+    !(
+      flow.step === 'confirm' ||
+      flow.step === 'buy_label' ||
+      flow.step === 'buy_icon' ||
+      flow.step === 'link_url'
+    )
   ) {
     return;
   }
@@ -5544,6 +5569,7 @@ async function showAnnounceConfirm(ctx: AppCtx): Promise<void> {
   // landed here from any of the buy_* sub-steps.
   const buy = (flow.data as { buy?: AnnounceBuy }).buy;
   const shareSales = Boolean(flow.data.share_sales);
+  const links = flow.data.links ?? [];
   ctx.session.adminFlow = {
     type: 'announce',
     step: 'confirm',
@@ -5552,6 +5578,7 @@ async function showAnnounceConfirm(ctx: AppCtx): Promise<void> {
       format: flow.data.format,
       buy,
       share_sales: shareSales,
+      links,
     },
   };
   const recipients = await listUsersForAnnouncement();
@@ -5564,25 +5591,28 @@ async function showAnnounceConfirm(ctx: AppCtx): Promise<void> {
       `\n   • Product: <code>${escapeHtml(buy.product_name)}</code> (id=${buy.product_id})` +
       `\n   • Color: <code>${buy.color}</code>` +
       `\n   • Icon: ${buy.icon_unicode ? `${buy.icon_unicode} (premium)` : '<i>none</i>'}`
-    : '\n\n<i>No Buy button attached. Tap “Add Buy Button” to deep-link an announcement to a specific product.</i>';
+      : '\n\n<i>No Buy button attached. Tap “Add Buy Button” to deep-link an announcement to a specific product.</i>';
+  const linksLine = links.length
+    ? `\n\n🔗 <b>Link buttons:</b>\n${links.map((link) => `• ${escapeHtml(link.label)}`).join('\n')}`
+    : '\n\n<i>No link buttons attached.</i>';
   try {
     await ctx.reply(previewHtml, {
       parse_mode: 'HTML',
-      reply_markup: announceBroadcastKeyboard(buy),
+      reply_markup: announceBroadcastKeyboard(buy, links),
     });
   } catch (err) {
     logger.warn({ err }, 'announce preview render failed; retrying without custom emoji tags');
     await ctx.reply(stripCustomEmojiTags(previewHtml), {
       parse_mode: 'HTML',
-      reply_markup: announceBroadcastKeyboard(buy),
+      reply_markup: announceBroadcastKeyboard(buy, links),
     });
   }
   const salesLine = shareSales
     ? '\n\n🌐 <b>Sales group mirror:</b> ON'
     : '\n\n🌐 <b>Sales group mirror:</b> OFF';
-  await ctx.reply(`📣 <b>Confirm broadcast</b>${buyLine}${salesLine}`, {
+  await ctx.reply(`📣 <b>Confirm broadcast</b>${buyLine}${linksLine}${salesLine}`, {
     parse_mode: 'HTML',
-    reply_markup: announceConfirmKeyboard(recipients.length, buy, shareSales),
+    reply_markup: announceConfirmKeyboard(recipients.length, buy, links, shareSales),
   });
 }
 
@@ -5676,6 +5706,7 @@ adminBot.callbackQuery('adm:ann', async (ctx) => {
     '📣 *Announce*\n\nSend the announcement text.\n\n' +
       'Tip: use `{tiger}` `{fire}` `{rocket}` etc. to insert mapped emojis (premium-aware).' +
       '\n\nAfter the text you can attach an optional *Buy Button* that deep-links to a product\'s quantity page.' +
+      '\n\nYou can also add optional link buttons for Shop, Settings, Support, referrals, API, Top-Up, or a custom URL.' +
       '\n\nOr `/cancel`.',
     { parse_mode: 'Markdown', reply_markup: backRow(new InlineKeyboard()) },
   );
@@ -5738,6 +5769,7 @@ adminBot.callbackQuery(/^adm:ann:buy:set:(\d+)$/, async (ctx) => {
       format: flow.data.format,
       buy,
       share_sales: flow.data.share_sales,
+      links: flow.data.links,
     },
   };
   await showAnnounceBuyEdit(ctx);
@@ -5788,6 +5820,7 @@ adminBot.callbackQuery('adm:ann:buy:remove', async (ctx) => {
       text: flow.data.text,
       format: flow.data.format,
       share_sales: flow.data.share_sales,
+      links: flow.data.links,
     },
   };
   await showAnnounceConfirm(ctx);
@@ -5813,6 +5846,7 @@ adminBot.callbackQuery('adm:ann:buy:label', async (ctx) => {
       format: flow.data.format,
       buy,
       share_sales: flow.data.share_sales,
+      links: flow.data.links,
     },
   };
   await ctx.editMessageText(
@@ -5872,6 +5906,7 @@ adminBot.callbackQuery(/^adm:ann:buy:color:(.+)$/, async (ctx) => {
       format: flow.data.format,
       buy: { ...buy, color },
       share_sales: flow.data.share_sales,
+      links: flow.data.links,
     },
   };
   await showAnnounceBuyEdit(ctx);
@@ -5897,6 +5932,7 @@ adminBot.callbackQuery('adm:ann:buy:icon', async (ctx) => {
       format: flow.data.format,
       buy,
       share_sales: flow.data.share_sales,
+      links: flow.data.links,
     },
   };
   await ctx.editMessageText(
@@ -5929,11 +5965,119 @@ adminBot.callbackQuery('adm:ann:sales:toggle', async (ctx) => {
       format: flow.data.format,
       buy: flow.data.buy,
       share_sales: shareSales,
+      links: flow.data.links,
     },
   };
   await ctx.answerCallbackQuery({
     text: `Sales group mirror ${shareSales ? 'enabled' : 'disabled'}.`,
   });
+  await showAnnounceConfirm(ctx);
+});
+
+function announceLinkPickerKeyboard(links: AnnounceLink[]): InlineKeyboard {
+  const selected = new Set(links.map((link) => link.kind));
+  const kb = new InlineKeyboard();
+  for (const preset of ANNOUNCE_LINK_PRESETS) {
+    kb.text(`${selected.has(preset.kind) ? '✅' : '➕'} ${preset.label}`, `adm:ann:link:set:${preset.kind}`).row();
+  }
+  kb.text('✏️ Custom URL', 'adm:ann:link:custom')
+    .row()
+    .text('⬅️ Back', 'adm:ann:buy:cancel');
+  return kb;
+}
+
+adminBot.callbackQuery('adm:ann:link:add', async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(
+    '🔗 *Link Buttons*\n\nTap a preset to toggle it, or add a custom URL. You can attach up to six links.',
+    { parse_mode: 'Markdown', reply_markup: announceLinkPickerKeyboard(flow.data.links ?? []) },
+  );
+});
+
+adminBot.callbackQuery(/^adm:ann:link:set:(refer|api|settings|shop|topup|support)$/, async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  const kind = ctx.match[1] as Exclude<AnnounceLink['kind'], 'url'>;
+  const links = [...(flow.data.links ?? [])];
+  const existing = links.findIndex((link) => link.kind === kind);
+  if (existing >= 0) {
+    links.splice(existing, 1);
+  } else if (links.length >= 6) {
+    await ctx.answerCallbackQuery({ text: 'Maximum six links.', show_alert: true });
+    return;
+  } else {
+    const preset = ANNOUNCE_LINK_PRESETS.find((link) => link.kind === kind)!;
+    links.push(preset);
+  }
+  ctx.session.adminFlow = {
+    type: 'announce',
+    step: 'confirm',
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy: flow.data.buy,
+      share_sales: flow.data.share_sales,
+      links,
+    },
+  };
+  await ctx.answerCallbackQuery();
+  await showAnnounceConfirm(ctx);
+});
+
+adminBot.callbackQuery('adm:ann:link:custom', async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  if ((flow.data.links ?? []).length >= 6) {
+    await ctx.answerCallbackQuery({ text: 'Maximum six links.', show_alert: true });
+    return;
+  }
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = {
+    type: 'announce',
+    step: 'link_url',
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy: flow.data.buy,
+      share_sales: flow.data.share_sales,
+      links: flow.data.links,
+    },
+  };
+  await ctx.editMessageText(
+    '✏️ *Custom Link Button*\n\nSend it as:\n`Label | https://example.com`\n\nThe label can be up to 64 characters.',
+    { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('⬅️ Back', 'adm:ann:buy:cancel') },
+  );
+});
+
+adminBot.callbackQuery('adm:ann:link:clear', async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  ctx.session.adminFlow = {
+    type: 'announce',
+    step: 'confirm',
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy: flow.data.buy,
+      share_sales: flow.data.share_sales,
+      links: [],
+    },
+  };
+  await ctx.answerCallbackQuery({ text: 'Links cleared.' });
   await showAnnounceConfirm(ctx);
 });
 
@@ -5947,6 +6091,7 @@ adminBot.callbackQuery('adm:ann:send', async (ctx) => {
   const body = flow.data.text;
   const format = flow.data.format ?? 'md';
   const buy = flow.data.buy;
+  const links = flow.data.links ?? [];
   const shareSales = Boolean(flow.data.share_sales);
   const recipients = await listUsersForAnnouncement();
   const api = ctx.api;
@@ -5976,6 +6121,7 @@ adminBot.callbackQuery('adm:ann:send', async (ctx) => {
             },
           }
         : {}),
+      links: links.map((link) => ({ text: link.label, url: link.url })),
     });
     if (shareSales) {
       await publicFeed.notifySalesAnnouncement(api, {
@@ -5990,6 +6136,7 @@ adminBot.callbackQuery('adm:ann:send', async (ctx) => {
               },
             }
           : {}),
+        links: links.map((link) => ({ text: link.label, url: link.url })),
       });
     }
     for (const r of recipients) {
@@ -5997,7 +6144,7 @@ adminBot.callbackQuery('adm:ann:send', async (ctx) => {
         // Build a fresh keyboard per recipient — the underlying
         // grammyjs InlineKeyboard is mutable, and reusing the same
         // instance across `sendMessage` calls is unsafe.
-        const reply_markup = announceBroadcastKeyboard(buy);
+        const reply_markup = announceBroadcastKeyboard(buy, links);
         try {
           await api.sendMessage(r.telegram_id, html, {
             parse_mode: 'HTML',
@@ -9868,6 +10015,40 @@ adminBot.on('message:text', async (ctx, next) => {
         await showAnnounceConfirm(ctx);
         return;
       }
+      if (flow.step === 'link_url') {
+        const separator = text.indexOf('|');
+        const label = separator >= 0 ? text.slice(0, separator).trim() : '';
+        const urlText = separator >= 0 ? text.slice(separator + 1).trim() : '';
+        let url: URL;
+        try {
+          url = new URL(urlText);
+        } catch {
+          await ctx.reply('❌ Send `Label | https://...` with a valid HTTP(S) URL.');
+          return;
+        }
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          await ctx.reply('❌ The URL must use http or https.');
+          return;
+        }
+        if (!label || label.length > 64) {
+          await ctx.reply('❌ The label must be between 1 and 64 characters.');
+          return;
+        }
+        const links = [...(flow.data.links ?? [])];
+        if (links.length >= 6) {
+          await ctx.reply('❌ Maximum six links.');
+          return;
+        }
+        links.push({ kind: 'url', label, url: url.toString() });
+        ctx.session.adminFlow = {
+          type: 'announce',
+          step: 'confirm',
+          data: { ...flow.data, links },
+        };
+        await ctx.reply(`✅ Link added → \`${label}\``, { parse_mode: 'Markdown' });
+        await showAnnounceConfirm(ctx);
+        return;
+      }
       if (flow.step === 'buy_label') {
         // Cap to 64 chars so the inline button never gets truncated
         // mid-emoji on Android. Keep premium-emoji markers intact —
@@ -9891,6 +10072,7 @@ adminBot.on('message:text', async (ctx, next) => {
             format: flow.data.format,
             buy: { ...flow.data.buy, label: trimmed },
             share_sales: flow.data.share_sales,
+            links: flow.data.links,
           },
         };
         await ctx.reply(`✅ Label updated → \`${trimmed}\``, { parse_mode: 'Markdown' });
@@ -9915,6 +10097,7 @@ adminBot.on('message:text', async (ctx, next) => {
                 icon_custom_emoji_id: undefined,
               },
               share_sales: flow.data.share_sales,
+              links: flow.data.links,
             },
           };
           await ctx.reply('🗑 Icon cleared.');
@@ -9952,6 +10135,7 @@ adminBot.on('message:text', async (ctx, next) => {
               icon_custom_emoji_id: customId,
             },
             share_sales: flow.data.share_sales,
+            links: flow.data.links,
           },
         };
         await ctx.reply(

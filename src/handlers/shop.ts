@@ -3,6 +3,7 @@ import { InlineKeyboard, InputFile } from 'grammy';
 import {
   LOCALES,
   PRODUCTS_PER_PAGE,
+  PRODUCTS_PER_PAGE_COMPACT,
   QTY_MAX,
   QTY_MIN,
   type Lang,
@@ -22,6 +23,7 @@ import {
   claimProductItems,
   spendReferralBalance,
   setOrderDeliveredItems,
+  type ShopListMode,
 } from '../db/queries.js';
 import { supabase } from '../db/supabase.js';
 import {
@@ -128,6 +130,10 @@ function buildShopRows(
   return out;
 }
 
+export function productsPerPage(mode: ShopListMode): number {
+  return mode === 'paged10' ? PRODUCTS_PER_PAGE_COMPACT : PRODUCTS_PER_PAGE;
+}
+
 export async function showShopHome(ctx: AppCtx, page = 0) {
   const { rows: rawRows, total: rawTotal } = await listActiveProducts(0, 10000);
   // Layer per-user price overrides onto the catalog rows before we
@@ -151,11 +157,12 @@ export async function showShopHome(ctx: AppCtx, page = 0) {
   const shopRows = buildShopRows(rows, categories, groupMode === 'grouped');
   const allMode = listMode === 'all';
   const total = shopRows.length;
-  const totalPages = Math.max(1, Math.ceil(total / PRODUCTS_PER_PAGE));
+  const pageSize = productsPerPage(listMode);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
   const pageRows = allMode
     ? shopRows.slice(0, 95)
-    : shopRows.slice(safePage * PRODUCTS_PER_PAGE, (safePage + 1) * PRODUCTS_PER_PAGE);
+    : shopRows.slice(safePage * pageSize, (safePage + 1) * pageSize);
   // Header is the single bold line `Available Products:` — page /
   // total counts live in the keyboard footer where they don't
   // clutter the body copy.
@@ -198,7 +205,8 @@ async function showProductGroup(ctx: AppCtx, categoryId: number, page = 0): Prom
     if (aInStock !== bInStock) return aInStock ? -1 : 1;
     return (a.sort_order ?? a.id) - (b.sort_order ?? b.id);
   });
-  const pageData = productVariantPage(rows, page);
+  const listMode = await getUserShopListMode(ctx.user.telegram_id);
+  const pageData = productVariantPage(rows, page, productsPerPage(listMode));
   const html = `<b>${escapeHtmlLocal(category.name)}</b>\n\nChoose a variant:`;
   const premiumOpts = {
     parse_mode: 'HTML',
