@@ -86,6 +86,34 @@ export async function activateReferralRecord(
   return true;
 }
 
+export type ReferralMilestoneReward = {
+  awardedCount: number;
+  awardedAmount: number;
+  newBalance: number;
+};
+
+export async function awardReferralMilestones(
+  user_id: number,
+): Promise<ReferralMilestoneReward> {
+  const { data, error } = await supabase.rpc('award_referral_milestones', {
+    p_user_id: user_id,
+  });
+  if (error) {
+    logger.warn({ err: error, user_id }, 'awardReferralMilestones failed');
+    return { awardedCount: 0, awardedAmount: 0, newBalance: 0 };
+  }
+  const result = (Array.isArray(data) ? data[0] : data) as {
+    awarded_count?: number;
+    awarded_amount?: number;
+    new_balance?: number;
+  } | null;
+  return {
+    awardedCount: Number(result?.awarded_count ?? 0),
+    awardedAmount: Number(result?.awarded_amount ?? 0),
+    newBalance: Number(result?.new_balance ?? 0),
+  };
+}
+
 export async function getOrCreateUser(args: {
   telegram_id: number;
   username?: string | null;
