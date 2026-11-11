@@ -814,7 +814,7 @@ export const en: Record<string, string> = {
   'btn.copy_link': '📋 Copy Link',
   'btn.live_refers': '🔵 See Your Live Refers',
   'btn.refer_convert': '💱 Convert to Wallet',
-  'btn.freebies': '🎁 Freebies',
+  'btn.freebies': 'FreeBies',
   'btn.freebie_claim': '✅ Claim Now — Free',
   'btn.home': '🛍 Home',
   'freebie.list.title': '{freebie_title} *Freebies*',
