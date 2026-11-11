@@ -5760,7 +5760,7 @@ adminBot.callbackQuery(/^adm:stockann:go:(\d+):(\d+)$/, async (ctx) => {
     data: {
       text: buildStockAnnounceText(product, qtyAdded),
       format: 'html',
-      share_sales: false,
+      share_sales: true,
       links: [],
       buy: {
         product_id: product.id,
