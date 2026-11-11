@@ -196,6 +196,7 @@ import {
 import type { ColorMode } from '../../../config/index.js';
 import { BUTTON_KEYS, COLOR_PREFIX, EMOJI, colorModeToStyle } from '../../../config/index.js';
 import type { AppCtx } from '../../middleware/user.js';
+import { registerFreebiesAdmin } from './freebies.js';
 import { logger } from '../../logger.js';
 import { env } from '../../env.js';
 import type { DBOrder, DBUser, DBPromo, DBProduct, DBSupplierApiSource, DBSupplierProductLink } from '../../types.js';
@@ -295,6 +296,8 @@ adminBot.command(
   async (_ctx, next) => next(),
 );
 
+registerFreebiesAdmin(adminBot);
+
 const PER_PAGE = 8;
 const ROOT_TEXT = '🛠 *Admin Panel*\n\nTap a section to manage it.';
 
@@ -322,6 +325,7 @@ function rootMenu(): InlineKeyboard {
     .text('💸 Promos', 'adm:promo')
     .row()
     .text('🎁 Gift Codes', 'adm:gift')
+    .text('🎁 Freebies', 'adm:fb')
     .row()
     .text('💎 Custom Prices', 'adm:price')
     .row()

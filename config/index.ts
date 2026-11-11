@@ -155,6 +155,9 @@ export const BUTTON_KEYS = {
   copy_link: 'btn.copy_link',
   live_refers: 'btn.live_refers',
   refer_convert: 'btn.refer_convert',
+  freebies: 'btn.freebies',
+  freebie_claim: 'btn.freebie_claim',
+  home: 'btn.home',
 
   // ---- Redeem Gift Code ---------------------------------------
   redeem: 'btn.redeem',
@@ -368,6 +371,9 @@ export const DEFAULT_BUTTON_COLORS: Record<keyof typeof BUTTON_KEYS, ColorMode> 
   // Refer copy-link: green (positive action).
   copy_link: 'green',
   live_refers: 'blue',
+  freebies: 'green',
+  freebie_claim: 'green',
+  home: 'none',
 
   // Redeem flow.
   redeem: 'none',
@@ -574,6 +580,23 @@ export const EMOJI: Record<string, EmojiSpec> = {
   refer_withdrawn: { unicode: '💵', custom_emoji_id: '5201873447554145566' },
   refer_spent: { unicode: '🧾', custom_emoji_id: '6276009124350138166' },
   refer_paybalance: { unicode: '🎫', custom_emoji_id: '4958699241137505132' },
+
+  // ---- Freebies (Refer & Earn → Freebies) ----
+  freebie_title: { unicode: '🎁', custom_emoji_id: '5053473385355412667' },
+  freebie_tap: { unicode: '👉', custom_emoji_id: '6181460307001481584' },
+  freebie_default: { unicode: '🎁', custom_emoji_id: '4958699241137505132' },
+  freebie_kind: { unicode: '📦', custom_emoji_id: '5069075201950483359' },
+  freebie_stock: { unicode: '📦', custom_emoji_id: '5472170432574528133' },
+  freebie_claims: { unicode: '👤', custom_emoji_id: '5332724926216428039' },
+  freebie_refs: { unicode: '🎫', custom_emoji_id: '4958699241137505132' },
+  freebie_desc: { unicode: '📄', custom_emoji_id: '5778299625370817409' },
+  freebie_free: { unicode: '✨', custom_emoji_id: '6088990159334808217' },
+  freebie_claim: { unicode: '✅', custom_emoji_id: '6267008582294705964' },
+  freebie_ok: { unicode: '✅', custom_emoji_id: '5096035317257864249' },
+  freebie_item: { unicode: '📦', custom_emoji_id: '6156809896256867448' },
+  freebie_warn: { unicode: '⚠️', custom_emoji_id: '5974083768233760323' },
+  freebie_out: { unicode: '❌', custom_emoji_id: '5095957930537124723' },
+  freebie_home: { unicode: '🛍', custom_emoji_id: '5312361253610475399' },
 
   // ---- Public group feed ---------------------------------------
   feed_title: { unicode: '🎉', custom_emoji_id: '6181381563071077485' },
@@ -897,6 +920,9 @@ export const BUTTON_ICONS: Partial<Record<keyof typeof BUTTON_KEYS, string>> = {
   // Refer copy-link
   copy_link: 'refer_transferred',
   live_refers: 'profile_link',
+  freebies: 'freebie_title',
+  freebie_claim: 'freebie_claim',
+  home: 'freebie_home',
 
   // Redeem
   redeem: 'gift_title',

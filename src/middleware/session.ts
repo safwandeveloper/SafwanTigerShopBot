@@ -7,6 +7,19 @@ export type AnnounceLink = {
 };
 
 /** Multi-step admin input flow state. */
+export type FreebieField =
+  | 'name'
+  | 'emoji'
+  | 'kind'
+  | 'description'
+  | 'content'
+  | 'items'
+  | 'stock'
+  | 'limit'
+  | 'min_refs'
+  | 'label'
+  | 'icon';
+
 export type AdminFlow =
   | { type: 'add_category'; step: 'name'; data: { emoji?: string } }
   | { type: 'add_category'; step: 'emoji'; data: { name: string } }
@@ -316,6 +329,11 @@ export type AdminFlow =
     }
   | { type: 'ban_user'; step: 'reason'; data: { telegram_id: number } }
   | { type: 'set_deposit_amount'; step: 'amount'; data: { deposit_id: number } }
+  | {
+      type: 'freebie_edit';
+      step: 'value';
+      data: { freebie_id: number | null; field: FreebieField };
+    }
   | { type: 'add_gift'; step: 'code'; data: Record<string, never> }
   | { type: 'add_gift'; step: 'amount'; data: { code: string } }
   | {

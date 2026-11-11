@@ -291,6 +291,8 @@ export function referKeyboard(
   }
   inlineCopyText(kb, lang, 'copy_link', link);
   kb.row();
+  inlineBtn(kb, lang, 'freebies', 'fb:list');
+  kb.row();
   inlineUrl(kb, lang, 'live_refers', 'https://t.me/TigerStockChat');
   kb.row();
   inlineBtn(kb, lang, 'refresh', options.refreshCallback ?? 'profile:refer');
