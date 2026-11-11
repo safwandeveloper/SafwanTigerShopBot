@@ -488,6 +488,37 @@ export async function notifySalesAnnouncement(api: Api, args: {
   );
 }
 
+const STOCK_ANN_HEAD_EMOJI_ID = '5424818078833715060';
+const STOCK_ANN_AVAILABLE_EMOJI_ID = '5386367538735104399';
+const STOCK_ANN_PRICE_EMOJI_ID = '5278223861404421915';
+
+/**
+ * Shared "N new stock added" body used by the public feed post and
+ * the admin stock broadcast. Returns a template for
+ * `renderHtmlTemplate` (custom emojis as `{{ce:id|glyph}}` markers).
+ */
+export function buildStockAddedTemplate(args: {
+  productName: string;
+  productEmoji?: string | null;
+  productEmojiId?: string | null;
+  qtyAdded: number;
+  available: number | string;
+  price: number;
+}): string {
+  const glyph = args.productEmoji?.trim() ?? '';
+  const productIcon = args.productEmojiId
+    ? `{{ce:${args.productEmojiId}|${glyph || '📦'}}} `
+    : glyph && glyph !== CART_FALLBACK
+      ? `${escapeAttr(glyph)} `
+      : '';
+  return [
+    `{{ce:${STOCK_ANN_HEAD_EMOJI_ID}|📣}} <b>${args.qtyAdded} new stock added for ${productIcon}${escapeAttr(args.productName)}!</b>`,
+    '',
+    `{{ce:${STOCK_ANN_AVAILABLE_EMOJI_ID}|🔄}} Available: ${args.available} items`,
+    `{{ce:${STOCK_ANN_PRICE_EMOJI_ID}|💰}} Price: <b>${money(args.price)} USDT</b>`,
+  ].join('\n');
+}
+
 export async function notifyStockAdded(api: Api, args: {
   productId: number;
   productName: string;
@@ -497,23 +528,7 @@ export async function notifyStockAdded(api: Api, args: {
   available: number;
   price: number;
 }): Promise<void> {
-  const glyph = args.productEmoji?.trim() ?? '';
-  const productIcon =
-    glyph && args.productEmojiId
-      ? `<tg-emoji emoji-id="${escapeAttr(args.productEmojiId)}">${escapeAttr(glyph)}</tg-emoji> `
-      : glyph && glyph !== CART_FALLBACK
-        ? `${escapeAttr(glyph)} `
-        : '';
-  const name = `${productIcon}${escapeAttr(args.productName)}`;
-  const html = renderHtmlTemplate(
-    [
-      `<blockquote>{feed_title} <b>${args.qtyAdded} new stock added for ${name}!</b>`,
-      '',
-      `{refer_active} <b>Available:</b> ${args.available} items`,
-      `{prod_price_base} <b>Price:</b> ${money(args.price)} USDT`,
-      '</blockquote>',
-    ].join('\n'),
-  );
+  const html = renderHtmlTemplate(buildStockAddedTemplate(args));
   await sendRenderedHtml(api, html, {
     text: `Buy ${args.productName}`.slice(0, 64),
     iconKey: 'feed_buy_button',
