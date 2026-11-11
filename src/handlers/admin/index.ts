@@ -246,6 +246,38 @@ async function notifyPublicStockAdded(
   });
 }
 
+const STOCK_ANN_HEAD_EMOJI_ID = '5424818078833715060';
+const STOCK_ANN_AVAILABLE_EMOJI_ID = '5386367538735104399';
+const STOCK_ANN_PRICE_EMOJI_ID = '5278223861404421915';
+const STOCK_ANN_BUY_ICON_ID = '5440841102871517055';
+
+function buildStockAnnounceText(product: DBProduct, qtyAdded: number): string {
+  const glyph = product.emoji?.trim() ?? '';
+  const productIcon =
+    glyph && product.emoji_id
+      ? `{{ce:${product.emoji_id}|${glyph}}} `
+      : glyph && glyph !== '🛒'
+        ? `${glyph} `
+        : '';
+  const available = product.unlimited_stock ? '∞' : String(product.stock);
+  return [
+    `{{ce:${STOCK_ANN_HEAD_EMOJI_ID}|📣}} <b>${qtyAdded} new stock added for ${productIcon}${escapeHtml(product.name)}!</b>`,
+    '',
+    `{{ce:${STOCK_ANN_AVAILABLE_EMOJI_ID}|🔄}} Available: ${available} items`,
+    `{{ce:${STOCK_ANN_PRICE_EMOJI_ID}|💰}} Price: <b>${Number(product.price).toFixed(2)} USDT</b>`,
+  ].join('\n');
+}
+
+async function askStockAnnounce(ctx: AppCtx, productId: number, qtyAdded: number): Promise<void> {
+  if (qtyAdded <= 0) return;
+  const kb = new InlineKeyboard()
+    .text('📣 Announce', `adm:stockann:go:${productId}:${qtyAdded}`)
+    .text('❌ Skip', 'adm:stockann:skip');
+  await ctx
+    .reply(`📣 Announce these ${qtyAdded} new stock item(s) to all users?`, { reply_markup: kb })
+    .catch((err) => logger.warn({ err, productId }, 'stock announce prompt failed'));
+}
+
 /**
  * Gate that ONLY blocks explicit admin invocations (commands and
  * `adm:` callback queries) for non-admins. Other updates pass through
@@ -3949,6 +3981,7 @@ adminBot.callbackQuery(/^adm:prod:items:confirm:(\d+):(\d+)$/, async (ctx) => {
     parse_mode: 'Markdown',
   });
   await showProductEditor(ctx, product_id, page);
+  await askStockAnnounce(ctx, product_id, staged.length);
 });
 
 adminBot.callbackQuery(/^adm:prod:items:clear_stage:(\d+):(\d+)$/, async (ctx) => {
@@ -5710,6 +5743,40 @@ adminBot.callbackQuery('adm:ann', async (ctx) => {
       '\n\nOr `/cancel`.',
     { parse_mode: 'Markdown', reply_markup: backRow(new InlineKeyboard()) },
   );
+});
+
+adminBot.callbackQuery(/^adm:stockann:go:(\d+):(\d+)$/, async (ctx) => {
+  const productId = Number(ctx.match[1]);
+  const qtyAdded = Number(ctx.match[2]);
+  const product = await getProduct(productId);
+  if (!product) {
+    await ctx.answerCallbackQuery({ text: 'Product not found.', show_alert: true });
+    return;
+  }
+  await ctx.answerCallbackQuery();
+  ctx.session.adminFlow = {
+    type: 'announce',
+    step: 'confirm',
+    data: {
+      text: buildStockAnnounceText(product, qtyAdded),
+      format: 'html',
+      share_sales: true,
+      links: [],
+      buy: {
+        product_id: product.id,
+        product_name: product.name,
+        label: `Buy ${product.name}`.slice(0, 64),
+        color: 'blue',
+        icon_custom_emoji_id: STOCK_ANN_BUY_ICON_ID,
+      },
+    },
+  };
+  await showAnnounceBuyEdit(ctx);
+});
+
+adminBot.callbackQuery('adm:stockann:skip', async (ctx) => {
+  await ctx.answerCallbackQuery({ text: 'No announcement sent.' });
+  await ctx.editMessageText('⏭ Stock announcement skipped.').catch(() => undefined);
 });
 
 adminBot.callbackQuery('adm:ann:buy:add', async (ctx) => {
@@ -9114,14 +9181,12 @@ adminBot.on('message:text', async (ctx, next) => {
       const before = await getProduct(flow.data.product_id);
       await updateProduct(flow.data.product_id, { stock });
       await autoFulfillPreordersAfterRestock(ctx, flow.data.product_id);
-      await notifyPublicStockAdded(
-        ctx,
-        flow.data.product_id,
-        Math.max(0, stock - Number(before?.stock ?? 0)),
-      );
+      const stockAdded = Math.max(0, stock - Number(before?.stock ?? 0));
+      await notifyPublicStockAdded(ctx, flow.data.product_id, stockAdded);
       ctx.session.adminFlow = undefined;
       await ctx.reply('✅ Stock updated.');
       await showProductEditor(ctx, flow.data.product_id, flow.data.page);
+      await askStockAnnounce(ctx, flow.data.product_id, stockAdded);
       return;
     }
     if (flow.type === 'edit_product_name') {
@@ -11551,6 +11616,7 @@ adminBot.command('addproductitems', async (ctx) => {
   await notifyPublicStockAdded(ctx, id, inserted);
   const remaining = await countAvailableProductItems(id);
   await ctx.reply(`✅ Added ${inserted} items to product #${id}. Pool now has ${remaining} unconsumed.`);
+  await askStockAnnounce(ctx, id, inserted);
 });
 
 adminBot.command('countproductitems', async (ctx) => {
