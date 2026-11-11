@@ -583,6 +583,7 @@ export const EMOJI: Record<string, EmojiSpec> = {
 
   // ---- Freebies (Refer & Earn → Freebies) ----
   freebie_title: { unicode: '🎁', custom_emoji_id: '5053473385355412667' },
+  freebie_button: { unicode: '🎁', custom_emoji_id: '6269358547880908450' },
   freebie_tap: { unicode: '👉', custom_emoji_id: '6181460307001481584' },
   freebie_default: { unicode: '🎁', custom_emoji_id: '4958699241137505132' },
   freebie_kind: { unicode: '📦', custom_emoji_id: '5069075201950483359' },
@@ -920,7 +921,7 @@ export const BUTTON_ICONS: Partial<Record<keyof typeof BUTTON_KEYS, string>> = {
   // Refer copy-link
   copy_link: 'refer_transferred',
   live_refers: 'profile_link',
-  freebies: 'freebie_title',
+  freebies: 'freebie_button',
   freebie_claim: 'freebie_claim',
   home: 'freebie_home',
 
