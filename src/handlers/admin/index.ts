@@ -246,26 +246,17 @@ async function notifyPublicStockAdded(
   });
 }
 
-const STOCK_ANN_HEAD_EMOJI_ID = '5424818078833715060';
-const STOCK_ANN_AVAILABLE_EMOJI_ID = '5386367538735104399';
-const STOCK_ANN_PRICE_EMOJI_ID = '5278223861404421915';
 const STOCK_ANN_BUY_ICON_ID = '5440841102871517055';
 
 function buildStockAnnounceText(product: DBProduct, qtyAdded: number): string {
-  const glyph = product.emoji?.trim() ?? '';
-  const productIcon =
-    glyph && product.emoji_id
-      ? `{{ce:${product.emoji_id}|${glyph}}} `
-      : glyph && glyph !== '🛒'
-        ? `${glyph} `
-        : '';
-  const available = product.unlimited_stock ? '∞' : String(product.stock);
-  return [
-    `{{ce:${STOCK_ANN_HEAD_EMOJI_ID}|📣}} <b>${qtyAdded} new stock added for ${productIcon}${escapeHtml(product.name)}!</b>`,
-    '',
-    `{{ce:${STOCK_ANN_AVAILABLE_EMOJI_ID}|🔄}} Available: ${available} items`,
-    `{{ce:${STOCK_ANN_PRICE_EMOJI_ID}|💰}} Price: <b>${Number(product.price).toFixed(2)} USDT</b>`,
-  ].join('\n');
+  return publicFeed.buildStockAddedTemplate({
+    productName: product.name,
+    productEmoji: product.emoji,
+    productEmojiId: product.emoji_id,
+    qtyAdded,
+    available: product.unlimited_stock ? '∞' : product.stock,
+    price: Number(product.price),
+  });
 }
 
 async function askStockAnnounce(ctx: AppCtx, productId: number, qtyAdded: number): Promise<void> {
