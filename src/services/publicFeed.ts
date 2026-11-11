@@ -507,15 +507,15 @@ export function buildStockAddedTemplate(args: {
 }): string {
   const glyph = args.productEmoji?.trim() ?? '';
   const productIcon = args.productEmojiId
-    ? `{{ce:${args.productEmojiId}|${glyph || '📦'}}} `
+    ? `{{ce:${args.productEmojiId}|${glyph || '📦'}}}\n`
     : glyph && glyph !== CART_FALLBACK
-      ? `${escapeAttr(glyph)} `
+      ? `${escapeAttr(glyph)}\n`
       : '';
   return [
-    `{{ce:${STOCK_ANN_HEAD_EMOJI_ID}|📣}} <b>${args.qtyAdded} new stock added for ${productIcon}${escapeAttr(args.productName)}!</b>`,
+    `{{ce:${STOCK_ANN_HEAD_EMOJI_ID}|📣}}  <b>${args.qtyAdded} new stock added for ${productIcon}${escapeAttr(args.productName)}!</b>`,
     '',
-    `{{ce:${STOCK_ANN_AVAILABLE_EMOJI_ID}|🔄}} Available: ${args.available} items`,
-    `{{ce:${STOCK_ANN_PRICE_EMOJI_ID}|💰}} Price: <b>${money(args.price)} USDT</b>`,
+    `{{ce:${STOCK_ANN_AVAILABLE_EMOJI_ID}|🔄}}  Available: ${args.available} items`,
+    `{{ce:${STOCK_ANN_PRICE_EMOJI_ID}|💰}}  Price: <b>${money(args.price)} USDT</b>`,
   ].join('\n');
 }
 
