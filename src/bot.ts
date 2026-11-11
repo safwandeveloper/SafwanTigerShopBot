@@ -10,6 +10,7 @@ import { forceJoinMiddleware } from './middleware/forceJoin.js';
 import { registerStart } from './handlers/start.js';
 import { registerShop } from './handlers/shop.js';
 import { registerProfile } from './handlers/profile.js';
+import { registerFreebies } from './handlers/freebies.js';
 import { registerSupport, restoreLiveSupportSession } from './handlers/support.js';
 import { registerTopup } from './handlers/topup.js';
 import { registerDirectPay } from './handlers/directPay.js';
@@ -45,6 +46,7 @@ export async function buildBot(): Promise<Bot<AppCtx>> {
   registerPublicGroup(bot);
   registerShop(bot);
   registerProfile(bot);
+  registerFreebies(bot);
   registerSupport(bot);
   registerTopup(bot);
   registerDirectPay(bot);
