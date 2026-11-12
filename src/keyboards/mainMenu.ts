@@ -33,6 +33,7 @@ const CALLBACK: Partial<Record<keyof typeof BUTTON_KEYS, string>> = {
   topup_wallet: 'topup:open',
   my_orders: 'profile:orders',
   refer: 'profile:refer',
+  freebies: 'fb:list',
   notifications: 'profile:notifications',
   language: 'profile:lang',
   deposit_history: 'profile:deposits',

@@ -582,11 +582,11 @@ export const EMOJI: Record<string, EmojiSpec> = {
   refer_paybalance: { unicode: '🎫', custom_emoji_id: '4958699241137505132' },
 
   // ---- Freebies (Refer & Earn → Freebies) ----
-  freebie_title: { unicode: '🎁', custom_emoji_id: '5053473385355412667' },
+  freebie_title: { unicode: '🎁', custom_emoji_id: '6269435754213021124' },
   freebie_button: { unicode: '🎁', custom_emoji_id: '6269358547880908450' },
-  freebie_tap: { unicode: '👉', custom_emoji_id: '6181460307001481584' },
+  freebie_tap: { unicode: '👉', custom_emoji_id: '6269369495752545904' },
   freebie_default: { unicode: '🎁', custom_emoji_id: '4958699241137505132' },
-  freebie_kind: { unicode: '📦', custom_emoji_id: '5069075201950483359' },
+  freebie_kind: { unicode: '📦', custom_emoji_id: '6028404508843842802' },
   freebie_stock: { unicode: '📦', custom_emoji_id: '5472170432574528133' },
   freebie_claims: { unicode: '👤', custom_emoji_id: '5332724926216428039' },
   freebie_refs: { unicode: '🎫', custom_emoji_id: '4958699241137505132' },
@@ -1062,7 +1062,7 @@ export const MAIN_MENU_LAYOUT: ReadonlyArray<ReadonlyArray<keyof typeof BUTTON_K
   ['shop'],
   ['topup', 'profile'],
   ['support', 'ai_support'],
-  ['refer', 'channel'],
+  ['refer', 'freebies'],
 ];
 
 /** Shop pagination size — products per page */

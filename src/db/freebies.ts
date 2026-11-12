@@ -85,7 +85,7 @@ export async function getFreebie(id: number): Promise<DBFreebie | null> {
 }
 
 export async function createFreebie(name: string): Promise<DBFreebie> {
-  const { data, error } = await supabase.from('freebies').insert({ name }).select('*').single();
+  const { data, error } = await supabase.from('freebies').insert({ name, kind: 'FreeBie' }).select('*').single();
   if (error) {
     logger.error({ err: error }, 'createFreebie failed');
     throw error;
