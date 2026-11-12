@@ -3,7 +3,7 @@
  */
 import { InlineKeyboard, type Composer } from 'grammy';
 import { colorModeToStyle, type ColorMode } from '../../config/index.js';
-import { countReferrals } from '../db/queries.js';
+import { countReferralsAfter } from '../db/queries.js';
 import {
   claimFreebie,
   countFreebieClaims,
@@ -91,7 +91,7 @@ export async function showFreebieDetail(ctx: AppCtx, id: number): Promise<void> 
   const [remaining, used, refs] = await Promise.all([
     freebieRemaining(f),
     countFreebieClaims(f.id, ctx.user.telegram_id),
-    f.min_refs > 0 ? countReferrals(ctx.user.telegram_id) : Promise.resolve(0),
+    f.min_refs > 0 ? countReferralsAfter(ctx.user.telegram_id, f.created_at) : Promise.resolve(0),
   ]);
   const stockText = remaining === null ? 'Unlimited' : remaining > 0 ? String(remaining) : 'Out of stock';
   const limitText = f.per_user_limit > 0 ? String(f.per_user_limit) : '∞';
@@ -104,9 +104,17 @@ export async function showFreebieDetail(ctx: AppCtx, id: number): Promise<void> 
   ];
   if (f.min_refs > 0) lines.push(`{freebie_refs}  <b>Required refs:</b> ${f.min_refs}/${refs}`);
   if (f.description?.trim()) {
-    lines.push('', `{freebie_desc}  <b>Description:</b>`, `<blockquote>${f.description.trim()}</blockquote>`);
+    lines.push('', `{freebie_desc}  <b>Description</b>`, `<blockquote>${f.description.trim()}</blockquote>`);
   }
-  lines.push('', '{freebie_free}  <i>Free — no payment needed.</i>');
+  if (f.min_refs > 0) {
+    const friends = f.min_refs === 1 ? 'new friend' : 'new friends';
+    lines.push(
+      '',
+      '{freebie_unlock}  <b>Unlock conditions:</b>',
+      `• Invite ${f.min_refs} ${friends} (since this freebie went live)`,
+    );
+  }
+  lines.push('', '{freebie_free_end}  <i>Free — no payment needed.</i>');
   const kb = new InlineKeyboard();
   inlineBtn(kb, ctx.lang, 'freebie_claim', `fb:c:${f.id}`);
   kb.row();
@@ -145,7 +153,7 @@ async function claim(ctx: AppCtx, id: number): Promise<void> {
     return;
   }
   if (f.min_refs > 0) {
-    const have = await countReferrals(ctx.user.telegram_id);
+    const have = await countReferralsAfter(ctx.user.telegram_id, f.created_at);
     if (have < f.min_refs) {
       await ctx.answerCallbackQuery({
         text: ctx.t('freebie.need_refs', { required: f.min_refs, have }),

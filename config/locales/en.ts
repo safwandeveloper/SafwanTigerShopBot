@@ -825,7 +825,7 @@ export const en: Record<string, string> = {
   'freebie.limit': 'You already claimed this freebie the maximum number of times.',
   'freebie.out': 'This freebie is out of stock.',
   'freebie.inactive': 'This freebie is not available right now.',
-  'freebie.need_refs': 'You need {required} active referrals to claim this (you have {have}).',
+  'freebie.need_refs': 'You need {required} new referrals since this freebie went live to claim it (you have {have}).',
   'freebie.error': 'Could not claim right now. Please try again.',
   'btn.currency': '💱 Currency',
   'btn.shop_view': '🛍 Shop View',
