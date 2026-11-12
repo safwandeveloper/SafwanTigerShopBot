@@ -31,7 +31,8 @@ const PROMPTS: Record<FreebieField, string> = {
   description: 'Send the <b>description</b>. Formatting and premium emojis are kept. Send <code>-</code> to clear.',
   content:
     'Send the <b>content</b> every claimer receives (text / link). Formatting and premium emojis are kept. Send <code>-</code> to clear.',
-  items: 'Send stock <b>items</b>, one per line. Each claim delivers one line.',
+  items:
+    'Send stock <b>items</b> (e.g. API keys), <b>one per line</b>. Each claim delivers one line to one user, and stock = number of items left.\n\nThis switches the freebie to <b>Stock items</b> mode.',
   stock: 'Send the <b>stock</b> (number of claims available). Send <code>-</code> for unlimited.',
   limit: 'Send the <b>per-user claim limit</b>. Send <code>0</code> for unlimited.',
   min_refs: 'Send the <b>minimum active referrals</b> needed to claim. Send <code>0</code> to turn off.',
@@ -119,6 +120,7 @@ async function showDetail(ctx: AppCtx, id: number): Promise<void> {
     kb.text('➕ Add Items', e('items')).text('🧹 Clear Unclaimed', `adm:fb:clr:${f.id}`).row();
   } else {
     kb.text('📦 Content', e('content')).text('🔢 Stock', e('stock')).row();
+    kb.text('➕ Add Stock Items (1 per claim)', e('items')).row();
   }
   kb.text('👤 Per-user Limit', e('limit'))
     .text('🎫 Min Refs', e('min_refs'))
@@ -187,6 +189,7 @@ async function applyField(
         .filter(Boolean);
       if (!lines.length) return 'Send at least one line.';
       await addFreebieItems(f.id, lines);
+      if (f.delivery_mode !== 'items') await updateFreebie(f.id, { delivery_mode: 'items' });
       return null;
     }
     case 'stock': {

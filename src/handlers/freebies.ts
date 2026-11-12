@@ -64,7 +64,8 @@ export async function showFreebiesList(ctx: AppCtx): Promise<void> {
   const kb = new InlineKeyboard();
   for (const f of freebies) {
     const remaining = await freebieRemaining(f);
-    const label = `${f.button_label?.trim() || f.name} | Free | ${remaining === null ? '∞' : remaining}`;
+    const price = f.min_refs > 0 ? `${f.min_refs} Refs` : 'Free';
+    const label = `${f.button_label?.trim() || f.name} | ${price} | ${remaining === null ? '∞' : remaining}`;
     kb.text(label.slice(0, 64), `fb:v:${f.id}`);
     if (isButtonChromeEnabled()) {
       const iconId = f.button_icon_id ?? f.emoji_id ?? emojiIdOf('freebie_default');
@@ -74,7 +75,7 @@ export async function showFreebiesList(ctx: AppCtx): Promise<void> {
     }
     kb.row();
   }
-  navRow(kb, ctx.lang, 'profile:refer');
+  navRow(kb, ctx.lang, 'main:open');
   const body = freebies.length
     ? ctx.t('freebie.list.body', { count: freebies.length })
     : ctx.t('freebie.list.empty');
@@ -87,11 +88,12 @@ export async function showFreebieDetail(ctx: AppCtx, id: number): Promise<void> 
     await showFreebiesList(ctx);
     return;
   }
-  const [remaining, used] = await Promise.all([
+  const [remaining, used, refs] = await Promise.all([
     freebieRemaining(f),
     countFreebieClaims(f.id, ctx.user.telegram_id),
+    f.min_refs > 0 ? countReferrals(ctx.user.telegram_id) : Promise.resolve(0),
   ]);
-  const stockText = remaining === null ? 'Unlimited' : remaining > 0 ? `${remaining} left` : 'Out of stock';
+  const stockText = remaining === null ? 'Unlimited' : remaining > 0 ? String(remaining) : 'Out of stock';
   const limitText = f.per_user_limit > 0 ? String(f.per_user_limit) : '∞';
   const lines = [
     `${freebieIconMarker(f)}  <b>${escapeAttr(f.name)}</b>`,
@@ -100,7 +102,7 @@ export async function showFreebieDetail(ctx: AppCtx, id: number): Promise<void> 
     `{freebie_stock}  <b>Stock:</b> ${stockText}`,
     `{freebie_claims}  <b>Your claims:</b> ${used} / ${limitText}`,
   ];
-  if (f.min_refs > 0) lines.push(`{freebie_refs}  <b>Required refs:</b> ${f.min_refs}`);
+  if (f.min_refs > 0) lines.push(`{freebie_refs}  <b>Required refs:</b> ${f.min_refs}/${refs}`);
   if (f.description?.trim()) {
     lines.push('', `{freebie_desc}  <b>Description:</b>`, `<blockquote>${f.description.trim()}</blockquote>`);
   }

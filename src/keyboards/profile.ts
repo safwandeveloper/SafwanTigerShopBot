@@ -291,8 +291,6 @@ export function referKeyboard(
   }
   inlineCopyText(kb, lang, 'copy_link', link);
   kb.row();
-  inlineBtn(kb, lang, 'freebies', 'fb:list');
-  kb.row();
   inlineBtn(kb, lang, 'refresh', options.refreshCallback ?? 'profile:refer');
   kb.row();
   inlineBtn(kb, lang, 'back', options.backCallback ?? 'main:open');
