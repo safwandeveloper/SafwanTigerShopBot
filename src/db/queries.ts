@@ -559,6 +559,20 @@ export async function getUserByTelegramId(telegram_id: number): Promise<DBUser |
  * milliseconds. Used by the Refer & Earn screen to render the 24-hour
  * and 7-day breakdowns.
  */
+/** Referrals made by `telegram_id` at or after `sinceIso`. */
+export async function countReferralsAfter(telegram_id: number, sinceIso: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('referrals')
+    .select('id', { count: 'exact', head: true })
+    .eq('referrer_id', telegram_id)
+    .gte('created_at', sinceIso);
+  if (error) {
+    logger.error({ err: error, telegram_id }, 'countReferralsAfter failed');
+    throw error;
+  }
+  return count ?? 0;
+}
+
 export async function countReferralsSince(
   telegram_id: number,
   windowMs: number,
