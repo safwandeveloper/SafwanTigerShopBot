@@ -103,7 +103,6 @@ export async function showFreebieDetail(ctx: AppCtx, id: number): Promise<void> 
     `{freebie_claims}  <b>Your claims:</b> ${used} / ${limitText}`,
   ];
   if (f.min_refs > 0) lines.push(`{freebie_refs}  <b>Required refs:</b> ${f.min_refs}/${refs}`);
-  lines.push('', '{freebie_free}  <i>Free — no payment needed.</i>');
   if (f.description?.trim()) {
     lines.push('', `{freebie_desc}  <b>Description</b>`, `<blockquote>${f.description.trim()}</blockquote>`);
   }
