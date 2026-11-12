@@ -515,7 +515,7 @@ export function buildStockAddedTemplate(args: {
     `{{ce:${STOCK_ANN_HEAD_EMOJI_ID}|📣}}  <b>${args.qtyAdded} new stock added for ${productIcon}${escapeAttr(args.productName)}!</b>`,
     '',
     `{{ce:${STOCK_ANN_AVAILABLE_EMOJI_ID}|🔄}}  Available: ${args.available} items`,
-    `{{ce:${STOCK_ANN_PRICE_EMOJI_ID}|💰}}  Price: <b>${money(args.price)} USDT</b>`,
+    `{{ce:${STOCK_ANN_PRICE_EMOJI_ID}|💰}}  Price: <b>${Number(args.price).toFixed(2)} USDT</b>`,
   ].join('\n');
 }
 
