@@ -35,6 +35,12 @@ const DEFAULT_ORDER_LOG_CHAT = '@safbanuunny0138';
 /** Public shop feed / watcher group. Empty means reuse the working order-log chat. */
 const DEFAULT_PUBLIC_FEED_CHAT = '';
 
+/** Referral verification log group (every referral event). */
+const DEFAULT_REFERRAL_LOG_CHAT = '@Groupreferrsmesageby0183saf';
+
+/** Referral abuse alert group. */
+const DEFAULT_REFERRAL_ALERT_CHAT = '@SafwanReferrOncegroup0102T';
+
 /** Dedicated public group for verified bKash payment notifications. */
 const DEFAULT_BKASH_PAYMENTS_CHAT = '@SafwanBkashPaysNotification101';
 
@@ -308,6 +314,28 @@ const schema = z.object({
   ZINIPAY_REDIRECT_URL: z.string().url().optional().or(z.literal('')),
   ZINIPAY_CANCEL_URL: z.string().url().optional().or(z.literal('')),
   ZINIPAY_BDT_PER_USDT: z.coerce.number().positive().default(130),
+
+  // ----------------------------------------------------------------
+  //  Referral human verification
+  // ----------------------------------------------------------------
+  // Public base URL of the verify page (e.g. a dedicated custom
+  // domain). Falls back to PUBLIC_BASE_URL when unset.
+  VERIFY_BASE_URL: z.string().url().optional().or(z.literal('')),
+  // HMAC secret for verify links and IP/device hashes. When unset a
+  // secret is derived from the bot token.
+  VERIFY_SECRET: z.string().optional().or(z.literal('')),
+  // Every referral verification event (pending / verified / skipped ...).
+  REFERRAL_LOG_CHAT_ID: z
+    .string()
+    .trim()
+    .optional()
+    .transform(logChannelTransformer(DEFAULT_REFERRAL_LOG_CHAT)),
+  // Abuse alerts (too many verified refers in one hour).
+  REFERRAL_ALERT_CHAT_ID: z
+    .string()
+    .trim()
+    .optional()
+    .transform(logChannelTransformer(DEFAULT_REFERRAL_ALERT_CHAT)),
 });
 
 // Provide a stable alias `BOT_TOKEN` on the parsed env for consumers.

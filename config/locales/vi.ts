@@ -263,7 +263,7 @@ export const vi: Record<string, string> = {
     '{refer_withdrawn} *Đã rút:* {withdrawn} USDT\n\n' +
     '{refer_paybalance} *Số dư Referral Pay:* {refAvailable} lượt\n' +
     '{refer_spent} *Đã chuyển thành USDT:* {converted} lượt\n\n' +
-    '_Chuyển tiền vào ví khi đạt $0.50. Để rút tiền mặt, liên hệ hỗ trợ._\n\n' +
+    '_Chuyển tiền vào ví khi đạt $0.10. Để rút tiền mặt, liên hệ hỗ trợ._\n\n' +
     '*Liên kết giới thiệu của bạn:*\n`{link}`',
   'profile.refer.convert_success':
     '💱 Đã đổi *{refs} refs* thành *{amount} USDT*.\n\n💳 Số dư ví: *{balance}*',

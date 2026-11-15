@@ -36,7 +36,7 @@ function makeRefCode(id: number): string {
   return `R${id.toString(36).toUpperCase()}`;
 }
 
-async function resolveValidReferrer(
+export async function resolveValidReferrer(
   referrerId: number | null | undefined,
   refereeId: number,
 ): Promise<number | null> {
@@ -539,6 +539,87 @@ export async function convertReferralBalance(args: {
     ...balance,
     convertedAmount: Number(result?.converted_amount ?? 0),
     newBalance: Number(result?.new_balance ?? 0),
+  };
+}
+
+export type ReferralValueSummary = {
+  total: number;
+  spent: number;
+  available: number;
+  availableUsd: number;
+  earnedUsd: number;
+  withdrawnUsd: number;
+};
+
+/**
+ * Value-aware referral balance (migration 0048). Returns null when the
+ * migration has not been applied yet so callers can fall back to the
+ * legacy fixed-rate calculation.
+ */
+export async function getReferralValueSummary(
+  user_id: number,
+  legacyValue: number,
+): Promise<ReferralValueSummary | null> {
+  const { data, error } = await supabase.rpc('referral_value_summary', {
+    p_user_id: user_id,
+    p_legacy_value: legacyValue,
+  });
+  if (error) {
+    logger.debug({ err: error, user_id }, 'referral_value_summary unavailable');
+    return null;
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | {
+        total_referrals?: number;
+        spent_referrals?: number;
+        available_referrals?: number;
+        available_usd?: number | string;
+        earned_usd?: number | string;
+      }
+    | null;
+  if (!row) return null;
+  const { data: conv } = await supabase
+    .from('referral_conversions')
+    .select('amount')
+    .eq('user_id', user_id);
+  const withdrawnUsd = (conv ?? []).reduce(
+    (sum, r) => sum + Number((r as { amount?: number | string }).amount ?? 0),
+    0,
+  );
+  return {
+    total: Number(row.total_referrals ?? 0),
+    spent: Number(row.spent_referrals ?? 0),
+    available: Number(row.available_referrals ?? 0),
+    availableUsd: Number(row.available_usd ?? 0),
+    earnedUsd: Number(row.earned_usd ?? 0),
+    withdrawnUsd: Math.round(withdrawnUsd * 100) / 100,
+  };
+}
+
+export async function convertReferralValue(args: {
+  user_id: number;
+  legacyValue: number;
+  minUsd: number;
+}): Promise<{ refsSpent: number; amount: number; newBalance: number }> {
+  const { data, error } = await supabase.rpc('convert_referral_value_to_wallet', {
+    p_user_id: args.user_id,
+    p_legacy_value: args.legacyValue,
+    p_min_usd: args.minUsd,
+  });
+  if (error) {
+    if (error.message.includes('INSUFFICIENT_REFERRALS')) {
+      throw new InsufficientReferralBalanceError();
+    }
+    logger.error({ err: error, args }, 'convertReferralValue failed');
+    throw error;
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { refs_spent?: number; amount?: number | string; new_balance?: number | string }
+    | null;
+  return {
+    refsSpent: Number(row?.refs_spent ?? 0),
+    amount: Number(row?.amount ?? 0),
+    newBalance: Number(row?.new_balance ?? 0),
   };
 }
 
