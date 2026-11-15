@@ -433,3 +433,43 @@ export async function clearPaymentMethodTutorial(methodId: number): Promise<void
 export function getPriceListPromoFooter(): string | null {
   return readString('profile.pricelist.promo_footer_override');
 }
+
+// ---------- Referral human verification ----------
+
+export function getHumanVerifyEnabled(): boolean {
+  const v = cache.get('hv.enabled');
+  return v === true || v === 'true';
+}
+
+export async function setHumanVerifyEnabled(enabled: boolean, updated_by?: number): Promise<void> {
+  await setSetting('hv.enabled', enabled, updated_by);
+  cache.set('hv.enabled', enabled);
+}
+
+export type HumanVerifyNumberKey = 'ip_limit' | 'ref_reward' | 'user_bonus' | 'alert_threshold';
+
+const HUMAN_VERIFY_NUMBERS: Record<HumanVerifyNumberKey, { def: number; min: number; max: number }> = {
+  ip_limit: { def: 1, min: 1, max: 50 },
+  ref_reward: { def: 0.1, min: 0, max: 10 },
+  user_bonus: { def: 0.01, min: 0, max: 10 },
+  alert_threshold: { def: 10, min: 1, max: 1000 },
+};
+
+export function getHumanVerifyNumber(key: HumanVerifyNumberKey): number {
+  const spec = HUMAN_VERIFY_NUMBERS[key];
+  const n = Number(cache.get(`hv.${key}`));
+  if (!Number.isFinite(n)) return spec.def;
+  return Math.min(spec.max, Math.max(spec.min, n));
+}
+
+export async function setHumanVerifyNumber(
+  key: HumanVerifyNumberKey,
+  value: number,
+  updated_by?: number,
+): Promise<number> {
+  const spec = HUMAN_VERIFY_NUMBERS[key];
+  const clamped = Math.min(spec.max, Math.max(spec.min, Math.round(value * 100) / 100));
+  await setSetting(`hv.${key}`, clamped, updated_by);
+  cache.set(`hv.${key}`, clamped);
+  return clamped;
+}

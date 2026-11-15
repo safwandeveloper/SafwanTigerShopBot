@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#111111">
+<title>Verify · SafwanTigerShop</title>
+<script>(function(){var t=localStorage.getItem('st-theme')||'system';if(t==='system')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.theme=t})()</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#111111; --surface:rgba(28,28,28,.82); --surface2:#232323; --border:#2e2e2e; --border2:#3a3a3a;
+  --fg:#ededed; --fg2:#a1a1a1; --fg3:#6f6f6f;
+  --brand:#3ecf8e; --brand-bg:#006239; --brand-bg2:#00744a; --brand-bd:rgba(62,207,142,.32);
+  --tiger:#f2a65a;
+  --red:#f87171; --red-bg:rgba(239,68,68,.08); --red-bd:rgba(239,68,68,.3);
+  --amber:#fbbf24; --amber-bg:rgba(251,191,36,.08); --amber-bd:rgba(251,191,36,.3);
+  --serif:"Newsreader","Tiempos Text","Iowan Old Style",Georgia,"Times New Roman",serif;
+  --sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
+  --hover:#2a2a2a; --well:rgba(17,17,17,.85); --nav:rgba(17,17,17,.72); --boxbg:#1a1a1a; --boxbd:#5a5a5a;
+  --gridc:rgba(255,255,255,.05); --cellc:rgba(62,207,142,.13); --strk:rgba(62,207,142,.75); --spotw:rgba(255,255,255,.035); --gridhi:rgba(62,207,142,.35); --spot:rgba(62,207,142,.07);
+  --curf:#262626; --curs:#7a7a7a; --bubbg:#1b1b1b; --bubbd:#5a5a5a; --dotc:#8a8a8a; --btnfg:#fafafa; --shadow:rgba(0,0,0,.8);
+}
+:root[data-theme=light]{
+  --bg:#fafafa; --surface:rgba(255,255,255,.88); --surface2:#f4f4f5; --border:#e6e6e6; --border2:#d6d6d6;
+  --fg:#171717; --fg2:#525252; --fg3:#8a8a8a;
+  --brand:#16a36a; --brand-bg:#1fb978; --brand-bg2:#18a86b; --brand-bd:rgba(22,163,106,.45);
+  --tiger:#e07a1f; --red:#dc2626; --amber:#b45309;
+  --hover:#ececec; --well:#fbfbfb; --nav:rgba(250,250,250,.8); --boxbg:#fff; --boxbd:#b5b5b5;
+  --gridc:rgba(0,0,0,.06); --cellc:rgba(22,163,106,.11); --strk:rgba(22,163,106,.6); --spotw:rgba(0,0,0,.025); --gridhi:rgba(22,163,106,.35); --spot:rgba(31,185,120,.08);
+  --curf:#f7f7f7; --curs:#555; --bubbg:#fff; --bubbd:#8a8a8a; --dotc:#555; --btnfg:#fff; --shadow:rgba(0,0,0,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100%}
+body.ready{transition:background .3s,color .3s}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;min-height:100vh;position:relative}
+
+.grid{position:fixed;inset:-40px;z-index:0;pointer-events:none;background-image:linear-gradient(var(--gridc) 1px,transparent 1px),linear-gradient(90deg,var(--gridc) 1px,transparent 1px);background-size:34px 34px;
+  -webkit-mask-image:radial-gradient(ellipse 85% 75% at 50% 40%,#000 35%,transparent 100%);mask-image:radial-gradient(ellipse 85% 75% at 50% 40%,#000 35%,transparent 100%)}
+@keyframes pan{to{background-position:34px 34px}}
+.grid.hi{background-image:linear-gradient(var(--gridhi) 1px,transparent 1px),linear-gradient(90deg,var(--gridhi) 1px,transparent 1px);
+  -webkit-mask-image:radial-gradient(circle 170px at var(--mx,-999px) var(--my,-999px),#000 0%,transparent 100%);mask-image:radial-gradient(circle 170px at var(--mx,-999px) var(--my,-999px),#000 0%,transparent 100%)}
+.fx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.gcell{position:absolute;width:33px;height:33px;background:var(--cellc);border-radius:2px;animation:cellf 2.6s ease-in-out forwards}
+@keyframes cellf{0%,100%{opacity:0}40%{opacity:1}}
+.streak{position:absolute;pointer-events:none}
+.streak.h{height:1px;width:160px;background:linear-gradient(90deg,transparent,var(--strk))}
+.streak.v{width:1px;height:160px;background:linear-gradient(180deg,transparent,var(--strk))}
+.streak.h.rev{background:linear-gradient(270deg,transparent,var(--strk))}
+.streak.v.rev{background:linear-gradient(0deg,transparent,var(--strk))}
+.spot{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(circle 420px at var(--tx,-999px) var(--ty,-999px),var(--spot),transparent 70%)}
+.cur-wrap{position:fixed;inset:0;z-index:0;pointer-events:none}
+.mp{position:absolute;left:0;top:0;will-change:transform;opacity:.92}
+.mp svg{display:block;filter:drop-shadow(0 3px 6px var(--shadow))}
+.mp svg path{fill:var(--c);stroke:#fff;stroke-width:1.6;stroke-linejoin:round}
+.mp .tag{position:absolute;left:16px;top:20px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;padding:3px 9px;border-radius:999px 999px 999px 4px;background:var(--c);color:#fff;font:600 11.5px var(--sans);box-shadow:0 4px 12px -4px var(--shadow)}
+.mp .say{position:absolute;left:16px;top:46px;max-width:190px;white-space:nowrap;padding:6px 11px;border-radius:4px 14px 14px 14px;background:var(--bubbg);border:1px solid var(--border2);color:var(--fg);font:500 12px var(--sans);box-shadow:0 8px 20px -10px var(--shadow);opacity:0;transform:translateY(4px) scale(.96);transition:opacity .35s,transform .35s}
+.mp .say.on{opacity:1;transform:none}
+.mp .say .dots{display:inline-flex;gap:3px;vertical-align:middle}
+.mp .say .dots i{width:5px;height:5px;border-radius:50%;background:var(--dotc);animation:dot 1.2s ease-in-out infinite}
+.mp .say .dots i:nth-child(2){animation-delay:.15s}.mp .say .dots i:nth-child(3){animation-delay:.3s}
+@keyframes dot{0%,60%,100%{transform:translateY(0);opacity:.6}30%{transform:translateY(-3px);opacity:1}}
+.mp.click svg{animation:clk .3s ease}
+@keyframes clk{50%{transform:scale(.82)}}
+.ripple{position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:2px solid var(--c);animation:rip .7s ease-out forwards;pointer-events:none}
+@keyframes rip{from{transform:scale(.2);opacity:.9}to{transform:scale(1.8);opacity:0}}
+.react{position:absolute;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--bubbg);border:1px solid var(--border2);box-shadow:0 6px 16px -8px var(--shadow);pointer-events:none;animation:up 2.4s cubic-bezier(.2,.7,.3,1) forwards}
+@keyframes up{0%{transform:translate(0,0) scale(.4);opacity:0}15%{transform:translate(0,-14px) scale(1.15);opacity:1}100%{transform:translate(var(--dx),-120px) scale(.9) rotate(var(--rot));opacity:0}}
+nav.top,main,footer{position:relative;z-index:1}
+.mono{font-family:var(--mono)}
+.serif{font-family:var(--serif)}
+
+nav.top{height:60px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--nav);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{width:30px;height:30px;border-radius:50%;object-fit:cover;border:1px solid var(--border2)}
+.brand b{font-family:var(--serif);font-weight:500;font-size:18px;letter-spacing:-.01em}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--fg2);border:1px solid var(--border);background:var(--surface2);padding:3px 10px;border-radius:999px}
+.pill .d{width:6px;height:6px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 3px rgba(62,207,142,.18)}
+
+main{flex:1;display:flex;justify-content:center;padding:40px 16px 96px}
+.wrap{width:100%;max-width:410px}
+.hero{text-align:left}
+.avatar{width:76px;height:76px;margin:0 auto 18px;border-radius:50%;padding:3px;background:conic-gradient(from 200deg,var(--tiger),var(--brand),var(--tiger));animation:spin 8s linear infinite}
+.avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;border:3px solid var(--bg);display:block;animation:spin 8s linear infinite reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+h1{font-family:var(--sans);font-weight:500;font-size:30px;line-height:1.2;letter-spacing:-.02em}
+h1 em{font-style:italic;color:var(--tiger)}
+.lead{color:var(--fg2);margin-top:8px;font-size:15px}
+
+.card{margin-top:26px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 24px 60px -30px var(--shadow)}
+.sec{padding:18px 20px}
+.sec+.sec{border-top:1px solid var(--border)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label,.lbl{display:block;font-size:13px;color:var(--fg2);margin-bottom:6px}
+.field{height:36px;display:flex;align-items:center;padding:0 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;font:13px var(--mono);white-space:nowrap;overflow:hidden}
+.head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.head .lbl{margin:0;color:var(--fg);font-family:var(--serif);font-size:17px}
+.icon-btn{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--fg2);font:12px var(--sans);cursor:pointer;transition:.15s}
+.icon-btn:hover{background:var(--surface2);color:var(--fg)}
+.icon-btn svg{transition:transform .4s}
+.icon-btn:active svg{transform:rotate(-180deg)}
+
+.chal{background:var(--well);border:1px solid var(--border);border-radius:8px;padding:18px 12px 14px;text-align:center;user-select:none}
+.chal .tag{display:inline-block;font:500 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--border);border-radius:999px;padding:2px 8px;margin-bottom:10px}
+.chal .disp{font-size:28px;letter-spacing:2px;line-height:1.35}
+.chal .disp.num{font:500 30px var(--mono);letter-spacing:0}
+.chal .op{color:var(--fg3);font-size:20px;margin:0 6px;letter-spacing:0;vertical-align:4px}
+.chal .q{font-family:var(--serif);font-style:italic;color:var(--fg2);font-size:15px;margin-top:8px}
+.opts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.opt{height:44px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--fg);font:500 16px var(--sans);cursor:pointer;transition:background .15s,border-color .15s,transform .1s}
+.opts.emo .opt{font-size:24px}
+.opt:hover{border-color:var(--fg3);background:var(--hover)}
+.opt:active{transform:scale(.97)}
+.opt.sel{border-color:var(--brand);background:rgba(62,207,142,.09);color:var(--brand)}
+.swap{animation:swap .35s ease}
+@keyframes swap{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* own captcha */
+.shield{display:flex;align-items:center;justify-content:space-between;height:70px;padding:0 12px 0 14px;margin-top:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;user-select:none}
+.sh-left{display:flex;align-items:center;gap:12px;cursor:pointer}
+.box{width:26px;height:26px;border-radius:5px;border:2px solid var(--boxbd);background:var(--boxbg);display:grid;place-items:center;transition:border-color .2s,background .2s}
+.sh-left:hover .box{border-color:var(--fg2)}
+.box .sp{width:18px;height:18px;border:2.5px solid rgba(62,207,142,.25);border-top-color:var(--brand);border-radius:50%;animation:spin .7s linear infinite;display:none}
+.box svg{display:none}
+.shield.loading .box{border-color:transparent;background:transparent}
+.shield.loading .sp{display:block}
+.shield.ok .box{border-color:var(--brand);background:rgba(62,207,142,.1)}
+.shield.ok .box svg{display:block}
+.shield.ok .box svg path{stroke-dasharray:24;stroke-dashoffset:24;animation:draw .35s ease forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.sh-txt{font-size:14.5px}
+.sh-sub{font-size:11.5px;color:var(--fg3);display:none}
+.shield.err .sh-sub{display:block;color:var(--red)}
+.sh-right{text-align:center;line-height:1.15}
+.sh-right img{width:28px;height:28px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 3px}
+.sh-right b{display:block;font:500 10px var(--sans);color:var(--fg2);letter-spacing:.02em}
+.sh-right small{font-size:9px;color:var(--fg3)}
+
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:40px;border-radius:6px;font:500 14px var(--sans);cursor:pointer;text-decoration:none;transition:background .15s,opacity .15s}
+.btn.primary{background:var(--brand-bg);border:1px solid var(--brand-bd);color:var(--btnfg)}
+.btn.primary:hover:not(:disabled){background:var(--brand-bg2)}
+.btn.primary:disabled{opacity:.42;cursor:not-allowed}
+.btn.default{background:var(--surface2);border:1px solid var(--border2);color:var(--fg)}
+.btn.default:hover{background:var(--hover)}
+.spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+.alert{display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:6px;font-size:13px;margin-bottom:14px;background:var(--red-bg);border:1px solid var(--red-bd);color:#fca5a5}
+.meta{display:flex;justify-content:space-between;font-size:12px;color:var(--fg3);margin-top:10px}
+
+.state{padding:34px 22px;text-align:center}
+.badge{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;margin:0 auto 16px}
+.badge.ok{background:rgba(62,207,142,.1);border:1px solid var(--brand-bd)}
+.badge.err{background:var(--red-bg);border:1px solid var(--red-bd)}
+.badge.warn{background:var(--amber-bg);border:1px solid var(--amber-bd)}
+.state h2{font-family:var(--serif);font-weight:400;font-size:26px;letter-spacing:-.01em}
+.state p{color:var(--fg2);margin:8px auto 22px;max-width:310px}
+.state p b{color:var(--fg);font-weight:500}
+.state .small{font-size:12px;color:var(--fg3);margin-top:12px}
+
+.note{display:flex;gap:8px;font-size:12px;color:var(--fg3);margin-top:16px;line-height:1.55}
+.note svg{flex:none;margin-top:2px}
+footer{border-top:1px solid var(--border);background:var(--nav);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:22px 20px 76px}
+.f-in{max-width:880px;margin:0 auto}
+.f-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.f-brand{display:flex;align-items:center;gap:12px}
+.f-brand img{width:38px;height:38px;border-radius:50%;object-fit:cover;border:1px solid var(--border2)}
+.f-brand b{display:block;font:500 18px/1.2 var(--serif);letter-spacing:-.01em}
+.f-brand span{font-size:12.5px;color:var(--fg3)}
+.f-mail{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--border2);background:var(--surface2);color:var(--fg);text-decoration:none;font-size:13px;transition:border-color .2s,background .2s}
+.f-mail:hover{border-color:var(--brand);background:var(--hover)}
+.f-mail .arr{color:var(--fg3);transition:transform .2s,color .2s}
+.f-mail:hover .arr{transform:translate(2px,-2px);color:var(--brand)}
+.f-bot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding-top:16px;border-top:1px dashed var(--border);font-size:12px;color:var(--fg3);flex-wrap:wrap}
+.f-status{display:inline-flex;align-items:center;gap:7px}
+.f-status .d{width:7px;height:7px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 3px rgba(62,207,142,.18);animation:blink 2s ease-in-out infinite}
+@keyframes blink{50%{opacity:.4}}
+.f-copy{font-family:var(--serif);font-size:13.5px;color:var(--fg2)}
+.seg{display:inline-flex;padding:3px;gap:2px;border:1px solid var(--border2);border-radius:999px;background:var(--surface2)}
+.seg button{width:28px;height:24px;border:0;border-radius:999px;background:transparent;color:var(--fg3);display:grid;place-items:center;cursor:pointer;transition:.15s}
+.seg button:hover{color:var(--fg)}
+.seg button.on{background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--border2)}
+.nav-r{display:flex;align-items:center;gap:8px}
+.tbtn{width:30px;height:30px;border-radius:999px;border:1px solid var(--border);background:var(--surface2);color:var(--fg2);display:grid;place-items:center;cursor:pointer}
+.tbtn:hover{color:var(--fg)}
+:root[data-theme=light] .i-moon,:root:not([data-theme=light]) .i-sun{display:none}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:20}
+.badge.ok.pop{animation:pop .6s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+.badge.ok.pop::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--brand);animation:ring 1s ease-out .2s forwards;opacity:0}
+.badge{position:relative}
+@keyframes ring{0%{transform:scale(1);opacity:.8}100%{transform:scale(2.2);opacity:0}}
+@media (max-width:520px){.f-top,.f-bot{flex-direction:column;align-items:flex-start}.f-mail span{font-size:12px}}
+
+.hide{display:none!important}
+@media (max-width:640px){.cur-wrap{opacity:.55}.mp.dk{display:none}}
+@media (max-width:380px){h1{font-size:26px}.chal .disp{font-size:24px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="grid"></div><div class="grid hi"></div><div class="fx" id="fx"></div><div class="spot"></div>
+<div class="cur-wrap" id="mpLayer"></div>
+
+<nav class="top">
+  <div class="brand"><img src="/verify/logo.jpg" alt=""><b>SafwanTigerShop</b></div>
+  <div class="nav-r"><span class="pill"><span class="d"></span>Secure verification</span>
+  <button class="tbtn" id="themeBtn" type="button" aria-label="Toggle theme"><svg class="i-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg><svg class="i-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+</nav>
+
+<main>
+<div class="wrap">
+  <div class="hero" id="intro">
+    <h1>Verify you're human</h1>
+    <p class="lead">One quick check to activate your account on @SafwanTigerShopBot.</p>
+  </div>
+
+  <div class="card" id="vChallenge">
+    <div class="sec">
+      <div class="row">
+        <div><label>Telegram ID</label><div class="field">__UID__</div></div>
+        <div><label>IP address</label><div class="field">__IP__</div></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="alert hide" id="err"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span id="errTxt"></span></div>
+      <div class="head">
+        <span class="lbl">Solve the challenge</span>
+        <button class="icon-btn" id="refresh" type="button"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>New</button>
+      </div>
+      <div class="chal" id="chal"></div>
+      <div class="opts" id="opts"></div>
+
+      <div class="shield" id="shield">
+        <div class="sh-left" id="shBtn" role="checkbox" aria-checked="false" tabindex="0">
+          <div class="box"><span class="sp"></span><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="m5 12.5 4.5 4.5L19 7.5" stroke="#3ecf8e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="sh-txt">I'm not a robot</div><div class="sh-sub">Please try again</div></div>
+        </div>
+        <div class="sh-right"><img src="/verify/logo.jpg" alt=""><b>TigerShield</b><small>Privacy · Terms</small></div>
+      </div>
+
+      <button class="btn primary" id="verify" style="margin-top:16px" disabled>Verify</button>
+      <div class="meta"><span id="tries">3 attempts left</span><span>Link expires in <span id="t" class="mono">--:--</span></span></div>
+    </div>
+  </div>
+
+  <div class="card hide" id="vSuccess"><div class="state">
+    <div class="badge ok"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3ecf8e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></div>
+    <h2>Verification complete</h2>
+    <p>Your account is now active. Welcome to SafwanTigerShop.</p>
+    <p class="small hide" id="sNote"></p>
+    <a class="btn primary" href="https://t.me/__BOT__">Return to bot</a>
+    <div class="small">Redirecting in <span id="cd" class="mono">3</span>s</div>
+  </div></div>
+
+  <div class="card hide" id="vIp"><div class="state">
+    <div class="badge err"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg></div>
+    <h2>Network limit reached</h2>
+    <p>The maximum number of accounts has already been verified from this network. Go back to the bot and click <b>Skip</b>.</p>
+    <a class="btn default" href="https://t.me/__BOT__">Back to bot</a>
+  </div></div>
+
+  <div class="card hide" id="vExpired"><div class="state">
+    <div class="badge warn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/></svg></div>
+    <h2>Link expired</h2>
+    <p>This link is no longer valid. Open the bot and tap <b>Verify I'm Human</b> to get a new one.</p>
+    <a class="btn primary" href="https://t.me/__BOT__">Back to bot</a>
+  </div></div>
+
+  <div class="card hide" id="vFailed"><div class="state">
+    <div class="badge err"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.4" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg></div>
+    <h2>Verification failed</h2>
+    <p>Too many incorrect answers. Request a new link from the bot to try again.</p>
+    <a class="btn default" href="https://t.me/__BOT__">Back to bot</a>
+  </div></div>
+
+  <div class="note"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+    <span>Protected by TigerShield. This link is signed for your account only, and your IP is stored hashed solely to prevent duplicate accounts.</span></div>
+</div>
+</main>
+
+<footer>
+  <div class="f-in">
+    <div class="f-top">
+      <div class="f-brand"><img src="/verify/logo.jpg" alt=""><div><b>SafwanTigerShop</b><span>Digital products, delivered instantly.</span></div></div>
+      <a class="f-mail" href="mailto:support@safwantigerprotection.online"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></svg><span>support@safwantigerprotection.online</span><svg class="arr" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+    </div>
+    <div class="f-bot">
+      <span class="f-status"><span class="d"></span>All systems operational</span>
+      <div class="seg" id="seg" role="radiogroup" aria-label="Theme">
+        <button data-t="system" aria-label="System"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
+        <button data-t="light" aria-label="Light"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+        <button data-t="dark" aria-label="Dark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg></button>
+      </div>
+      <span class="f-copy">© 2026 SafwanTigerShop</span>
+    </div>
+  </div>
+</footer>
+<canvas id="confetti"></canvas>
+
+
+
+<script>
+
+const $=id=>document.getElementById(id);
+/* theme */
+const mq=matchMedia('(prefers-color-scheme: light)');
+function applyTheme(t){const eff=t==='system'?(mq.matches?'light':'dark'):t;document.documentElement.dataset.theme=eff;
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  document.querySelector('meta[name=theme-color]').content=eff==='light'?'#fafafa':'#111111'}
+let theme=localStorage.getItem('st-theme')||'system';applyTheme(theme);
+mq.addEventListener('change',()=>theme==='system'&&applyTheme('system'));
+const setTheme=t=>{theme=t;localStorage.setItem('st-theme',t);applyTheme(t)};
+document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>setTheme(b.dataset.t));
+$('themeBtn').onclick=()=>setTheme(document.documentElement.dataset.theme==='light'?'dark':'light');
+/* background follows pointer */
+(()=>{const r=document.documentElement.style;let raf=0,ev=null;
+  addEventListener('pointermove',e=>{ev=e;if(raf)return;raf=requestAnimationFrame(()=>{raf=0;
+    const nx=ev.clientX/innerWidth-.5,ny=ev.clientY/innerHeight-.5;
+    r.setProperty('--mx',(ev.clientX+40)+'px');r.setProperty('--my',(ev.clientY+40)+'px');
+    r.setProperty('--tx',ev.clientX+'px');r.setProperty('--ty',ev.clientY+'px')})},{passive:true})})();
+
+/* multiplayer cursors */
+(()=>{const L=$('mpLayer');if(!L)return;
+const SVG='<svg width="20" height="22" viewBox="0 0 20 22"><path d="M2 2l15.5 7.2-6.6 1.9-3 6.6L2 2Z"/></svg>';
+const people=[
+ {n:'Tiger',c:'#f08a24',x:.11,y:.20,ax:70,ay:50,fx:.21,fy:.33,dk:0,say:['Welcome to the shop','•••','Verified in 3s']},
+ {n:'Buyer',c:'#3b82f6',x:.86,y:.18,ax:60,ay:60,fx:.27,fy:.19,dk:1,say:['•••','Got my key','So fast']},
+ {n:'Verified',c:'#16a36a',x:.84,y:.62,ax:80,ay:45,fx:.17,fy:.29,dk:0,say:['I\'m human','•••','Easy one']},
+ {n:'Reseller',c:'#8b5cf6',x:.13,y:.70,ax:65,ay:55,fx:.23,fy:.25,dk:1,say:['•••','API orders','Instant delivery']},
+ {n:'Guest',c:'#ec4899',x:.24,y:.45,ax:50,ay:70,fx:.31,fy:.15,dk:1,say:[]},
+ {n:'Support',c:'#0ea5e9',x:.76,y:.40,ax:55,ay:50,fx:.19,fy:.23,dk:1,say:['Need help? Mail us','•••']},
+ {n:'Admin',c:'#ef4444',x:.93,y:.84,ax:40,ay:45,fx:.25,fy:.21,dk:1,say:['•••','Stock updated']},
+ {n:'Member',c:'#14b8a6',x:.05,y:.42,ax:35,ay:80,fx:.18,fy:.27,dk:1,say:['Joined via referral','•••']},
+ {n:'Seller',c:'#eab308',x:.70,y:.88,ax:70,ay:35,fx:.29,fy:.17,dk:1,say:[]},
+ {n:'VIP',c:'#a855f7',x:.30,y:.88,ax:60,ay:30,fx:.22,fy:.31,dk:1,say:['Bonus received','•••']},
+];
+const els=people.map((p,i)=>{const d=document.createElement('div');d.className='mp'+(p.dk?' dk':'');d.style.setProperty('--c',p.c);
+  d.innerHTML=SVG+`<span class="tag">${p.n}</span>`+(p.say.length?'<div class="say"></div>':'');L.appendChild(d);p.ph=i*1.7;p.el=d;return d});
+const small=()=>innerWidth<640;
+let t0=performance.now();
+function pos(p,t){const sx=small()&&!p.dk?(p.x<.5?.06:.72):p.x,sy=small()?Math.min(p.y+.45,.9):p.y;
+  return[sx*innerWidth+Math.sin(t*p.fx+p.ph)*p.ax+Math.sin(t*p.fx*2.1+p.ph)*p.ax*.3, sy*innerHeight+Math.cos(t*p.fy+p.ph)*p.ay]}
+const still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function frame(now){const t=(now-t0)/1000;for(const p of people){const[x,y]=pos(p,t);p.cx=x;p.cy=y;p.el.style.transform=`translate(${x}px,${y}px)`}if(!still)requestAnimationFrame(frame)}
+requestAnimationFrame(frame);frame(performance.now());
+people.forEach((p,i)=>{if(!p.say.length)return;const b=p.el.querySelector('.say');let k=0;
+  const show=()=>{const m=p.say[k++%p.say.length];b.innerHTML=m==='•••'?'<span class="dots"><i></i><i></i><i></i></span>':m;b.classList.add('on');
+    setTimeout(()=>b.classList.remove('on'),2600)};
+  setTimeout(()=>{show();setInterval(show,4200+i*500)},600+i*900)});
+const ic=d=>`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const R=[ic('<path d="M20 6 9 17l-5-5"/>'),ic('<path d="M12 21s-7-4.4-9.2-9A5 5 0 0 1 12 6a5 5 0 0 1 9.2 6c-2.2 4.6-9.2 9-9.2 9Z"/>'),
+ ic('<path d="m12 3 2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7Z"/>'),ic('<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>'),
+ ic('<path d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/>'),ic('<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>')];
+function react(){const vis=people.filter(p=>getComputedStyle(p.el).display!=='none');const p=vis[Math.floor(Math.random()*vis.length)];if(!p||p.cx==null)return;
+  p.el.classList.remove('click');void p.el.offsetWidth;p.el.classList.add('click');
+  const r=document.createElement('span');r.className='ripple';r.style.cssText=`left:${p.cx+3}px;top:${p.cy+3}px;--c:${p.c}`;L.appendChild(r);setTimeout(()=>r.remove(),750);
+  const e=document.createElement('span');e.className='react';e.innerHTML=R[Math.floor(Math.random()*R.length)];
+  e.style.cssText=`left:${p.cx-4}px;top:${p.cy-18}px;color:${p.c};--dx:${(Math.random()*60-30).toFixed(0)}px;--rot:${(Math.random()*40-20).toFixed(0)}deg`;L.appendChild(e);setTimeout(()=>e.remove(),2500)}
+if(!still)setInterval(react,800);
+})();
+/* grid cells + streaks */
+(()=>{const F=$('fx');if(!F||matchMedia('(prefers-reduced-motion: reduce)').matches)return;const G=34,O=-40;
+ function cell(){const c=document.createElement('div');c.className='gcell';
+   const i=Math.floor(Math.random()*(innerWidth/G+2)),j=Math.floor(Math.random()*(innerHeight/G+2));
+   c.style.left=(O+i*G+1)+'px';c.style.top=(O+j*G+1)+'px';F.appendChild(c);setTimeout(()=>c.remove(),2700)}
+ function streak(){const h=Math.random()<.55,rev=Math.random()<.5,e=document.createElement('div');e.className='streak '+(h?'h':'v')+(rev?' rev':'');F.appendChild(e);
+   const len=160,dur=2600+Math.random()*2200;
+   if(h){const y=O+G*Math.floor(Math.random()*(innerHeight/G+2));e.style.top=y+'px';
+     const a=rev?innerWidth+len:-len,b=rev?-len:innerWidth+len;e.animate([{transform:`translateX(${a}px)`},{transform:`translateX(${b}px)`}],{duration:dur,easing:'linear'}).onfinish=()=>e.remove()}
+   else{const x=O+G*Math.floor(Math.random()*(innerWidth/G+2));e.style.left=x+'px';
+     const a=rev?innerHeight+len:-len,b=rev?-len:innerHeight+len;e.animate([{transform:`translateY(${a}px)`},{transform:`translateY(${b}px)`}],{duration:dur,easing:'linear'}).onfinish=()=>e.remove()}}
+ setInterval(cell,260);setInterval(streak,700);for(let k=0;k<8;k++)setTimeout(cell,k*80);streak();streak();
+})();
+/* confetti */
+function confetti(){const c=$('confetti'),x=c.getContext('2d'),d=Math.min(devicePixelRatio||1,2);c.width=innerWidth*d;c.height=innerHeight*d;
+  const cols=['#3ecf8e','#f2a65a','#fbbf24','#60a5fa','#f472b6','#ffffff'],P=[];
+  for(let k=0;k<2;k++)for(let i=0;i<90;i++){const left=k===0;P.push({x:(left?0:innerWidth)*d,y:innerHeight*.75*d,
+    vx:(left?1:-1)*(4+Math.random()*9)*d,vy:-(9+Math.random()*10)*d,g:.32*d,w:(5+Math.random()*6)*d,h:(3+Math.random()*4)*d,
+    r:Math.random()*6,vr:(Math.random()-.5)*.35,c:cols[i%cols.length],o:1})}
+  let f=0;(function tick(){x.clearRect(0,0,c.width,c.height);let alive=0;
+    for(const p of P){p.vy+=p.g;p.vx*=.985;p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;if(f>90)p.o-=.012;if(p.o<=0||p.y>c.height+40)continue;alive++;
+      x.save();x.globalAlpha=Math.max(p.o,0);x.translate(p.x,p.y);x.rotate(p.r);x.fillStyle=p.c;x.fillRect(-p.w/2,-p.h/2,p.w,p.h*Math.abs(Math.cos(p.r*2)));x.restore()}
+    f++;if(alive)requestAnimationFrame(tick);else x.clearRect(0,0,c.width,c.height)})()}
+const CFG={t:'__TOKEN__',state:'__STATE__',exp:__EXP__,bot:'__BOT__'};
+let animate=false,cid=null,picked=null,human=false,tries=__TRIES__,loadedAt=Date.now(),moved=0,busy=false;
+addEventListener('pointermove',()=>moved++,{passive:true});
+addEventListener('touchstart',()=>moved++,{passive:true});
+function devId(){let d=null;try{d=localStorage.getItem('st-dev')}catch(e){}
+  if(!d){const m=document.cookie.match(/(?:^|; )st_dev=([A-Za-z0-9_-]{16,64})/);if(m)d=m[1]}
+  if(!d){const a=new Uint8Array(18);crypto.getRandomValues(a);d=Array.from(a,x=>x.toString(16).padStart(2,'0')).join('')}
+  try{localStorage.setItem('st-dev',d)}catch(e){}
+  document.cookie='st_dev='+d+'; Max-Age=63072000; Path=/; SameSite=Lax; Secure';return d}
+const DEV=devId();
+async function api(path,body){const r=await fetch(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.assign({t:CFG.t},body||{}))});
+  return r.json().catch(()=>({ok:false,state:'error'}))}
+function renderChallenge(ch,c){cid=c;picked=null;
+  const el=$('chal');el.innerHTML=`<span class="tag">${ch.tag}</span><div class="disp${ch.num?' num':''}">${ch.disp}</div><div class="q">${ch.q}</div>`;
+  const o=$('opts');o.className='opts'+(ch.emo?' emo':'');o.innerHTML='';
+  ch.opts.forEach(v=>{const b=document.createElement('button');b.className='opt';b.type='button';b.textContent=v;
+    b.onclick=()=>{o.querySelectorAll('.opt').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');picked=String(v);$('err').classList.add('hide');upd()};o.appendChild(b)});
+  if(animate)[el,o].forEach(x=>{x.classList.remove('swap');void x.offsetWidth;x.classList.add('swap')});animate=true;upd()}
+async function newChallenge(){const r=await api('/verify/api/challenge');if(r.ok)renderChallenge(r.challenge,r.c);else handleState(r)}
+function upd(){$('verify').disabled=busy||!(picked!==null&&human)}
+function shieldClick(){const s=$('shield');if(s.classList.contains('ok')||s.classList.contains('loading'))return;
+  s.classList.remove('err');s.classList.add('loading');
+  setTimeout(()=>{s.classList.remove('loading');
+    if(Date.now()-loadedAt<1200){s.classList.add('err');return}
+    s.classList.add('ok');$('shBtn').setAttribute('aria-checked','true');human=true;upd()},900)}
+$('shBtn').onclick=shieldClick;$('shBtn').onkeydown=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();shieldClick()}};
+$('refresh').onclick=()=>{if(!busy)newChallenge()};
+function setTries(n){tries=n;$('tries').textContent=n+(n===1?' attempt left':' attempts left')}
+function handleState(r){
+  if(r.state==='success'||r.state==='done'){show('vSuccess');if(r.note){$('sNote').textContent=r.note;$('sNote').classList.remove('hide')}return}
+  if(r.state==='ip')return show('vIp');
+  if(r.state==='failed')return show('vFailed');
+  if(r.state==='expired')return show('vExpired');
+  if(r.state==='wrong'){setTries(r.attemptsLeft);$('errTxt').textContent='Incorrect answer. Try this new challenge.';$('err').classList.remove('hide');if(r.challenge)renderChallenge(r.challenge,r.c);return}
+  $('errTxt').textContent=r.message||'Something went wrong. Please try again.';$('err').classList.remove('hide')}
+$('verify').onclick=async()=>{if(busy)return;busy=true;const btn=$('verify');btn.disabled=true;btn.innerHTML='<span class="spin"></span>Verifying…';
+  let r;try{r=await api('/verify/api/submit',{c:cid,answer:picked,dev:DEV,elapsed:Date.now()-loadedAt,moves:moved,human})}catch(e){r={ok:false,state:'error'}}
+  busy=false;btn.textContent='Verify';handleState(r);upd()};
+function show(id){['vChallenge','vSuccess','vIp','vExpired','vFailed'].forEach(v=>$(v).classList.toggle('hide',v!==id));
+  $('intro').classList.toggle('hide',id!=='vChallenge');
+  if(id!=='vChallenge'&&tm)clearInterval(tm);
+  if(id==='vSuccess'){const bg=document.querySelector('#vSuccess .badge');bg.classList.remove('pop');void bg.offsetWidth;bg.classList.add('pop');if(!matchMedia('(prefers-reduced-motion: reduce)').matches)confetti();let n=3;$('cd').textContent=n;const c=setInterval(()=>{n--;$('cd').textContent=Math.max(n,0);if(n<=0){clearInterval(c);location.href='https://t.me/'+CFG.bot}},1000)}}
+let secs=CFG.exp,tm=null;
+function tick(){$('t').textContent=Math.floor(Math.max(secs,0)/60)+':'+String(Math.max(secs,0)%60).padStart(2,'0')}
+setTimeout(()=>document.body.classList.add('ready'),50);
+if(CFG.state==='challenge'){setTries(tries);tick();tm=setInterval(()=>{secs--;tick();if(secs<=0){clearInterval(tm);show('vExpired')}},1000);newChallenge()}
+else handleState({state:CFG.state});
+</script>
+</body>
+</html>

@@ -802,7 +802,7 @@ export const en: Record<string, string> = {
     '{refer_paybalance} *Referral Pay Balance:* {refAvailable} refs\n' +
     '{refer_spent} *Converted To Usdt:* {converted} refs\n' +
     '\n' +
-    '_Transfer earnings to your wallet once they reach $0.50. For cash withdrawal, contact support._\n' +
+    '_Transfer earnings to your wallet once they reach $0.10. For cash withdrawal, contact support._\n' +
     '\n' +
     '*Your Referral Link:*\n`{link}`',
   'profile.refer.convert_success':

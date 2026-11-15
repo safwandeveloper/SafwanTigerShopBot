@@ -90,6 +90,18 @@ function cleanDisplayName(value: string): string {
  */
 export async function activateReferralForUser(ctx: AppCtx): Promise<void> {
   if (!ctx.user?.referred_by || !ctx.from) return;
+  const { startHumanVerification } = await import('../services/humanVerify.js');
+  const gated = await startHumanVerification(
+    ctx.api,
+    {
+      telegram_id: ctx.user.telegram_id,
+      username: ctx.from.username ?? null,
+      first_name: ctx.from.first_name ?? null,
+      referred_by: ctx.user.referred_by,
+    },
+    ctx.from.id,
+  ).catch(() => false);
+  if (gated) return;
   const { activateReferralRecord } = await import('../db/queries.js');
   const activated = await activateReferralRecord(ctx.user.referred_by, ctx.user.telegram_id);
   if (!activated) return;

@@ -3,6 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import { formatPriceWithCurrency } from '../../config/currencies.js';
 import type { AppCtx } from '../middleware/user.js';
 import { activateReferralForUser } from '../middleware/user.js';
+import { isHumanVerifyPending } from '../services/humanVerify.js';
 import { mainMenuKeyboard } from '../keyboards/mainMenu.js';
 import { renderMdHtml } from '../services/premium.js';
 import { getOrder, getProduct } from '../db/queries.js';
@@ -313,6 +314,7 @@ export function registerStart(bot: Composer<AppCtx>): void {
     if (await maybeGateForceJoin(ctx)) return;
     if (flagged.__just_created) {
       await activateReferralForUser(ctx);
+      if (isHumanVerifyPending(ctx.user.telegram_id)) return;
     }
     if (await handleReferDeepLink(ctx)) return;
     if (await handleSettingsDeepLink(ctx)) return;
@@ -385,6 +387,7 @@ export function registerStart(bot: Composer<AppCtx>): void {
       await activateReferralForUser(ctx);
     }
     await ctx.answerCallbackQuery({ text: 'Access unlocked.' });
+    if (isHumanVerifyPending(ctx.user.telegram_id)) return;
     await showMainMenu(ctx);
   });
 

@@ -197,6 +197,7 @@ import type { ColorMode } from '../../../config/index.js';
 import { BUTTON_KEYS, COLOR_PREFIX, EMOJI, colorModeToStyle } from '../../../config/index.js';
 import type { AppCtx } from '../../middleware/user.js';
 import { registerFreebiesAdmin } from './freebies.js';
+import { registerHumanVerifyAdmin } from './humanVerify.js';
 import { logger } from '../../logger.js';
 import { env } from '../../env.js';
 import type { DBOrder, DBUser, DBPromo, DBProduct, DBSupplierApiSource, DBSupplierProductLink } from '../../types.js';
@@ -297,6 +298,7 @@ adminBot.command(
 );
 
 registerFreebiesAdmin(adminBot);
+registerHumanVerifyAdmin(adminBot);
 
 const PER_PAGE = 8;
 const ROOT_TEXT = '🛠 *Admin Panel*\n\nTap a section to manage it.';
@@ -387,6 +389,8 @@ async function showBotSettings(ctx: AppCtx): Promise<void> {
     .row()
     .text('📣 Set Join Channel', 'adm:bot:forcejoin:channel')
     .text('🗑 Clear Join Channel', 'adm:bot:forcejoin:clear')
+    .row()
+    .text('🛡 Referral Human Verify', 'adm:hv')
     .row()
     .text('📄 Set Email PDF URL', 'adm:bot:emailpdf')
     .row()
