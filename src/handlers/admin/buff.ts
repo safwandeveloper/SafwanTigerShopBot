@@ -12,12 +12,25 @@ import {
   listBuffOrders,
   type DBBuffOrder,
 } from '../../services/buff.js';
-import { escapeAttr } from '../../services/premium.js';
+import { entitiesToHtml, escapeAttr } from '../../services/premium.js';
+import type { MessageEntity } from 'grammy/types';
+import { isAdmin } from '../../db/queries.js';
 import {
+  getBuffDescription,
+  getBuffEmojiSpec,
   getBuffEnabled,
   getBuffMarkupPercent,
+  getBuffName,
+  getBuffPosition,
+  getBuffUnitPrice,
+  getBuffWarranty,
+  setBuffDescription,
+  setBuffEmoji,
   setBuffEnabled,
   setBuffMarkupPercent,
+  setBuffName,
+  setBuffPosition,
+  setBuffWarranty,
 } from '../../services/settings.js';
 import { fetchSupplierBalance } from '../../services/supplierApi.js';
 
@@ -31,8 +44,16 @@ async function showBuffAdmin(ctx: AppCtx): Promise<void> {
   } catch (err) {
     dbReady = !isBuffMigrationError(err);
   }
+  const spec = getBuffEmojiSpec();
+  const iconTxt = typeof spec === 'object' && spec.custom_emoji_id ? 'premium emoji' : String(spec);
+  const unit = getBuffUnitPrice();
   const lines = [
     '🚀 <b>Buff Token Muse AI (TunVN)</b>',
+    '',
+    `<b>Card name:</b> ${escapeAttr(getBuffName())} · <b>Icon:</b> ${escapeAttr(iconTxt)}`,
+    `<b>Price/1B:</b> ${unit ? `$${unit.toFixed(2)}` : '<i>shown after first order</i>'} · <b>Shop row:</b> ${getBuffPosition()}`,
+    `<b>Warranty:</b> ${escapeAttr(getBuffWarranty())}`,
+    `<b>Description:</b> ${escapeAttr(getBuffDescription() || '(none)')}`,
     '',
     `Status: <b>${getBuffEnabled() ? '🟢 ON' : '🔴 OFF'}</b>`,
     `Markup: <b>${getBuffMarkupPercent()}%</b> over TunVN price`,
@@ -59,7 +80,16 @@ async function showBuffAdmin(ctx: AppCtx): Promise<void> {
     }
   }
   lines.push('', '<i>"Being checked" = TunVN took the order but could not confirm it. Check TunVN first, refund only if it really failed.</i>');
-  kb.text('🔄 Refresh', 'adm:buff').text('⬅️ Back', 'adm:back');
+  kb.text('✏️ Name', 'adm:buff:f:name')
+    .text('✨ Icon', 'adm:buff:f:emoji')
+    .row()
+    .text('📄 Description', 'adm:buff:f:description')
+    .text('🛡 Warranty', 'adm:buff:f:warranty')
+    .row()
+    .text(`↕️ Shop row: ${getBuffPosition() === 'top' ? 'Top' : 'Bottom'}`, 'adm:buff:pos')
+    .row()
+    .text('🔄 Refresh', 'adm:buff')
+    .text('⬅️ Back', 'adm:back');
   const html = lines.join('\n').slice(0, 4000);
   const opts = { parse_mode: 'HTML' as const, reply_markup: kb, link_preview_options: { is_disabled: true } };
   if (ctx.callbackQuery?.message) {
@@ -88,6 +118,58 @@ export function registerBuffAdmin(adminBot: Composer<AppCtx>): void {
     await ctx.answerCallbackQuery({ text: `Markup ${next}%` });
     await showBuffAdmin(ctx);
   });
+  const PROMPTS: Record<string, string> = {
+    name: 'Send the <b>name</b> shown on the Buff card and shop button (e.g. Buff Token Muse AI).',
+    emoji: 'Send ONE <b>premium emoji</b> for the Buff card icon (or any unicode emoji).',
+    description:
+      'Send the <b>description</b> shown under the Buff card title. Formatting and premium emojis are kept. Send <code>-</code> to clear.',
+    warranty: 'Send the <b>warranty</b> line (e.g. "Tokens in ~2 min or auto-refund").',
+  };
+
+  adminBot.callbackQuery(/^adm:buff:f:(name|emoji|description|warranty)$/, async (ctx) => {
+    const field = ctx.match[1] as 'name' | 'emoji' | 'description' | 'warranty';
+    ctx.session.adminFlow = { type: 'buff_edit', step: 'value', data: { field } };
+    await ctx.answerCallbackQuery();
+    await ctx.reply(PROMPTS[field] ?? 'Send the new value.', { parse_mode: 'HTML' });
+  });
+
+  adminBot.callbackQuery('adm:buff:pos', async (ctx) => {
+    const next = getBuffPosition() === 'top' ? 'bottom' : 'top';
+    await setBuffPosition(next, ctx.from.id);
+    await ctx.answerCallbackQuery({ text: `Shop row: ${next}` });
+    await showBuffAdmin(ctx);
+  });
+
+  adminBot.on('message:text', async (ctx, next) => {
+    const flow = ctx.session.adminFlow;
+    if (!flow || flow.type !== 'buff_edit') return next();
+    if (!ctx.from || !(await isAdmin(ctx.from.id))) return next();
+    const text = ctx.message.text.trim();
+    if (text.startsWith('/')) {
+      ctx.session.adminFlow = undefined;
+      return next();
+    }
+    ctx.session.adminFlow = undefined;
+    const { field } = flow.data;
+    if (field === 'name') {
+      if (!text || text.length > 60) {
+        await ctx.reply('⚠️ Name must be 1-60 characters.');
+        return;
+      }
+      await setBuffName(text, ctx.from.id);
+    } else if (field === 'description') {
+      await setBuffDescription(text === '-' ? '' : entitiesToHtml(ctx.message.text, ctx.message.entities ?? []), ctx.from.id);
+    } else if (field === 'warranty') {
+      await setBuffWarranty(text, ctx.from.id);
+    } else {
+      const ent = ctx.message.entities?.find((e: MessageEntity) => e.type === 'custom_emoji');
+      const id = ent && 'custom_emoji_id' in ent ? ent.custom_emoji_id : undefined;
+      await setBuffEmoji(text.slice(0, 4) || '🚀', id, ctx.from.id);
+    }
+    await ctx.reply('✅ Saved.');
+    await showBuffAdmin(ctx);
+  });
+
   adminBot.callbackQuery(/^adm:buff:rf:(\d+)$/, async (ctx) => {
     const refunded = await adminRefundBuff(Number(ctx.match[1]));
     await ctx.answerCallbackQuery({

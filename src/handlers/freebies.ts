@@ -15,7 +15,7 @@ import {
   type DBFreebie,
 } from '../db/freebies.js';
 import { BuffError, placeBuffOrder, quoteBuff } from '../services/buff.js';
-import { buffErrorText } from './buff.js';
+import { buffErrorText, tgEmoji } from './buff.js';
 import { logger } from '../logger.js';
 import { isForceJoinSatisfied, sendForceJoinPrompt } from '../middleware/forceJoin.js';
 import type { AppCtx } from '../middleware/user.js';
@@ -182,10 +182,10 @@ async function claim(ctx: AppCtx, id: number): Promise<void> {
     ctx.session.userFlow = { type: 'buff_freebie', step: 'value', data: { freebie_id: f.id } };
     await ctx.reply(
       [
-        `🚀 <b>${escapeAttr(f.name)}</b>`,
+        `${tgEmoji('freebie_title')} <b>${escapeAttr(f.name)}</b>`,
         '',
-        `You get <b>${f.buff_qty}B Buff Token</b> for free.`,
-        '✍️ Send your <b>Muse AI invite code</b> now (only the code, e.g. <code>ABBADJ</code>).',
+        `${tgEmoji('freebie_free')} You get <b>${f.buff_qty}B Buff Token</b> for free.`,
+        `${tgEmoji('pencil')} Send your <b>Muse AI invite code</b> now (only the code, e.g. <code>ABBADJ</code>).`,
       ].join('\n'),
       { parse_mode: 'HTML', reply_markup: new InlineKeyboard().text('❌ Cancel', `fb:v:${f.id}`) },
     );
@@ -227,7 +227,7 @@ function claimErrorKey(err: unknown): string {
     : 'freebie.error';
 }
 
-async function claimBuffFreebie(ctx: AppCtx, freebieId: number, text: string): Promise<void> {
+async function quoteBuffFreebie(ctx: AppCtx, freebieId: number, text: string): Promise<void> {
   const f = await getFreebie(freebieId);
   if (!f || !f.active || !f.buff_qty) {
     ctx.session.userFlow = undefined;
@@ -249,7 +249,36 @@ async function claimBuffFreebie(ctx: AppCtx, freebieId: number, text: string): P
     await ctx.reply(`${buffErrorText(err)}\n\nSend your invite code again.`, { parse_mode: 'HTML' });
     return;
   }
-  ctx.session.userFlow = undefined;
+  ctx.session.userFlow = {
+    type: 'buff_freebie',
+    step: 'value',
+    data: { freebie_id: f.id, orders_text: text.trim() },
+  };
+  const code = text.trim().split(/\s+/)[0] ?? '';
+  await ctx.reply(
+    [
+      `${tgEmoji('freebie_title')} <b>${escapeAttr(f.name)}</b>`,
+      '',
+      `${tgEmoji('profile_status')} You will send <b>${f.buff_qty}B Buff Token</b> to invite code:`,
+      `<code>${escapeAttr(code)}</code>`,
+      '',
+      `${tgEmoji('freebie_warn')} Make sure the code is yours — tokens go straight to that Muse AI account and cannot be taken back.`,
+    ].join('\n'),
+    {
+      parse_mode: 'HTML',
+      reply_markup: new InlineKeyboard()
+        .text('✅ Confirm', `fb:buf:${f.id}`)
+        .text('❌ Cancel', `fb:v:${f.id}`),
+    },
+  );
+}
+
+async function claimBuffFreebie(ctx: AppCtx, freebieId: number, ordersText: string): Promise<void> {
+  const f = await getFreebie(freebieId);
+  if (!f || !f.active || !f.buff_qty) {
+    await ctx.reply(renderMdHtml(ctx.t('freebie.inactive')), { parse_mode: 'HTML' });
+    return;
+  }
   let claimId: number;
   try {
     ({ claimId } = await claimFreebie(f.id, ctx.user.telegram_id));
@@ -262,7 +291,7 @@ async function claimBuffFreebie(ctx: AppCtx, freebieId: number, text: string): P
     const res = await placeBuffOrder({
       api: ctx.api,
       userId: ctx.user.telegram_id,
-      ordersText: text,
+      ordersText,
       channel: 'freebie',
       chargeUser: false,
       fixedQty: f.buff_qty,
@@ -270,10 +299,10 @@ async function claimBuffFreebie(ctx: AppCtx, freebieId: number, text: string): P
     });
     await ctx.reply(
       [
-        `✅ <b>Claimed:</b> ${escapeAttr(f.name)}`,
+        `${tgEmoji('freebie_claim')} <b>Claimed:</b> ${escapeAttr(f.name)}`,
         '',
-        `🚀 <b>${f.buff_qty}B Buff Token</b> is on the way (order #B${res.order.id}).`,
-        'It usually arrives within 1-2 minutes. You will get a message when it is done.',
+        `${tgEmoji('profile_status')} <b>${f.buff_qty}B Buff Token</b> is on the way (order #B${res.order.id}).`,
+        `${tgEmoji('refer_pending')} It usually arrives within 1-2 minutes. You will get a message when it is done.`,
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
@@ -295,13 +324,31 @@ export function registerFreebies(bot: Composer<AppCtx>): void {
       ctx.session.userFlow = undefined;
       return next();
     }
-    await claimBuffFreebie(ctx, flow.data.freebie_id, text);
+    if (flow.data.orders_text) {
+      await ctx.reply('Tap ✅ Confirm or ❌ Cancel on the message above.');
+      return;
+    }
+    await quoteBuffFreebie(ctx, flow.data.freebie_id, text);
+  });
+  bot.callbackQuery(/^fb:buf:(\d+)$/, async (ctx) => {
+    const flow = ctx.session.userFlow;
+    const data = flow?.type === 'buff_freebie' ? flow.data : undefined;
+    const ordersText = data?.orders_text;
+    ctx.session.userFlow = undefined;
+    if (!ordersText || data?.freebie_id !== Number(ctx.match[1])) {
+      await ctx.answerCallbackQuery({ text: 'Expired. Please claim again.', show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery({ text: '⏳ Claiming…' });
+    await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
+    await claimBuffFreebie(ctx, Number(ctx.match[1]), ordersText);
   });
   bot.callbackQuery('fb:list', async (ctx) => {
     await ctx.answerCallbackQuery();
     await showFreebiesList(ctx);
   });
   bot.callbackQuery(/^fb:v:(\d+)$/, async (ctx) => {
+    if (ctx.session.userFlow?.type === 'buff_freebie') ctx.session.userFlow = undefined;
     await ctx.answerCallbackQuery();
     await showFreebieDetail(ctx, Number(ctx.match[1]));
   });

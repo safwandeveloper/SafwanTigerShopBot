@@ -1,8 +1,10 @@
 /**
- * Shop → 🚀 Buff Token Muse AI: user sends invite codes + amounts, sees
- * the price, confirms, pays from wallet. See services/buff.ts.
+ * Shop → Buff Token product card: premium-emoji styled card with
+ * admin-editable name/description/warranty, per-1B price, then a
+ * code+amount input, price preview, confirm and wallet pay.
  */
 import { InlineKeyboard, type Composer } from 'grammy';
+import type { EmojiSpec } from '../../config/index.js';
 import { logger } from '../logger.js';
 import type { AppCtx } from '../middleware/user.js';
 import {
@@ -17,9 +19,30 @@ import {
   quoteBuff,
 } from '../services/buff.js';
 import { escapeAttr } from '../services/premium.js';
-import { getBuffEnabled } from '../services/settings.js';
+import {
+  getBuffDescription,
+  getBuffEmojiSpec,
+  getBuffEnabled,
+  getBuffName,
+  getBuffUnitPrice,
+  getBuffWarranty,
+  getEmoji,
+} from '../services/settings.js';
 
 const HTML = { parse_mode: 'HTML' as const, link_preview_options: { is_disabled: true } };
+
+export function buffEmojiTag(spec: EmojiSpec): string {
+  return typeof spec === 'object' && spec.custom_emoji_id
+    ? `<tg-emoji emoji-id="${escapeAttr(spec.custom_emoji_id)}">${spec.unicode}</tg-emoji>`
+    : typeof spec === 'object'
+      ? spec.unicode
+      : spec;
+}
+
+/** Render a config EMOJI key as a premium `<tg-emoji>` when it has an id. */
+export function tgEmoji(key: string): string {
+  return buffEmojiTag(getEmoji(key));
+}
 
 async function showOrEdit(ctx: AppCtx, html: string, kb: InlineKeyboard): Promise<void> {
   if (ctx.callbackQuery?.message) {
@@ -39,40 +62,70 @@ export function buffErrorText(err: unknown): string {
   return '⚠️ Something went wrong. Please try again later.';
 }
 
+function unitPriceLine(): string {
+  const unit = getBuffUnitPrice();
+  return unit ? `<b>$${unit.toFixed(2)}</b> / 1B` : '<i>shown before paying</i>';
+}
+
+/** Product-card screen for the Buff Token feature. */
 async function showBuffHome(ctx: AppCtx): Promise<void> {
-  ctx.session.userFlow = { type: 'buff_input', step: 'value', data: {} };
   ctx.session.buffPending = undefined;
+  ctx.session.userFlow = undefined;
+  const name = getBuffName();
+  const desc = getBuffDescription().trim();
+  const lines = [
+    `${buffEmojiTag(getBuffEmojiSpec())} <b>${escapeAttr(name)}</b>`,
+    '',
+    ...(desc ? [desc, ''] : []),
+    `${tgEmoji('price')} <b>Price:</b> ${unitPriceLine()}  <i>(min 1B)</i>`,
+    `${tgEmoji('warranty')} <b>Warranty:</b> ${escapeAttr(getBuffWarranty())}`,
+    '',
+    `${tgEmoji('freebie_desc')} <b>How it works:</b>`,
+    `1️⃣ Tap <b>Buy ${escapeAttr(name)}</b>`,
+    `2️⃣ Send your invite code + amount: <code>ABBADJ 20</code>`,
+    `3️⃣ Check the price → Confirm → paid from your wallet`,
+    `${tgEmoji('freebie_ok')} Tokens land in ~1-2 min · auto-refund on fail`,
+    '',
+    `${tgEmoji('profile_balance')} Wallet: <b>$${Number(ctx.user.balance ?? 0).toFixed(2)}</b>`,
+  ];
+  const kb = new InlineKeyboard()
+    .text(`💎 Buy ${name}`, 'buff:buy')
+    .row()
+    .text('⬅️ Back', 'shop:home');
+  await showOrEdit(ctx, lines.join('\n'), kb);
+}
+
+/** Ask for invite code + amount. */
+async function showBuffInput(ctx: AppCtx): Promise<void> {
+  ctx.session.userFlow = { type: 'buff_input', step: 'value', data: {} };
   const html = [
-    '🚀 <b>Buff Token Muse AI</b>',
-    '',
-    'Top up Muse AI tokens straight to your invite code.',
-    '',
-    '✍️ <b>Send your invite code and amount</b> (in billion tokens):',
+    `${tgEmoji('pencil')} <b>Send your invite code and amount</b> (in billion tokens):`,
     `<code>ABBADJ 20</code>`,
     '',
-    `• ${BUFF_QTY_MIN}-${BUFF_QTY_MAX}B per code, up to ${BUFF_MAX_LINES} codes (one per line)`,
-    '• You see the exact price before paying',
-    '• Tokens arrive in about 1-2 minutes',
-    '• Failed orders are refunded to your wallet automatically',
-    '',
-    `💰 Wallet: <b>$${Number(ctx.user.balance ?? 0).toFixed(2)}</b>`,
+    `${tgEmoji('freebie_item')} ${BUFF_QTY_MIN}-${BUFF_QTY_MAX}B per code · up to ${BUFF_MAX_LINES} codes, one per line`,
+    `${tgEmoji('freebie_kind')} You'll see the exact price before paying`,
   ].join('\n');
-  const kb = new InlineKeyboard()
-    .text('📜 My Buff Orders', 'buff:my')
-    .row()
-    .text('⬅️ Back', 'shop:home')
-    .text('🏠 Home', 'main:open');
+  const kb = new InlineKeyboard().text('❌ Cancel', 'buff:open');
   await showOrEdit(ctx, html, kb);
 }
 
 export function registerBuff(bot: Composer<AppCtx>): void {
+  const guard = async (ctx: AppCtx): Promise<boolean> => {
+    if (getBuffEnabled()) return true;
+    await ctx.answerCallbackQuery({ text: 'Buff Token is not available right now.', show_alert: true });
+    return false;
+  };
+
   bot.callbackQuery('buff:open', async (ctx) => {
-    if (!getBuffEnabled()) {
-      await ctx.answerCallbackQuery({ text: 'Buff Token is not available right now.', show_alert: true });
-      return;
-    }
+    if (!(await guard(ctx))) return;
     await ctx.answerCallbackQuery();
     await showBuffHome(ctx);
+  });
+
+  bot.callbackQuery('buff:buy', async (ctx) => {
+    if (!(await guard(ctx))) return;
+    await ctx.answerCallbackQuery();
+    await showBuffInput(ctx);
   });
 
   bot.callbackQuery('buff:my', async (ctx) => {
@@ -83,7 +136,7 @@ export function registerBuff(bot: Composer<AppCtx>): void {
     } catch (err) {
       if (!isBuffMigrationError(err)) logger.warn({ err }, 'buff my orders failed');
     }
-    const lines = ['📜 <b>My Buff Orders</b>', ''];
+    const lines = [`${tgEmoji('stats_orders')} <b>My Buff Orders</b>`, ''];
     if (rows.length === 0) lines.push('<i>No Buff orders yet.</i>');
     for (const o of rows) {
       const codes = o.orders_text.split('\n').map((l) => escapeAttr(l)).join(', ');
@@ -92,7 +145,7 @@ export function registerBuff(bot: Composer<AppCtx>): void {
         `<code>${codes}</code>`,
       );
     }
-    const kb = new InlineKeyboard().text('⬅️ Back', 'buff:open').text('🏠 Home', 'main:open');
+    const kb = new InlineKeyboard().text('⬅️ Back', 'buff:open');
     await showOrEdit(ctx, lines.join('\n'), kb);
   });
 
@@ -123,14 +176,15 @@ export function registerBuff(bot: Composer<AppCtx>): void {
     }
     ctx.session.buffPending = { ordersText: quote.ordersText, price: quote.priceUsdt };
     const balance = Number(ctx.user.balance ?? 0);
+    const per = quote.totalQty > 0 ? quote.priceUsdt / quote.totalQty : 0;
     const lines = [
-      '🧾 <b>Buff Token order preview</b>',
+      `${tgEmoji('stats_orders')} <b>Order preview</b>`,
       '',
-      ...quote.lines.map((l) => `• <code>${escapeAttr(l.code)}</code> → <b>${l.qty}B</b>`),
+      ...quote.lines.map((l) => `${tgEmoji('api_key')} <code>${escapeAttr(l.code)}</code> → <b>${l.qty}B</b>`),
       '',
-      `Total: <b>${quote.totalQty}B tokens</b>`,
-      `Price: <b>$${quote.priceUsdt.toFixed(2)}</b>`,
-      `Wallet: $${balance.toFixed(2)}`,
+      `${tgEmoji('total')} Total: <b>${quote.totalQty}B tokens</b> · $${per.toFixed(2)}/1B`,
+      `${tgEmoji('price')} Price: <b>$${quote.priceUsdt.toFixed(2)}</b>`,
+      `${tgEmoji('profile_balance')} Wallet: $${balance.toFixed(2)}`,
     ];
     const kb = new InlineKeyboard();
     if (balance < quote.priceUsdt) {
@@ -165,15 +219,15 @@ export function registerBuff(bot: Composer<AppCtx>): void {
       const kb = new InlineKeyboard().text('📜 My Buff Orders', 'buff:my').text('🏠 Home', 'main:open');
       const head =
         res.status === 'placed'
-          ? '✅ <b>Buff Token order placed!</b>'
-          : '⏳ <b>Buff Token order received</b> — it is being checked.';
+          ? `${tgEmoji('freebie_ok')} <b>Buff Token order placed!</b>`
+          : `${tgEmoji('refer_pending')} <b>Buff Token order received</b> — it is being checked.`;
       await ctx.reply(
         [
           head,
           '',
-          `Order: <b>#B${res.order.id}</b>`,
-          `Paid: <b>$${res.priceUsdt.toFixed(2)}</b>`,
-          res.balanceAfter !== null ? `Wallet: $${res.balanceAfter.toFixed(2)}` : '',
+          `${tgEmoji('stats_orders')} Order: <b>#B${res.order.id}</b>`,
+          `${tgEmoji('price')} Paid: <b>$${res.priceUsdt.toFixed(2)}</b>`,
+          res.balanceAfter !== null ? `${tgEmoji('profile_balance')} Wallet: $${res.balanceAfter.toFixed(2)}` : '',
           '',
           'Tokens will be credited to your invite code within about 1-2 minutes. You will get a message when it is done. If it fails, you are refunded automatically.',
         ]

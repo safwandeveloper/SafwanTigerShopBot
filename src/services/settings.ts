@@ -482,6 +482,65 @@ export function getBuffEnabled(): boolean {
   return v === true || v === 'true';
 }
 
+/** Shop-card name for the Buff Token feature. Default "Buff Token Muse AI". */
+export function getBuffName(): string {
+  const v = getTextOverride('buff_name');
+  return v && v.trim() ? v.trim() : 'Buff Token Muse AI';
+}
+export async function setBuffName(name: string, updated_by?: number): Promise<void> {
+  await setText('buff_name', name.trim().slice(0, 80), updated_by);
+}
+
+/** Optional HTML description shown on the Buff shop card. */
+export function getBuffDescription(): string {
+  return getTextOverride('buff_description') ?? '';
+}
+export async function setBuffDescription(text: string, updated_by?: number): Promise<void> {
+  await setText('buff_description', text.slice(0, 1500), updated_by);
+}
+
+/** Warranty line on the Buff shop card. */
+export function getBuffWarranty(): string {
+  const v = getTextOverride('buff_warranty');
+  return v && v.trim() ? v.trim() : 'Tokens credited to your invite code within ~2 minutes or auto-refund';
+}
+export async function setBuffWarranty(text: string, updated_by?: number): Promise<void> {
+  await setText('buff_warranty', text.slice(0, 300), updated_by);
+}
+
+/** Premium icon for the Buff button/card: `emoji.buff_product` spec. */
+export function getBuffEmojiSpec(): EmojiSpec {
+  return getEmoji('buff_product');
+}
+export async function setBuffEmoji(
+  unicode: string,
+  custom_emoji_id: string | undefined,
+  updated_by?: number,
+): Promise<void> {
+  await setEmoji('buff_product', unicode, custom_emoji_id, updated_by);
+}
+
+/** Where the Buff row sits in the shop product list. */
+export function getBuffPosition(): 'top' | 'bottom' {
+  return cache.get('buff.position') === 'bottom' ? 'bottom' : 'top';
+}
+export async function setBuffPosition(pos: 'top' | 'bottom', updated_by?: number): Promise<void> {
+  await setSetting('buff.position', pos, updated_by);
+  cache.set('buff.position', pos);
+}
+
+/** Last quoted per-1B selling price (USDT), shown on the shop button/card. */
+export function getBuffUnitPrice(): number | null {
+  const v = Number(cache.get('buff.unit_price'));
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+export async function setBuffUnitPrice(usdt: number, updated_by?: number): Promise<void> {
+  if (!Number.isFinite(usdt) || usdt <= 0) return;
+  const rounded = Number(usdt.toFixed(4));
+  await setSetting('buff.unit_price', rounded, updated_by);
+  cache.set('buff.unit_price', rounded);
+}
+
 export async function setBuffEnabled(enabled: boolean, updated_by?: number): Promise<void> {
   await setSetting('buff.enabled', enabled, updated_by);
   cache.set('buff.enabled', enabled);

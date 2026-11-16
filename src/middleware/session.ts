@@ -335,6 +335,11 @@ export type AdminFlow =
       step: 'value';
       data: { freebie_id: number | null; field: FreebieField };
     }
+  | {
+      type: 'buff_edit';
+      step: 'value';
+      data: { field: 'name' | 'emoji' | 'description' | 'warranty' };
+    }
   | { type: 'add_gift'; step: 'code'; data: Record<string, never> }
   | { type: 'add_gift'; step: 'amount'; data: { code: string } }
   | {
@@ -518,7 +523,7 @@ export type UserFlow =
       /** Buff Token freebie: next text message is the claimer's invite code. */
       type: 'buff_freebie';
       step: 'value';
-      data: { freebie_id: number };
+      data: { freebie_id: number; orders_text?: string };
     }
   | {
       /**

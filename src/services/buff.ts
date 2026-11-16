@@ -11,7 +11,7 @@ import { supabase } from '../db/supabase.js';
 import { logger } from '../logger.js';
 import type { DBSupplierApiSource } from '../types.js';
 import * as adminLog from './adminLog.js';
-import { getBuffEnabled, getBuffMarkupPercent } from './settings.js';
+import { getBuffEnabled, getBuffMarkupPercent, setBuffUnitPrice } from './settings.js';
 import { supplierRequestRaw } from './supplierApi.js';
 import { charge, credit } from './wallet.js';
 
@@ -156,12 +156,15 @@ export async function quoteBuff(ordersText: string, fixedQty?: number): Promise<
   }
   const cost = Number(json.sell_price_usdt);
   if (!Number.isFinite(cost) || cost <= 0) throw new BuffError('unavailable', 'Buff price unavailable. Try again later.', 503);
+  const totalQty = parsed.lines.reduce((a, l) => a + l.qty, 0);
+  const price = buffSellPrice(cost);
+  if (totalQty > 0) void setBuffUnitPrice(price / totalQty).catch(() => undefined);
   return {
     ordersText: parsed.ordersText,
     lines: parsed.lines,
-    totalQty: parsed.lines.reduce((a, l) => a + l.qty, 0),
+    totalQty,
     costUsdt: money(cost),
-    priceUsdt: buffSellPrice(cost),
+    priceUsdt: price,
     fundable: json.fundable !== false,
   };
 }

@@ -3,6 +3,9 @@ import { formatPriceWithCurrency } from '../../config/currencies.js';
 import { EMOJI, PRODUCTS_PER_PAGE, colorModeToStyle, type Lang } from '../../config/index.js';
 import { inlineBtn, inlineCopyText } from './helpers.js';
 import {
+  getBuffEmojiSpec,
+  getBuffName,
+  getBuffUnitPrice,
   getCategoryColor,
   getCategoryDefaultColor,
   getProductColor,
@@ -71,9 +74,25 @@ export function shopProductsKeyboard(
   page: number,
   totalPages: number,
   currency = 'USDT',
-  opts: { allMode?: boolean; buff?: boolean } = {},
+  opts: { allMode?: boolean; buff?: { position: 'top' | 'bottom' } | null } = {},
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
+
+  // Optional Buff Token row — renders like a product row but carries
+  // the per-1B price instead of stock. `opts.buff` picks top/bottom.
+  const addBuffRow = () => {
+    if (!opts.buff) return;
+    const spec = getBuffEmojiSpec();
+    const iconId = typeof spec === 'object' ? spec.custom_emoji_id : undefined;
+    const glyph = typeof spec === 'object' ? spec.unicode : spec;
+    const name = getBuffName();
+    const unit = getBuffUnitPrice();
+    const price = unit ? ` · ${formatPriceWithCurrency(unit, currency)}/1B` : ' · from 1B';
+    kb.text(`${iconId ? '' : `${glyph} `}${name}${price}`, 'buff:open');
+    if (iconId) kb.icon(iconId);
+    kb.row();
+  };
+  if (opts.buff?.position === 'top') addBuffRow();
 
   const defaultInStockIcon = premiumIconId('orders_product');
   const oosIcon = premiumIconId('gift_invalid');
@@ -145,12 +164,7 @@ export function shopProductsKeyboard(
   //  • Single page →  [Refresh]    [1/1]
   //
   //  Bottom row, every case: [Back] (full width).
-  if (opts.buff) {
-    kb.text('🚀 Buff Token Muse AI', 'buff:open');
-    const buffIcon = premiumIconId('orders_product');
-    if (buffIcon) kb.icon(buffIcon);
-    kb.row();
-  }
+  if (opts.buff?.position === 'bottom') addBuffRow();
 
   if (opts.allMode) {
     inlineBtn(kb, lang, 'refresh', 'shop:p:0');

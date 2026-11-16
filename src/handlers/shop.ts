@@ -1,4 +1,4 @@
-import { getBuffEnabled } from '../services/settings.js';
+import { getBuffEnabled, getBuffPosition } from '../services/settings.js';
 import type { Composer } from 'grammy';
 import { InlineKeyboard, InputFile } from 'grammy';
 import {
@@ -168,7 +168,7 @@ export async function showShopHome(ctx: AppCtx, page = 0) {
   // total counts live in the keyboard footer where they don't
   // clutter the body copy.
   const html = renderMdHtml(ctx.t('shop.home.header'));
-  const kb = shopProductsKeyboard(ctx.lang, pageRows, safePage, totalPages, ctx.user.currency ?? 'USDT', { allMode, buff: getBuffEnabled() });
+  const kb = shopProductsKeyboard(ctx.lang, pageRows, safePage, totalPages, ctx.user.currency ?? 'USDT', { allMode, buff: getBuffEnabled() ? { position: getBuffPosition() } : null });
   if (ctx.callbackQuery) {
     await ctx.editMessageText(html, { parse_mode: 'HTML', reply_markup: kb });
   } else {
