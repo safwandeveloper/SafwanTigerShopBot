@@ -357,7 +357,7 @@ export async function sendVerifyPrompt(api: Api, chatId: number, userId: number)
   const url = verifyUrl(userId);
   if (!url) return false;
   const bonus = getHumanVerifyNumber('user_bonus');
-  const kb = new InlineKeyboard().url("Verify I'm Human", url).row().text('Skip', 'hv:skip');
+  const kb = new InlineKeyboard().url('Open Verify Link', url).row().text('Skip', 'hv:skip');
   const lines = [
     `<tg-emoji emoji-id="${BELL_EMOJI_ID}">🔔</tg-emoji> <b>Verify you're human</b>`,
     '',
@@ -365,7 +365,8 @@ export async function sendVerifyPrompt(api: Api, chatId: number, userId: number)
   ];
   if (bonus > 0) lines.push(`<tg-emoji emoji-id="${DONE_EMOJI_ID}">✅</tg-emoji> Get <b>$${bonus.toFixed(2)}</b> in your wallet after verifying.`);
   lines.push(
-    `<tg-emoji emoji-id="${SKIP_EMOJI_ID}">⏭</tg-emoji> You can also tap <b>Skip</b> and use the bot normally (no reward).`,
+    '',
+    `<tg-emoji emoji-id="${SKIP_EMOJI_ID}">⏭</tg-emoji> <b>Warning:</b> if you tap <b>Skip</b>, your referral will <b>not</b> count and you will <b>not</b> receive your bonus. The bot stays locked until you verify or skip.`,
     '',
     `<i>The link is valid for ${Math.round(LINK_TTL_SECONDS / 60)} minutes.</i>`,
   );

@@ -383,19 +383,22 @@ export function registerStart(bot: Composer<AppCtx>): void {
       return;
     }
     ctx.session.forceJoinUnlocked = true;
-    if (status === 'joined') {
-      await activateReferralForUser(ctx);
-    }
+    // 'unknown' means the membership check failed; let the user through and
+    // run referral activation — the human verify step still gates the reward.
+    await activateReferralForUser(ctx);
     await ctx.answerCallbackQuery({ text: 'Access unlocked.' });
     if (isHumanVerifyPending(ctx.user.telegram_id)) return;
     await showMainMenu(ctx);
   });
 
+  // Stale prompts from before Skip was removed may still send this: make the
+  // channel join mandatory by re-showing the prompt instead of unlocking.
   bot.callbackQuery('forcejoin:skip', async (ctx) => {
-    ctx.session.forceJoinUnlocked = true;
-    ctx.session.forceJoinRequired = false;
-    await ctx.answerCallbackQuery({ text: 'Skipped.' });
-    await showMainMenu(ctx);
+    await ctx.answerCallbackQuery({
+      text: 'Please join the channel first, then tap Done.',
+      show_alert: true,
+    });
+    await sendForceJoinPrompt(ctx);
   });
 
   // Legacy channel button callback. The old join/channel prompt is disabled:
