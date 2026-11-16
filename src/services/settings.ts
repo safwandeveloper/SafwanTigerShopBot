@@ -446,13 +446,14 @@ export async function setHumanVerifyEnabled(enabled: boolean, updated_by?: numbe
   cache.set('hv.enabled', enabled);
 }
 
-export type HumanVerifyNumberKey = 'ip_limit' | 'ref_reward' | 'user_bonus' | 'alert_threshold';
+export type HumanVerifyNumberKey = 'ip_limit' | 'ref_reward' | 'user_bonus' | 'alert_threshold' | 'daily_limit';
 
 const HUMAN_VERIFY_NUMBERS: Record<HumanVerifyNumberKey, { def: number; min: number; max: number }> = {
   ip_limit: { def: 1, min: 1, max: 50 },
   ref_reward: { def: 0.1, min: 0, max: 10 },
   user_bonus: { def: 0.01, min: 0, max: 10 },
   alert_threshold: { def: 10, min: 1, max: 1000 },
+  daily_limit: { def: 10, min: 0, max: 1000 },
 };
 
 export function getHumanVerifyNumber(key: HumanVerifyNumberKey): number {

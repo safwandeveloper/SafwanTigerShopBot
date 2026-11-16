@@ -805,6 +805,31 @@ export const en: Record<string, string> = {
     '_Transfer earnings to your wallet once they reach $0.10. For cash withdrawal, contact support._\n' +
     '\n' +
     '*Your Referral Link:*\n`{link}`',
+  'profile.refer.body_v2':
+    '{refer_prize_l} *Earn ${refReward} for every friend who verifies* {refer_prize_r}\n' +
+    '_Your friend also gets ${userBonus} in their wallet._\n' +
+    '\n' +
+    '{refer_active} *Verified Friends:* {verified} _(Today: {today}/{limit})_\n' +
+    '{refer_pending} *Waiting To Verify:* {pending}\n' +
+    '{refer_left} *Skipped:* {skipped}\n' +
+    '{email_in_use} *Duplicate Devices:* {deviceDup}\n' +
+    '{freebie_warn} *Same Network (IP Limit):* {ipLimited}\n' +
+    '{freebie_out} *Failed Verification:* {failed}\n' +
+    '{refer_total} *Total Referred:* {refTotal} _(old refers: {legacy})_\n' +
+    '\n' +
+    '{refer_coin} *Total Earned:* {earnedTotal} USDT\n' +
+    '{refer_withdrawn} *Withdrawn:* {withdrawn} USDT\n' +
+    '{welcome_balance} *Available To Convert:* {availableUsd} USDT\n' +
+    '{refer_paybalance} *Referral Pay Balance:* {refAvailable} refs\n' +
+    '\n' +
+    '{freebie_desc} *How It Works*\n' +
+    '1. Share your referral link\n' +
+    '2. Your friend joins the channel and verifies\n' +
+    '3. You get +1 refer (${refReward})\n' +
+    '\n' +
+    '_Only verified friends earn rewards (max {limit} per day). Old refers keep $0.02 each. Convert to wallet from $0.10. For cash withdrawal, contact support._\n' +
+    '\n' +
+    '*Your Referral Link:*\n`{link}`',
   'profile.refer.convert_success':
     '💱 Converted *{refs} refs* into *{amount} USDT*.\n\n💳 Wallet Balance: *{balance} USDT*',
   'profile.refer.convert_low':
