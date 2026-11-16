@@ -1600,6 +1600,7 @@ export async function updateSupplierApiSource(
     last_balance?: number | null;
     last_sync_at?: string | null;
     last_error?: string | null;
+    locked_profit?: number | null;
   },
 ): Promise<void> {
   const payload = { ...patch, updated_at: new Date().toISOString() };
@@ -1674,6 +1675,7 @@ export async function updateSupplierProductLink(
   patch: Partial<Omit<SupplierProductLinkInput, 'local_product_id'>> & {
     last_sync_at?: string | null;
     last_error?: string | null;
+    locked_profit?: number | null;
   },
 ): Promise<void> {
   const payload = { ...patch, updated_at: new Date().toISOString() };

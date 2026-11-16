@@ -5,11 +5,16 @@ import {
   listSupplierProductLinks,
 } from '../db/queries.js';
 import { logger } from '../logger.js';
+import * as adminLog from './adminLog.js';
+
+/** linkId -> last cost:price pair we alerted about, so loss alerts are not repeated every sync. */
+const lossAlerted = new Map<number, string>();
 import { fulfillPendingPreordersForProduct } from './preorder.js';
 import {
   fetchSupplierProducts,
   importSupplierProduct,
   isSupplierMigrationError,
+  lockedProfitOf,
   syncSupplierProductLink,
 } from './supplierApi.js';
 
@@ -53,11 +58,28 @@ export async function syncSupplierStocksOnce(api: Api): Promise<{
       });
 
       for (const link of links) {
-        if (!link.auto_sync_stock) continue;
+        if (!link.auto_sync_stock && lockedProfitOf(link) === null) continue;
         checked += 1;
         try {
           const result = await syncSupplierProductLink(link);
           if (result.updatedLocal) updated += 1;
+          if (result.repriced) {
+            lossAlerted.delete(link.id);
+            void adminLog
+              .logSupplierPriceEvent(api, { kind: 'repriced', supplierName: source.name, ...result.repriced })
+              .catch((err) => logger.warn({ err }, 'supplier reprice log failed'));
+          }
+          if (result.loss) {
+            const key = `${result.loss.supplierCost}:${result.loss.oldPrice}`;
+            if (lossAlerted.get(link.id) !== key) {
+              lossAlerted.set(link.id, key);
+              void adminLog
+                .logSupplierPriceEvent(api, { kind: 'loss', supplierName: source.name, ...result.loss })
+                .catch((err) => logger.warn({ err }, 'supplier loss log failed'));
+            }
+          } else {
+            lossAlerted.delete(link.id);
+          }
 
           const product = await getProduct(link.local_product_id).catch(() => null);
           if (product && !product.unlimited_stock && product.stock > 0) {

@@ -11,6 +11,7 @@ import { registerStart } from './handlers/start.js';
 import { registerShop } from './handlers/shop.js';
 import { registerProfile } from './handlers/profile.js';
 import { registerFreebies } from './handlers/freebies.js';
+import { registerBuff } from './handlers/buff.js';
 import { humanVerifyGate, registerHumanVerify } from './handlers/humanVerify.js';
 import { registerSupport, restoreLiveSupportSession } from './handlers/support.js';
 import { registerTopup } from './handlers/topup.js';
@@ -50,6 +51,7 @@ export async function buildBot(): Promise<Bot<AppCtx>> {
   registerShop(bot);
   registerProfile(bot);
   registerFreebies(bot);
+  registerBuff(bot);
   registerSupport(bot);
   registerTopup(bot);
   registerDirectPay(bot);

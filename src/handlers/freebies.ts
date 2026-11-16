@@ -11,8 +11,11 @@ import {
   freebieRemaining,
   getFreebie,
   listFreebies,
+  releaseFreebieClaim,
   type DBFreebie,
 } from '../db/freebies.js';
+import { BuffError, placeBuffOrder, quoteBuff } from '../services/buff.js';
+import { buffErrorText } from './buff.js';
 import { logger } from '../logger.js';
 import { isForceJoinSatisfied, sendForceJoinPrompt } from '../middleware/forceJoin.js';
 import type { AppCtx } from '../middleware/user.js';
@@ -162,6 +165,32 @@ async function claim(ctx: AppCtx, id: number): Promise<void> {
       return;
     }
   }
+  if (f.buff_qty) {
+    const [remaining, used] = await Promise.all([
+      freebieRemaining(f),
+      countFreebieClaims(f.id, ctx.user.telegram_id),
+    ]);
+    if (f.per_user_limit > 0 && used >= f.per_user_limit) {
+      await ctx.answerCallbackQuery({ text: ctx.t('freebie.limit'), show_alert: true });
+      return;
+    }
+    if (remaining !== null && remaining <= 0) {
+      await ctx.answerCallbackQuery({ text: ctx.t('freebie.out'), show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    ctx.session.userFlow = { type: 'buff_freebie', step: 'value', data: { freebie_id: f.id } };
+    await ctx.reply(
+      [
+        `🚀 <b>${escapeAttr(f.name)}</b>`,
+        '',
+        `You get <b>${f.buff_qty}B Buff Token</b> for free.`,
+        '✍️ Send your <b>Muse AI invite code</b> now (only the code, e.g. <code>ABBADJ</code>).',
+      ].join('\n'),
+      { parse_mode: 'HTML', reply_markup: new InlineKeyboard().text('❌ Cancel', `fb:v:${f.id}`) },
+    );
+    return;
+  }
   let delivered: string | null;
   try {
     ({ delivered } = await claimFreebie(f.id, ctx.user.telegram_id));
@@ -188,7 +217,86 @@ async function claim(ctx: AppCtx, id: number): Promise<void> {
   );
 }
 
+function claimErrorKey(err: unknown): string {
+  return err instanceof FreebieClaimFailed
+    ? err.code === 'FREEBIE_LIMIT'
+      ? 'freebie.limit'
+      : err.code === 'FREEBIE_OUT'
+        ? 'freebie.out'
+        : 'freebie.inactive'
+    : 'freebie.error';
+}
+
+async function claimBuffFreebie(ctx: AppCtx, freebieId: number, text: string): Promise<void> {
+  const f = await getFreebie(freebieId);
+  if (!f || !f.active || !f.buff_qty) {
+    ctx.session.userFlow = undefined;
+    await ctx.reply(renderMdHtml(ctx.t('freebie.inactive')), { parse_mode: 'HTML' });
+    return;
+  }
+  if (f.min_refs > 0) {
+    const have = await countReferralsAfter(ctx.user.telegram_id, f.created_at);
+    if (have < f.min_refs) {
+      ctx.session.userFlow = undefined;
+      await ctx.reply(ctx.t('freebie.need_refs', { required: f.min_refs, have }));
+      return;
+    }
+  }
+  await ctx.replyWithChatAction('typing').catch(() => undefined);
+  try {
+    await quoteBuff(text, f.buff_qty);
+  } catch (err) {
+    await ctx.reply(`${buffErrorText(err)}\n\nSend your invite code again.`, { parse_mode: 'HTML' });
+    return;
+  }
+  ctx.session.userFlow = undefined;
+  let claimId: number;
+  try {
+    ({ claimId } = await claimFreebie(f.id, ctx.user.telegram_id));
+  } catch (err) {
+    if (!(err instanceof FreebieClaimFailed)) logger.error({ err, id: f.id }, 'buff freebie claim failed');
+    await ctx.reply(renderMdHtml(ctx.t(claimErrorKey(err))), { parse_mode: 'HTML' });
+    return;
+  }
+  try {
+    const res = await placeBuffOrder({
+      api: ctx.api,
+      userId: ctx.user.telegram_id,
+      ordersText: text,
+      channel: 'freebie',
+      chargeUser: false,
+      fixedQty: f.buff_qty,
+      freebieClaimId: claimId,
+    });
+    await ctx.reply(
+      [
+        `✅ <b>Claimed:</b> ${escapeAttr(f.name)}`,
+        '',
+        `🚀 <b>${f.buff_qty}B Buff Token</b> is on the way (order #B${res.order.id}).`,
+        'It usually arrives within 1-2 minutes. You will get a message when it is done.',
+      ].join('\n'),
+      { parse_mode: 'HTML' },
+    );
+  } catch (err) {
+    if (!(err instanceof BuffError)) logger.error({ err, id: f.id }, 'buff freebie order failed');
+    await releaseFreebieClaim(claimId).catch(() => undefined);
+    await ctx.reply(`${buffErrorText(err)}\n\nYour claim was not used. You can try again later.`, {
+      parse_mode: 'HTML',
+    });
+  }
+}
+
 export function registerFreebies(bot: Composer<AppCtx>): void {
+  bot.on('message:text', async (ctx, next) => {
+    const flow = ctx.session.userFlow;
+    if (!flow || flow.type !== 'buff_freebie') return next();
+    const text = ctx.message.text.trim();
+    if (text.startsWith('/')) {
+      ctx.session.userFlow = undefined;
+      return next();
+    }
+    await claimBuffFreebie(ctx, flow.data.freebie_id, text);
+  });
   bot.callbackQuery('fb:list', async (ctx) => {
     await ctx.answerCallbackQuery();
     await showFreebiesList(ctx);

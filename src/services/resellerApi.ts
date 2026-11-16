@@ -8,17 +8,20 @@ import {
   decrementProductStock,
   findUserById,
   getProduct,
+  getSupplierApiSource,
+  getSupplierProductLinkByProduct,
   listActiveProducts,
   setOrderDeliveredItems,
 } from '../db/queries.js';
 import { supabase } from '../db/supabase.js';
 import { env } from '../env.js';
 import { logger } from '../logger.js';
-import type { DBProduct, DBUser } from '../types.js';
+import type { DBOrder, DBProduct, DBUser } from '../types.js';
 import { publicOrderId } from './orderId.js';
 import { applyUserPriceToProduct, applyUserPriceToProducts } from './pricing.js';
 import { priceBreakdown, resolvePromo } from './promo.js';
-import { charge } from './wallet.js';
+import { charge, credit } from './wallet.js';
+import { trySupplierAutoOrder } from './supplierApi.js';
 import * as adminLog from './adminLog.js';
 
 const API_KEY_PREFIX = 'stapi_';
@@ -57,6 +60,7 @@ export type ApiProduct = {
   unlimited_stock: boolean;
   warranty: string | null;
   description: string | null;
+  note: string | null;
 };
 
 export type ApiOrderResult = {
@@ -70,6 +74,8 @@ export type ApiOrderResult = {
   total: number;
   balance_after: number;
   items: string[];
+  warranty: string | null;
+  note: string | null;
 };
 
 type ApiOrderRow = {
@@ -188,6 +194,7 @@ function productToApi(p: DBProduct): ApiProduct {
     unlimited_stock: unlimited,
     warranty: p.warranty ?? null,
     description: p.description ?? null,
+    note: p.note ?? null,
   };
 }
 
@@ -579,8 +586,13 @@ export async function placeApiOrder(args: {
   if (!product.unlimited_stock && product.stock < qty) {
     throw new ApiError(409, 'out_of_stock', 'Product does not have enough stock.');
   }
+  const supplierLink = await getSupplierProductLinkByProduct(product.id).catch(() => null);
+  const supplierSource = supplierLink?.auto_order
+    ? await getSupplierApiSource(supplierLink.supplier_id).catch(() => null)
+    : null;
+  const viaSupplier = Boolean(supplierLink?.auto_order && supplierSource?.enabled);
   const availableItems = await countAvailableProductItems(product.id);
-  if (availableItems < qty) {
+  if (!viaSupplier && availableItems < qty) {
     throw new ApiError(
       409,
       'delivery_not_ready',
@@ -609,6 +621,21 @@ export async function placeApiOrder(args: {
     promo_id: promo?.promo.id ?? null,
     delivery: `API order #${product.id}-${qty}`,
   });
+
+  if (viaSupplier) {
+    return placeSupplierApiOrder({
+      api: args.api,
+      apiKeyId: args.apiKeyId,
+      user: args.user,
+      product,
+      qty,
+      total,
+      discount,
+      currentBalance,
+      requestId,
+      order,
+    });
+  }
 
   const claimed = await claimProductItems(product.id, qty, order.id);
   if (claimed.length < qty) {
@@ -673,5 +700,152 @@ export async function placeApiOrder(args: {
     total,
     balance_after: Number(balanceAfter.toFixed(3)),
     items: claimed,
+    warranty: product.warranty ?? null,
+    note: product.note ?? null,
+  };
+}
+
+async function recordApiOrderStats(args: {
+  userId: number;
+  apiKeyId: number;
+  orderId: number;
+  productId: number;
+  qty: number;
+  total: number;
+  requestId: string | null;
+}): Promise<void> {
+  const { error } = await supabase.from('reseller_api_orders').insert({
+    user_id: args.userId,
+    api_key_id: args.apiKeyId,
+    order_id: args.orderId,
+    product_id: args.productId,
+    qty: args.qty,
+    total: args.total,
+    request_id: args.requestId,
+  });
+  if (error) logger.warn({ err: error, orderId: args.orderId }, 'API order stats insert failed');
+}
+
+/**
+ * Supplier-linked product bought through the reseller API: charge the
+ * wallet, buy from the supplier with the owner's supplier balance, fall
+ * back to local items, and refund in full when nothing can be delivered.
+ */
+async function placeSupplierApiOrder(args: {
+  api: Api;
+  apiKeyId: number;
+  user: DBUser;
+  product: DBProduct;
+  qty: number;
+  total: number;
+  discount: number;
+  currentBalance: number;
+  requestId: string | null;
+  order: DBOrder;
+}): Promise<ApiOrderResult> {
+  const { product, qty, total, order } = args;
+  const publicId = publicOrderId(order);
+  let balanceAfter: number;
+  try {
+    balanceAfter = await charge(args.user.telegram_id, total, args.currentBalance, `api_order:${order.id}`);
+  } catch (err) {
+    await deleteOrder(order.id);
+    if ((err as { code?: string }).code === 'INSUFFICIENT_FUNDS') {
+      throw new ApiError(402, 'insufficient_balance', 'Insufficient wallet/API balance.');
+    }
+    logger.error({ err, orderId: order.id }, 'API supplier order charge failed');
+    throw new ApiError(500, 'order_failed', 'Order could not be completed.');
+  }
+
+  const supplierOrder = await trySupplierAutoOrder({
+    localProductId: product.id,
+    qty,
+    localOrderId: order.id,
+    onFailure: (failure) =>
+      adminLog.logSupplierOrderFailed(args.api, {
+        user: {
+          telegram_id: args.user.telegram_id,
+          username: args.user.username ?? null,
+          first_name: args.user.first_name ?? null,
+          email: args.user.email ?? null,
+        },
+        orderDbId: order.id,
+        orderPublicId: publicId,
+        productId: product.id,
+        productName: product.name,
+        qty,
+        total,
+        paidVia: 'Reseller API wallet',
+        balanceAfter: Number(balanceAfter.toFixed(3)),
+        supplierName: failure.supplierName,
+        supplierProductId: failure.supplierProductId,
+        reason: failure.error,
+        lowBalance: failure.lowBalance,
+      }).catch((err) => logger.warn({ err }, 'API supplier failure admin log failed')),
+  });
+
+  let items = supplierOrder?.items ?? [];
+  if (items.length === 0) {
+    const local = await claimProductItems(product.id, qty, order.id);
+    if (local.length >= qty) {
+      items = local;
+    } else {
+      await rollbackClaimedItems(order.id);
+      await credit(args.user.telegram_id, total, `api_order_refund:${order.id}`, 'refund');
+      await deleteOrder(order.id);
+      throw new ApiError(
+        502,
+        'supplier_failed',
+        'Supplier could not deliver this order. Your balance was refunded in full.',
+      );
+    }
+  }
+
+  await decrementProductStock(product.id, qty).catch((err) =>
+    logger.warn({ err, orderId: order.id }, 'API supplier order stock decrement failed'),
+  );
+  await setOrderDeliveredItems(order.id, items.join('\n'));
+  await recordApiOrderStats({
+    userId: args.user.telegram_id,
+    apiKeyId: args.apiKeyId,
+    orderId: order.id,
+    productId: product.id,
+    qty,
+    total,
+    requestId: args.requestId,
+  });
+
+  void adminLog.logOrderCreated(args.api, {
+    user: {
+      telegram_id: args.user.telegram_id,
+      username: args.user.username ?? null,
+      first_name: args.user.first_name ?? null,
+      email: args.user.email ?? null,
+    },
+    orderDbId: order.id,
+    orderPublicId: publicId,
+    productId: product.id,
+    productName: product.name,
+    qty,
+    unitPrice: product.price,
+    total,
+    paidVia: 'Reseller API wallet',
+    balanceAfter: Number(balanceAfter.toFixed(3)),
+    lifecycle: 'delivered',
+  });
+
+  return {
+    order_id: publicId,
+    order_db_id: order.id,
+    product_id: product.id,
+    product_name: product.name,
+    quantity: qty,
+    unit_price: Number(product.price),
+    discount: args.discount,
+    total,
+    balance_after: Number(balanceAfter.toFixed(3)),
+    items,
+    warranty: product.warranty ?? null,
+    note: product.note ?? null,
   };
 }
