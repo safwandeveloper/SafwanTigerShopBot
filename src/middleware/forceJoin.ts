@@ -11,7 +11,6 @@ import { inlineBtn, inlineUrl } from '../keyboards/helpers.js';
 const DEFAULT_FORCE_JOIN_CHANNEL = '@SafwanTigerStore';
 const BELL_EMOJI_ID = '5798670723975221399';
 const DONE_EMOJI_ID = '6170055790146098906';
-const SKIP_EMOJI_ID = '5843822645711212265';
 
 export type ForceJoinStatus = 'disabled' | 'joined' | 'not_joined' | 'unknown';
 
@@ -48,14 +47,11 @@ async function checkChannelMembership(ctx: AppCtx, channelUrl: string): Promise<
 async function showForceJoinPrompt(ctx: AppCtx, channelUrl: string): Promise<void> {
   const kb = new InlineKeyboard();
   inlineUrl(kb, ctx.lang, 'force_join', forceJoinUrl(channelUrl)).row();
-  inlineBtn(kb, ctx.lang, 'force_join_done', 'forcejoin:done').row();
-  inlineBtn(kb, ctx.lang, 'force_join_skip', 'forcejoin:skip');
+  inlineBtn(kb, ctx.lang, 'force_join_done', 'forcejoin:done');
   const text = [
     `<tg-emoji emoji-id="${BELL_EMOJI_ID}">🔔</tg-emoji> <b>Please join our Channel to continue using this bot.</b>`,
     '',
     `After joining, tap <b>"Done <tg-emoji emoji-id="${DONE_EMOJI_ID}">✅</tg-emoji>"</b> below.`,
-    '',
-    `Or tap <b>"Skip <tg-emoji emoji-id="${SKIP_EMOJI_ID}">🔕</tg-emoji>"</b> to continue without joining.`,
   ].join('\n');
   try {
     await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
@@ -83,7 +79,9 @@ export async function checkForceJoinStatus(ctx: AppCtx): Promise<ForceJoinStatus
 
 export async function isForceJoinSatisfied(ctx: AppCtx): Promise<boolean> {
   const status = await checkForceJoinStatus(ctx);
-  return status === 'disabled' || status === 'joined';
+  // Fail open when membership can't be checked ('unknown') so users are
+  // never hard-locked out; referral rewards still need verification.
+  return status !== 'not_joined';
 }
 
 export async function sendForceJoinPrompt(ctx: AppCtx): Promise<void> {
@@ -95,7 +93,6 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   if (!ctx.from) return next();
   if (!getForceJoinEnabled()) return next();
   if (ctx.callbackQuery?.data === 'forcejoin:done') return next();
-  if (ctx.callbackQuery?.data === 'forcejoin:skip') return next();
   if (ctx.from.id === Number(process.env.ADMIN_USER_ID || 0)) return next();
   if (
     !(ctx.session.forceJoinRequired ||
@@ -105,7 +102,7 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   }
 
   const status = await checkForceJoinStatus(ctx);
-  if (status === 'disabled' || status === 'joined') return next();
+  if (status !== 'not_joined') return next();
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery({
       text: 'Please join the channel first, then tap Done.',

@@ -92,7 +92,9 @@ import {
   getEmailPdfUrl,
   getAdminContactUrlWithPrefill,
   getBotTutorial,
+  getHumanVerifyNumber,
 } from '../services/settings.js';
+import { getReferrerVerifyStats } from '../services/humanVerify.js';
 import * as adminLog from '../services/adminLog.js';
 import { InputFile } from 'grammy';
 import { fileURLToPath } from 'url';
@@ -605,18 +607,42 @@ export async function showReferScreen(
   const earnedTotal = (valued ? valued.earnedUsd : total * REFERRAL_USDT_PER_REF).toFixed(2);
   const withdrawn = (valued ? valued.withdrawnUsd : converted * REFERRAL_USDT_PER_REF).toFixed(2);
   const availableEarnings = valued ? valued.availableUsd : available * REFERRAL_USDT_PER_REF;
-  const body = ctx.t('profile.refer.body', {
-    link,
-    clicks: 0,
-    pending: 0,
-    active,
-    left,
-    refTotal: total,
-    earnedTotal,
-    withdrawn,
-    refAvailable: available,
-    converted,
-  });
+  const hv = await getReferrerVerifyStats(ctx.user.telegram_id);
+  const dailyLimit = getHumanVerifyNumber('daily_limit');
+  const userBonus = getHumanVerifyNumber('user_bonus');
+  const body = hv
+    ? ctx.t('profile.refer.body_v2', {
+        link,
+        refReward: getHumanVerifyNumber('ref_reward').toFixed(2),
+        friendBonusLine:
+          userBonus > 0 ? `_Your friend also gets $${userBonus.toFixed(2)} in their wallet._\n` : '',
+        verified: hv.verified,
+        today: hv.today,
+        limit: dailyLimit > 0 ? dailyLimit : '∞',
+        pending: hv.pending,
+        skipped: hv.skipped,
+        deviceDup: hv.deviceDup,
+        ipLimited: hv.ipLimited,
+        failed: hv.failed,
+        refTotal: total,
+        legacy: hv.legacy,
+        earnedTotal,
+        withdrawn,
+        availableUsd: availableEarnings.toFixed(2),
+        refAvailable: available,
+      })
+    : ctx.t('profile.refer.body', {
+        link,
+        clicks: 0,
+        pending: 0,
+        active,
+        left,
+        refTotal: total,
+        earnedTotal,
+        withdrawn,
+        refAvailable: available,
+        converted,
+      });
   const referText = `${ctx.t('profile.refer.title')}\n\n${body}`;
   const html = renderMdHtml(referText);
   const reply_markup = referKeyboard(ctx.lang, link, {

@@ -12,13 +12,26 @@ import { env } from '../env.js';
 import { logger } from '../logger.js';
 import * as publicFeed from './publicFeed.js';
 import { getHumanVerifyEnabled, getHumanVerifyNumber } from './settings.js';
+import { EMOJI } from '../../config/index.js';
+
+function pe(key: keyof typeof EMOJI): string {
+  const spec = EMOJI[key] as { unicode: string; custom_emoji_id?: string };
+  return spec.custom_emoji_id
+    ? `<tg-emoji emoji-id="${spec.custom_emoji_id}">${spec.unicode}</tg-emoji>`
+    : spec.unicode;
+}
+
+/** Start of the current day in Asia/Karachi (UTC+5), as ISO. */
+function pkDayStartIso(now = Date.now()): string {
+  const offset = 5 * 3600_000;
+  return new Date(Math.floor((now + offset) / 86_400_000) * 86_400_000 - offset).toISOString();
+}
 
 export const LINK_TTL_SECONDS = 15 * 60;
 export const MAX_ATTEMPTS = 3;
 
 const BELL_EMOJI_ID = '5798670723975221399';
 const DONE_EMOJI_ID = '6170055790146098906';
-const SKIP_EMOJI_ID = '5843822645711212265';
 
 export type VerifyStatus = 'pending' | 'verified' | 'skipped' | 'ip_limited' | 'device_dup' | 'failed';
 
@@ -357,17 +370,28 @@ export async function sendVerifyPrompt(api: Api, chatId: number, userId: number)
   const url = verifyUrl(userId);
   if (!url) return false;
   const bonus = getHumanVerifyNumber('user_bonus');
-  const kb = new InlineKeyboard().url("Verify I'm Human", url).row().text('Skip', 'hv:skip');
+  const refReward = getHumanVerifyNumber('ref_reward');
+  const kb = new InlineKeyboard().url('Open Verify Link', url).row().text('Skip', 'hv:skip');
   const lines = [
-    `<tg-emoji emoji-id="${BELL_EMOJI_ID}">🔔</tg-emoji> <b>Verify you're human</b>`,
+    `${pe('notify_bell')} <b>One-Time Human Verification</b>`,
     '',
-    `<tg-emoji emoji-id="${DONE_EMOJI_ID}">✅</tg-emoji> One quick check to activate your account.`,
+    `${pe('welcome_banner')} You joined through a friend's invite link.`,
+    'Complete one quick check to activate your account.',
+    '',
   ];
-  if (bonus > 0) lines.push(`<tg-emoji emoji-id="${DONE_EMOJI_ID}">✅</tg-emoji> Get <b>$${bonus.toFixed(2)}</b> in your wallet after verifying.`);
+  if (bonus > 0) lines.push(`${pe('refer_coin')} <b>Your reward:</b> +$${bonus.toFixed(2)} in your wallet`);
+  if (refReward > 0) lines.push(`${pe('refer_title')} <b>Your friend gets:</b> +1 refer ($${refReward.toFixed(2)})`);
   lines.push(
-    `<tg-emoji emoji-id="${SKIP_EMOJI_ID}">⏭</tg-emoji> You can also tap <b>Skip</b> and use the bot normally (no reward).`,
     '',
-    `<i>The link is valid for ${Math.round(LINK_TTL_SECONDS / 60)} minutes.</i>`,
+    `${pe('freebie_desc')} <b>How it works</b>`,
+    `1. Tap <b>Open Verify Link</b>`,
+    '2. Solve one easy challenge',
+    `3. Tick <b>"I'm not a robot"</b>, done in about 10 seconds`,
+    '',
+    `${pe('email_secure')} <b>One-time task:</b> you will never be asked to verify again on this account.`,
+    `${pe('freebie_warn')} <b>If you tap Skip:</b> your referral will <b>not</b> count and you will <b>not</b> receive your bonus. This can't be undone.`,
+    '',
+    `${pe('refer_pending')} <i>Link valid for ${Math.round(LINK_TTL_SECONDS / 60)} minutes. The bot stays locked until you verify or skip.</i>`,
   );
   try {
     await api.sendMessage(chatId, lines.join('\n'), {
@@ -466,20 +490,29 @@ export async function completeHumanVerification(
 ): Promise<VerifyStatus> {
   const refReward = getHumanVerifyNumber('ref_reward');
   const bonus = getHumanVerifyNumber('user_bonus');
-  const { data, error } = await supabase.rpc('complete_human_verification', {
+  const args = {
     p_user_id: userId,
     p_ip_hash: ipHash,
     p_device_hash: deviceHash,
     p_ip_limit: getHumanVerifyNumber('ip_limit'),
     p_ref_reward: refReward,
     p_user_bonus: bonus,
+  };
+  let { data, error } = await supabase.rpc('complete_human_verification_v2', {
+    ...args,
+    p_daily_limit: getHumanVerifyNumber('daily_limit'),
   });
+  if (error && (error.code === 'PGRST202' || /complete_human_verification_v2/.test(error.message ?? ''))) {
+    // Migration 0049 not applied yet: no daily limit.
+    ({ data, error } = await supabase.rpc('complete_human_verification', args));
+  }
   if (error) throw error;
   const row = (Array.isArray(data) ? data[0] : data) as {
     status: VerifyStatus;
     referrer_id: number | null;
     referral_created: boolean;
     new_balance: number | null;
+    referrer_limited?: boolean;
   };
   pendingUsers.delete(userId);
   void afterComplete(api, userId, row, refReward, bonus).catch((err) =>
@@ -491,7 +524,7 @@ export async function completeHumanVerification(
 async function afterComplete(
   api: Api,
   userId: number,
-  row: { status: VerifyStatus; referrer_id: number | null; referral_created: boolean },
+  row: { status: VerifyStatus; referrer_id: number | null; referral_created: boolean; referrer_limited?: boolean },
   refReward: number,
   bonus: number,
 ): Promise<void> {
@@ -516,7 +549,11 @@ async function afterComplete(
     'verified',
     user,
     row.referrer_id,
-    `<b>Rewards:</b> referrer +$${refReward.toFixed(2)}${row.referral_created ? '' : ' (already counted)'} · new user +$${bonus.toFixed(2)}`,
+    `<b>Rewards:</b> ${
+      row.referrer_limited
+        ? 'referrer daily limit reached (no refer)'
+        : `referrer +$${refReward.toFixed(2)}${row.referral_created ? '' : ' (already counted)'}`
+    } · new user +$${bonus.toFixed(2)}`,
   );
   await notifyUser(
     api,
@@ -525,8 +562,16 @@ async function afterComplete(
       bonus > 0 ? ` <b>$${bonus.toFixed(2)}</b> was added to your wallet.` : ''
     } Send /start to open the menu.`,
   );
-  if (!row.referral_created || !row.referrer_id) return;
   const name = esc(user.first_name?.trim() || (user.username ? `@${user.username}` : 'A new user'));
+  if (row.referrer_limited && row.referrer_id) {
+    await notifyUser(
+      api,
+      row.referrer_id,
+      `${pe('freebie_warn')} <b>Daily refer limit reached</b>\n\n${name} verified, but you already got <b>${getHumanVerifyNumber('daily_limit')}</b> rewarded friends today, so no refer was added. The limit resets at 12:00 AM (PKT).`,
+    );
+    return;
+  }
+  if (!row.referral_created || !row.referrer_id) return;
   await notifyUser(
     api,
     row.referrer_id,
@@ -547,4 +592,47 @@ async function afterComplete(
   } catch (err) {
     logger.debug({ err }, 'human verify: public feed failed');
   }
+}
+
+export type ReferrerVerifyStats = {
+  verified: number;
+  pending: number;
+  skipped: number;
+  ipLimited: number;
+  deviceDup: number;
+  failed: number;
+  today: number;
+  legacy: number;
+};
+
+/** Per-referrer verification counts for the Refer & Earn screen. */
+export async function getReferrerVerifyStats(referrerId: number): Promise<ReferrerVerifyStats | null> {
+  if (!(await isHumanVerifyReady())) return null;
+  const base = () =>
+    supabase
+      .from('human_verifications')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('referrer_id', referrerId);
+  const statuses: VerifyStatus[] = ['verified', 'pending', 'skipped', 'ip_limited', 'device_dup', 'failed'];
+  const results = await Promise.all([
+    ...statuses.map((s) => base().eq('status', s)),
+    base().eq('status', 'verified').gt('ref_reward', 0).gte('verified_at', pkDayStartIso()),
+    supabase
+      .from('referrals')
+      .select('referrer_id', { count: 'exact', head: true })
+      .eq('referrer_id', referrerId)
+      .is('reward_usd', null),
+  ]);
+  if (results.some((r) => r.error)) return null;
+  const n = (i: number) => results[i]?.count ?? 0;
+  return {
+    verified: n(0),
+    pending: n(1),
+    skipped: n(2),
+    ipLimited: n(3),
+    deviceDup: n(4),
+    failed: n(5),
+    today: n(6),
+    legacy: n(7),
+  };
 }

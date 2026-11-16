@@ -19,10 +19,12 @@ const STEPS: Record<HumanVerifyNumberKey, number> = {
   ref_reward: 0.01,
   user_bonus: 0.01,
   alert_threshold: 1,
+  daily_limit: 1,
 };
 
 function fmt(key: HumanVerifyNumberKey): string {
   const v = getHumanVerifyNumber(key);
+  if (key === 'daily_limit' && v === 0) return 'unlimited';
   return key === 'ref_reward' || key === 'user_bonus' ? `$${v.toFixed(2)}` : String(v);
 }
 
@@ -43,6 +45,7 @@ async function showHumanVerify(ctx: AppCtx): Promise<void> {
   row('Refer reward', 'ref_reward', kb);
   row('New user bonus', 'user_bonus', kb);
   row('Alert / hour', 'alert_threshold', kb);
+  row('Daily refer limit', 'daily_limit', kb);
   kb.text('🔁 Refresh', 'adm:hv').row().text('⬅️ Back', 'adm:bot');
   const chat = (c: number | string | undefined) => (c === undefined ? 'off' : String(c));
   const lines = [
@@ -99,7 +102,7 @@ export function registerHumanVerifyAdmin(adminBot: Composer<AppCtx>): void {
     await showHumanVerify(ctx);
   });
 
-  adminBot.callbackQuery(/^adm:hv:n:(ip_limit|ref_reward|user_bonus|alert_threshold):([+-])$/, async (ctx) => {
+  adminBot.callbackQuery(/^adm:hv:n:(ip_limit|ref_reward|user_bonus|alert_threshold|daily_limit):([+-])$/, async (ctx) => {
     const key = ctx.match[1] as HumanVerifyNumberKey;
     const dir = ctx.match[2] === '+' ? 1 : -1;
     const v = await setHumanVerifyNumber(key, getHumanVerifyNumber(key) + dir * STEPS[key], ctx.from.id);
