@@ -267,7 +267,7 @@ export const vi: Record<string, string> = {
     '*Liên kết giới thiệu của bạn:*\n`{link}`',
   'profile.refer.body_v2':
     '{refer_prize_l} *Earn ${refReward} for every friend who verifies* {refer_prize_r}\n' +
-    '_Your friend also gets ${userBonus} in their wallet._\n' +
+    '{friendBonusLine}' +
     '\n' +
     '{refer_active} *Verified Friends:* {verified} _(Today: {today}/{limit})_\n' +
     '{refer_pending} *Waiting To Verify:* {pending}\n' +

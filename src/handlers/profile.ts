@@ -609,11 +609,13 @@ export async function showReferScreen(
   const availableEarnings = valued ? valued.availableUsd : available * REFERRAL_USDT_PER_REF;
   const hv = await getReferrerVerifyStats(ctx.user.telegram_id);
   const dailyLimit = getHumanVerifyNumber('daily_limit');
+  const userBonus = getHumanVerifyNumber('user_bonus');
   const body = hv
     ? ctx.t('profile.refer.body_v2', {
         link,
         refReward: getHumanVerifyNumber('ref_reward').toFixed(2),
-        userBonus: getHumanVerifyNumber('user_bonus').toFixed(2),
+        friendBonusLine:
+          userBonus > 0 ? `_Your friend also gets $${userBonus.toFixed(2)} in their wallet._\n` : '',
         verified: hv.verified,
         today: hv.today,
         limit: dailyLimit > 0 ? dailyLimit : '∞',
