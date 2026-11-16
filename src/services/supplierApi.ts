@@ -471,6 +471,57 @@ async function supplierFetch(
   }
 }
 
+/**
+ * Like `supplierFetch`, but never throws on a non-2xx status: callers that
+ * must tell "rejected, nothing charged" apart from "charged, unconfirmed"
+ * (TunVN Buff returns 202 for the latter) get the raw status code.
+ */
+export async function supplierRequestRaw(
+  source: DBSupplierApiSource,
+  path: string,
+  method: SupplierOrderMethod = 'GET',
+  payload?: Record<string, unknown>,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const url = joinUrl(resolveSupplierBaseUrl(source.base_url), path);
+  if (source.auth_mode === 'query' && source.api_key.trim()) {
+    url.searchParams.set(source.key_query_param || 'api_key', source.api_key.trim());
+  }
+  if (method === 'GET' && payload) {
+    for (const [key, val] of Object.entries(payload)) {
+      if (val !== undefined && val !== null) url.searchParams.set(key, String(val));
+    }
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: authHeaders(source),
+      body: method === 'POST' ? JSON.stringify(payload ?? {}) : undefined,
+      signal: controller.signal,
+    });
+    const bodyText = await res.text();
+    let json: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = bodyText ? JSON.parse(bodyText) : {};
+      json = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : { data: parsed };
+    } catch {
+      json = { raw: bodyText.slice(0, 1000) };
+    }
+    return { status: res.status, json };
+  } catch (err) {
+    if ((err as { name?: string }).name === 'AbortError') {
+      throw new SupplierApiError(`Timeout after ${Math.round(timeoutMs / 1000)}s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function normalizeCatalogProduct(
   source: DBSupplierApiSource,
   raw: unknown,
@@ -944,9 +995,25 @@ export async function trySupplierAutoOrder(args: {
   }
 }
 
+export function lockedProfitOf(link: DBSupplierProductLink): number | null {
+  if (link.locked_profit === null || link.locked_profit === undefined) return null;
+  const n = Number(link.locked_profit);
+  return Number.isFinite(n) ? n : null;
+}
+
+export type SupplierPriceEvent = {
+  productId: number;
+  productName: string;
+  supplierCost: number;
+  oldPrice: number;
+  newPrice: number | null;
+};
+
 export async function syncSupplierProductLink(link: DBSupplierProductLink): Promise<{
   matched: SupplierCatalogProduct | null;
   updatedLocal: boolean;
+  repriced?: SupplierPriceEvent;
+  loss?: SupplierPriceEvent;
 }> {
   const source = await getSupplierApiSource(link.supplier_id);
   if (!source) throw new SupplierApiError('Supplier not found.');
@@ -971,7 +1038,24 @@ export async function syncSupplierProductLink(link: DBSupplierProductLink): Prom
     await updateProduct(link.local_product_id, { stock: matched.stock });
     updatedLocal = true;
   }
-  return { matched, updatedLocal };
+  let repriced: SupplierPriceEvent | undefined;
+  let loss: SupplierPriceEvent | undefined;
+  const cost = matched.price === null ? null : Number(matched.price);
+  if (local && cost !== null && Number.isFinite(cost) && cost > 0) {
+    const oldPrice = Number(local.price);
+    const locked = lockedProfitOf(link);
+    if (locked !== null) {
+      const next = Number((cost + locked).toFixed(2));
+      if (next > 0 && Math.abs(next - oldPrice) >= 0.005) {
+        await updateProduct(link.local_product_id, { price: next });
+        updatedLocal = true;
+        repriced = { productId: local.id, productName: local.name, supplierCost: cost, oldPrice, newPrice: next };
+      }
+    } else if (cost > oldPrice) {
+      loss = { productId: local.id, productName: local.name, supplierCost: cost, oldPrice, newPrice: null };
+    }
+  }
+  return { matched, updatedLocal, repriced, loss };
 }
 
 export function isSupplierMigrationError(err: unknown): boolean {

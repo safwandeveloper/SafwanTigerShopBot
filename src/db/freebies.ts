@@ -14,6 +14,8 @@ export type DBFreebie = {
   kind: string;
   description: string | null;
   delivery_mode: FreebieMode;
+  /** Buff Token amount (billion) ordered from TunVN per claim. NULL = normal freebie. */
+  buff_qty?: number | null;
   content: string | null;
   stock: number | null;
   per_user_limit: number;
@@ -52,6 +54,7 @@ export type FreebiePatch = Partial<
     | 'button_color'
     | 'button_icon_id'
     | 'active'
+    | 'buff_qty'
   >
 >;
 
@@ -204,4 +207,13 @@ export async function claimFreebie(
     | { claim_id?: number; delivered?: string | null }
     | null;
   return { claimId: Number(row?.claim_id ?? 0), delivered: row?.delivered ?? null };
+}
+
+/** Give back a claim (and its stock/item) when a Buff freebie order failed. */
+export async function releaseFreebieClaim(claimId: number): Promise<void> {
+  const { error } = await supabase.rpc('release_freebie_claim', { p_claim_id: claimId });
+  if (error) {
+    logger.error({ err: error, claimId }, 'release_freebie_claim failed');
+    throw error;
+  }
 }

@@ -13,12 +13,14 @@ import { handleCryptoPayWebhook } from './services/cryptoPayWebhookHttp.js';
 import { handleZiniPayWebhook } from './services/zinipayWebhookHttp.js';
 import { startSupplierStockSyncLoop } from './services/supplierAutoSync.js';
 import { startCryptoPayReconciliationLoop } from './services/cryptoPayReconcile.js';
+import { startBuffStatusLoop } from './services/buff.js';
 
 async function main() {
   const bot = await buildBot();
   logMailerStatus();
   startSupplierStockSyncLoop(bot.api);
   startCryptoPayReconciliationLoop(bot.api);
+  startBuffStatusLoop(bot.api);
 
   const startHttpServer = (telegramHandler?: http.RequestListener) => {
     const server = http.createServer((req, res) => {

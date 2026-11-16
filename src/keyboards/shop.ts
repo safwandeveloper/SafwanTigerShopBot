@@ -71,7 +71,7 @@ export function shopProductsKeyboard(
   page: number,
   totalPages: number,
   currency = 'USDT',
-  opts: { allMode?: boolean } = {},
+  opts: { allMode?: boolean; buff?: boolean } = {},
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
 
@@ -145,6 +145,13 @@ export function shopProductsKeyboard(
   //  • Single page →  [Refresh]    [1/1]
   //
   //  Bottom row, every case: [Back] (full width).
+  if (opts.buff) {
+    kb.text('🚀 Buff Token Muse AI', 'buff:open');
+    const buffIcon = premiumIconId('orders_product');
+    if (buffIcon) kb.icon(buffIcon);
+    kb.row();
+  }
+
   if (opts.allMode) {
     inlineBtn(kb, lang, 'refresh', 'shop:p:0');
     kb.row();

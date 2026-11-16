@@ -18,7 +18,8 @@ export type FreebieField =
   | 'limit'
   | 'min_refs'
   | 'label'
-  | 'icon';
+  | 'icon'
+  | 'buff_qty';
 
 export type AdminFlow =
   | { type: 'add_category'; step: 'name'; data: { emoji?: string } }
@@ -508,6 +509,18 @@ export type AdminFlow =
  */
 export type UserFlow =
   | {
+      /** Buff Token: next text message is `INVITE_CODE QTY` lines. */
+      type: 'buff_input';
+      step: 'value';
+      data: Record<string, never>;
+    }
+  | {
+      /** Buff Token freebie: next text message is the claimer's invite code. */
+      type: 'buff_freebie';
+      step: 'value';
+      data: { freebie_id: number };
+    }
+  | {
       /**
        * Capture an email address sent as a message after tapping "Set
        * Email" or "Change Email". `mode` distinguishes the two so we
@@ -905,6 +918,8 @@ export type SessionData = {
    * before accessing bot features.
    */
   forceJoinRequired?: boolean;
+  /** Buff Token order waiting for the user's Confirm tap. */
+  buffPending?: { ordersText: string; price: number };
 };
 
 export type SessionCtx = Context & SessionFlavor<SessionData>;

@@ -775,3 +775,63 @@ export async function logSupportTranscript(api: Api, args: {
   });
   await sendDocument(api, args.pdf, caption);
 }
+
+/** Supplier price sync: profit-locked price changed, or an unlocked product now sells at a loss. */
+export async function logSupplierPriceEvent(api: Api, args: {
+  kind: 'repriced' | 'loss';
+  supplierName: string;
+  productId: number;
+  productName: string;
+  supplierCost: number;
+  oldPrice: number;
+  newPrice: number | null;
+}): Promise<void> {
+  const money = (n: number) => `$${n.toFixed(3).replace(/0$/, '')}`;
+  const lines: string[] = [];
+  if (args.kind === 'loss') {
+    lines.push('<b>[SUPPLIER_LOSS]</b> ⚠️ Loss warning');
+    lines.push('');
+    lines.push(`Product: ${escapeHtml(args.productName)} (#${args.productId})`);
+    lines.push(`Supplier: ${escapeHtml(args.supplierName)}`);
+    lines.push(`Supplier cost: <b>${money(args.supplierCost)}</b>`);
+    lines.push(`Your price: <b>${money(args.oldPrice)}</b>`);
+    lines.push(`Loss per item: <b>${money(args.supplierCost - args.oldPrice)}</b>`);
+    lines.push('');
+    lines.push('<i>Product is not profit-locked. Edit the price or turn on Lock Profit.</i>');
+  } else {
+    lines.push('<b>[SUPPLIER_REPRICE]</b> 🔒 Profit lock price update');
+    lines.push('');
+    lines.push(`Product: ${escapeHtml(args.productName)} (#${args.productId})`);
+    lines.push(`Supplier: ${escapeHtml(args.supplierName)}`);
+    lines.push(`Supplier cost: <b>${money(args.supplierCost)}</b>`);
+    lines.push(`Price: ${money(args.oldPrice)} → <b>${money(args.newPrice ?? args.oldPrice)}</b>`);
+  }
+  lines.push('');
+  lines.push(`📅 Logged At: ${formatLoggedAt()}`);
+  await send(api, lines.join('\n'), 'main');
+}
+
+export async function logBuffEvent(api: Api, args: {
+  buffOrderId: number;
+  userId: number;
+  channel: string;
+  ordersText: string;
+  priceUsdt: number;
+  batchId: string | null;
+  message: string;
+}): Promise<void> {
+  const lines = [
+    '<b>[BUFF]</b> 🚀 Buff Token order needs attention',
+    '',
+    `Buff order: <code>#B${args.buffOrderId}</code> (${escapeHtml(args.channel)})`,
+    `User: <a href="tg://user?id=${args.userId}">${args.userId}</a>`,
+    `Price: <b>$${args.priceUsdt.toFixed(2)}</b>`,
+    args.batchId ? `TunVN batch: <code>${escapeHtml(args.batchId)}</code>` : 'TunVN batch: —',
+    `Orders:\n<code>${escapeHtml(args.ordersText.slice(0, 500))}</code>`,
+    '',
+    escapeHtml(args.message),
+    '',
+    `📅 Logged At: ${formatLoggedAt()}`,
+  ];
+  await send(api, lines.join('\n'), 'main');
+}

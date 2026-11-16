@@ -38,6 +38,8 @@ const PROMPTS: Record<FreebieField, string> = {
   min_refs: 'Send the <b>minimum active referrals</b> needed to claim. Send <code>0</code> to turn off.',
   label: 'Send the <b>button label</b> shown in the list. Send <code>-</code> to use the name.',
   icon: 'Send ONE <b>premium emoji</b> for the list button icon (send <code>-</code> to use the freebie emoji).',
+  buff_qty:
+    'Send the <b>Buff Token amount</b> (1-30, in billion tokens) each claimer gets. The claimer sends their Muse AI invite code and the bot orders it from TunVN using <b>your TunVN balance</b>.\n\nSend <code>-</code> to turn Buff off for this freebie.\n\n<i>Every claim costs you real TunVN money. Keep Stock and Per-user Limit tight.</i>',
 };
 
 function tgEmoji(id: string | null, fallback = '🎁'): string {
@@ -94,7 +96,9 @@ async function showDetail(ctx: AppCtx, id: number): Promise<void> {
       `${tgEmoji(f.emoji_id)} <b>${escapeAttr(f.name)}</b>  ${f.active ? '🟢 ON' : '🔴 OFF'}`,
       '',
       `<b>Kind:</b> ${escapeAttr(f.kind)}`,
-      `<b>Delivery:</b> ${isItems ? 'Stock items (1 per claim)' : 'Same content for everyone'}`,
+      f.buff_qty
+        ? `<b>Delivery:</b> 🚀 Buff Token ${f.buff_qty}B per claim (paid from your TunVN balance)`
+        : `<b>Delivery:</b> ${isItems ? 'Stock items (1 per claim)' : 'Same content for everyone'}`,
       `<b>Stock left:</b> ${remaining === null ? '∞ unlimited' : remaining}`,
       `<b>Per-user limit:</b> ${f.per_user_limit > 0 ? f.per_user_limit : '∞ unlimited'}`,
       `<b>Min refs:</b> ${f.min_refs > 0 ? f.min_refs : 'off'}`,
@@ -122,6 +126,7 @@ async function showDetail(ctx: AppCtx, id: number): Promise<void> {
     kb.text('📦 Content', e('content')).text('🔢 Stock', e('stock')).row();
     kb.text('➕ Add Stock Items (1 per claim)', e('items')).row();
   }
+  kb.text(f.buff_qty ? `🚀 Buff Token: ${f.buff_qty}B` : '🚀 Buff Token: OFF', e('buff_qty')).row();
   kb.text('👤 Per-user Limit', e('limit'))
     .text('🎫 Min Refs', e('min_refs'))
     .row()
@@ -200,6 +205,23 @@ async function applyField(
       const n = parseCount(text);
       if (n === null) return 'Send a whole number, or - for unlimited.';
       await updateFreebie(f.id, { stock: n });
+      return null;
+    }
+    case 'buff_qty': {
+      let qty: number | null = null;
+      if (!clear) {
+        const n = parseCount(text);
+        if (n === null || n < 1 || n > 30) return 'Send a whole number from 1 to 30, or - to turn Buff off.';
+        qty = n;
+      }
+      try {
+        await updateFreebie(f.id, { buff_qty: qty });
+      } catch (err) {
+        if (/buff_qty/i.test(String((err as { message?: string })?.message ?? ''))) {
+          return 'Run supabase/migrations/0050_buff_profit_lock.sql in Supabase first.';
+        }
+        throw err;
+      }
       return null;
     }
     case 'limit':

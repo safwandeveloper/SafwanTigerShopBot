@@ -8,6 +8,8 @@ import {
   listApiProducts,
   placeApiOrder,
 } from './resellerApi.js';
+import { BuffError, getBuffOrder, isBuffMigrationError, placeBuffOrder, quoteBuff } from './buff.js';
+import { getBuffEnabled } from './settings.js';
 
 const BODY_LIMIT_BYTES = 64 * 1024;
 
@@ -76,6 +78,12 @@ async function readJsonBody(req: http.IncomingMessage): Promise<JsonRecord> {
   }
 }
 
+function buffApiError(err: unknown): ApiError {
+  if (err instanceof BuffError) return new ApiError(err.httpStatus, `buff_${err.code}`, err.message);
+  if (isBuffMigrationError(err)) return new ApiError(503, 'buff_unavailable', 'Buff Token is not available right now.');
+  return err instanceof ApiError ? err : new ApiError(500, 'buff_internal', 'Buff order could not be completed.');
+}
+
 function docsBody(): JsonRecord {
   const base = apiBaseUrl();
   return {
@@ -89,7 +97,33 @@ function docsBody(): JsonRecord {
       legacy_products: `GET ${base}?action=products`,
       legacy_balance: `GET ${base}?action=balance`,
       legacy_order: `POST ${base}?action=order`,
+      buff_check: `POST ${base}/buff/check`,
+      buff_order: `POST ${base}/buff/order`,
+      buff_status: `GET ${base}/buff/status?id=BUFF_ORDER_ID`,
     },
+    product_fields: ['id', 'name', 'price', 'stock', 'available', 'unlimited_stock', 'warranty', 'description', 'note'],
+    order_fields: [
+      'order_id',
+      'order_db_id',
+      'product_id',
+      'product_name',
+      'quantity',
+      'unit_price',
+      'discount',
+      'total',
+      'balance_after',
+      'items',
+      'warranty',
+      'note',
+    ],
+    buff_body: {
+      orders_text: 'INVITE_CODE 20\nINVITE_CODE2 15',
+      max_price: 'optional: reject the order if the price is higher than this (USDT)',
+    },
+    buff_notes:
+      'Buff Token Muse AI: one INVITE_CODE QUANTITY pair per line, quantity 1-30 (billion tokens), max 10 lines. ' +
+      'buff/check only prices the order. buff/order charges your balance; failed orders are refunded automatically. ' +
+      'Status: processing, done, refunded, partial_refund, needs_check, failed.',
     order_body: {
       product_id: 123,
       quantity: 1,
@@ -181,6 +215,77 @@ export async function handleResellerApiRequest(
         requestId,
       });
       sendJson(res, 200, { ok: true, order });
+      return true;
+    }
+
+    if (req.method === 'POST' && (action === 'buff/check' || action === 'buff_check')) {
+      const body = await readJsonBody(req);
+      if (!getBuffEnabled()) throw new ApiError(503, 'buff_disabled', 'Buff Token is not available right now.');
+      try {
+        const q = await quoteBuff(typeof body.orders_text === 'string' ? body.orders_text : '');
+        sendJson(res, 200, {
+          ok: true,
+          orders_text: q.ordersText,
+          lines: q.lines.map((l) => ({ invite_code: l.code, quantity_b: l.qty })),
+          total_quantity_b: q.totalQty,
+          price: q.priceUsdt,
+          currency: 'USDT',
+          available: q.fundable,
+        });
+      } catch (err) {
+        throw buffApiError(err);
+      }
+      return true;
+    }
+
+    if (req.method === 'POST' && (action === 'buff/order' || action === 'buff_order')) {
+      const body = await readJsonBody(req);
+      const maxPrice = Number(body.max_price);
+      try {
+        const r = await placeBuffOrder({
+          api,
+          userId: auth.user.telegram_id,
+          ordersText: typeof body.orders_text === 'string' ? body.orders_text : '',
+          channel: 'api',
+          chargeUser: true,
+          maxPriceUsdt: Number.isFinite(maxPrice) && maxPrice > 0 ? maxPrice : undefined,
+        });
+        sendJson(res, 200, {
+          ok: true,
+          buff_order: {
+            id: r.order.id,
+            status: r.status === 'placed' ? 'processing' : 'needs_check',
+            total_quantity_b: r.order.total_qty,
+            price: r.priceUsdt,
+            currency: 'USDT',
+            balance_after: r.balanceAfter,
+          },
+        });
+      } catch (err) {
+        throw buffApiError(err);
+      }
+      return true;
+    }
+
+    if (req.method === 'GET' && (action === 'buff/status' || action === 'buff_status')) {
+      const id = Number(url.searchParams.get('id') ?? url.searchParams.get('buff_order_id'));
+      const order = Number.isInteger(id) && id > 0 ? await getBuffOrder(id).catch(() => null) : null;
+      if (!order || order.user_id !== auth.user.telegram_id) {
+        throw new ApiError(404, 'buff_order_not_found', 'Buff order not found.');
+      }
+      sendJson(res, 200, {
+        ok: true,
+        buff_order: {
+          id: order.id,
+          status: ['pending', 'placed'].includes(order.status) ? 'processing' : order.status,
+          orders_text: order.orders_text,
+          total_quantity_b: order.total_qty,
+          price: Number(order.price_usdt),
+          refunded: Number(order.refunded_usdt ?? 0),
+          currency: 'USDT',
+          created_at: order.created_at,
+        },
+      });
       return true;
     }
 

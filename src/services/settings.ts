@@ -474,3 +474,30 @@ export async function setHumanVerifyNumber(
   cache.set(`hv.${key}`, clamped);
   return clamped;
 }
+
+// ---------- Buff Token (TunVN) ----------
+
+export function getBuffEnabled(): boolean {
+  const v = cache.get('buff.enabled');
+  return v === true || v === 'true';
+}
+
+export async function setBuffEnabled(enabled: boolean, updated_by?: number): Promise<void> {
+  await setSetting('buff.enabled', enabled, updated_by);
+  cache.set('buff.enabled', enabled);
+}
+
+export const BUFF_MARKUP_DEFAULT = 25;
+
+export function getBuffMarkupPercent(): number {
+  const n = Number(cache.get('buff.markup'));
+  if (!Number.isFinite(n) || cache.get('buff.markup') === undefined) return BUFF_MARKUP_DEFAULT;
+  return Math.min(500, Math.max(0, n));
+}
+
+export async function setBuffMarkupPercent(value: number, updated_by?: number): Promise<number> {
+  const clamped = Math.min(500, Math.max(0, Math.round(value)));
+  await setSetting('buff.markup', clamped, updated_by);
+  cache.set('buff.markup', clamped);
+  return clamped;
+}

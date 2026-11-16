@@ -224,6 +224,8 @@ export type DBSupplierProductLink = {
   auto_order: boolean;
   auto_sync_stock: boolean;
   fallback_manual: boolean;
+  /** Fixed profit kept on top of supplier cost. NULL/undefined = profit lock off. */
+  locked_profit?: number | null;
   last_sync_at: string | null;
   last_error: string | null;
   created_at: string;

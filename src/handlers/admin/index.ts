@@ -187,6 +187,7 @@ import {
   resolveSupplierBaseUrl,
   supabaseResellerSupplierConfig,
   supplierSellPrice,
+  lockedProfitOf,
   syncSupplierProductLink,
   testSupplierConnection,
   tunVnMmoSupplierConfig,
@@ -197,6 +198,7 @@ import type { ColorMode } from '../../../config/index.js';
 import { BUTTON_KEYS, COLOR_PREFIX, EMOJI, colorModeToStyle } from '../../../config/index.js';
 import type { AppCtx } from '../../middleware/user.js';
 import { registerFreebiesAdmin } from './freebies.js';
+import { registerBuffAdmin } from './buff.js';
 import { registerHumanVerifyAdmin } from './humanVerify.js';
 import { logger } from '../../logger.js';
 import { env } from '../../env.js';
@@ -298,6 +300,7 @@ adminBot.command(
 );
 
 registerFreebiesAdmin(adminBot);
+registerBuffAdmin(adminBot);
 registerHumanVerifyAdmin(adminBot);
 
 const PER_PAGE = 8;
@@ -330,6 +333,7 @@ function rootMenu(): InlineKeyboard {
     .text('🎁 Freebies', 'adm:fb')
     .row()
     .text('💎 Custom Prices', 'adm:price')
+    .text('🚀 Buff Token', 'adm:buff')
     .row()
     .text('🏠 Main Menu', 'adm:close');
 }
@@ -1616,6 +1620,7 @@ async function showSupplierCatalogProduct(
       local ? `Local status: *${local.active ? 'visible' : 'hidden'}*` : '',
       link ? `Auto order: *${link.auto_order ? 'ON' : 'OFF'}*` : '',
       link ? `Auto stock sync: *${link.auto_sync_stock ? 'ON' : 'OFF'}*` : '',
+      link ? profitLockLine(link, local, product.price) : '',
       '',
       `Catalog position: ${index + 1}/${products.length}`,
     ];
@@ -1661,6 +1666,12 @@ async function showSupplierCatalogProduct(
       apiPremiumButton(kb, link.auto_order ? 'api_key' : 'orders_note', link.auto_order ? 'success' : 'danger');
       kb.text(link.auto_sync_stock ? 'Sync Stock: ON' : 'Sync Stock: OFF', `adm:api:supplier:link:sync:${source.id}:${page}:${mode}:${index}:${link.id}`);
       apiPremiumButton(kb, link.auto_sync_stock ? 'stats_refresh' : 'orders_note', link.auto_sync_stock ? 'success' : 'danger');
+      kb.row();
+      kb.text(
+        lockedProfitOf(link) === null ? 'Lock Profit: OFF' : 'Lock Profit: ON',
+        `adm:api:supplier:link:lock:${source.id}:${page}:${mode}:${index}:${link.id}`,
+      );
+      apiPremiumButton(kb, 'deposits_wallet', lockedProfitOf(link) === null ? 'danger' : 'success');
       kb.row();
       kb.text('Unlink', `adm:api:supplier:unlink2:${source.id}:${page}:${mode}:${index}:${link.id}`);
       apiPremiumButton(kb, 'gift_invalid', 'danger');
@@ -2192,6 +2203,71 @@ adminBot.callbackQuery(/^adm:api:supplier:link:auto:(\d+):(\d+):(all|stock):(\d+
     await updateSupplierProductLink(linkId, { auto_order: !link.auto_order });
     await showSupplierCatalogProduct(ctx, supplierId, page, mode, index);
   } catch (err) {
+    await showSupplierError(ctx, err);
+  }
+});
+
+function profitLockLine(
+  link: DBSupplierProductLink,
+  local: DBProduct | null,
+  cost: number | null,
+): string {
+  const locked = lockedProfitOf(link);
+  if (locked !== null) return `Profit lock: *ON* (+$${escapeMd(apiMoney(locked))} over cost)`;
+  if (local && cost !== null && Number(cost) > Number(local.price)) {
+    return `⚠️ *Loss:* cost ${escapeMd(apiMoney(Number(cost)))} > price ${escapeMd(apiMoney(Number(local.price)))}`;
+  }
+  return 'Profit lock: *OFF*';
+}
+
+adminBot.callbackQuery(/^adm:api:supplier:link:lock:(\d+):(\d+):(all|stock):(\d+):(\d+)$/, async (ctx) => {
+  const supplierId = Number(ctx.match[1]);
+  const page = Number(ctx.match[2]);
+  const mode = ctx.match[3] as SupplierCatalogMode;
+  const index = Number(ctx.match[4]);
+  const linkId = Number(ctx.match[5]);
+  try {
+    const link = (await listSupplierProductLinks(supplierId)).find((l) => l.id === linkId);
+    if (!link) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+    if (lockedProfitOf(link) !== null) {
+      await updateSupplierProductLink(linkId, { locked_profit: null });
+      await ctx.answerCallbackQuery({ text: 'Profit lock OFF. Price stays as it is now.' });
+    } else {
+      const local = await getProduct(link.local_product_id);
+      const cost = link.supplier_cost === null ? null : Number(link.supplier_cost);
+      if (!local || cost === null || !Number.isFinite(cost)) {
+        await ctx.answerCallbackQuery({
+          text: 'Supplier cost unknown yet. Wait for the next sync, then try again.',
+          show_alert: true,
+        });
+        return;
+      }
+      const profit = Number((Number(local.price) - cost).toFixed(4));
+      if (profit <= 0) {
+        await ctx.answerCallbackQuery({
+          text: `Your price is not above cost (${apiMoney(cost)}). Raise the price first, then lock.`,
+          show_alert: true,
+        });
+        return;
+      }
+      await updateSupplierProductLink(linkId, { locked_profit: profit });
+      await ctx.answerCallbackQuery({
+        text: `Profit locked at $${apiMoney(profit)}. Price will follow supplier cost + $${apiMoney(profit)}.`,
+        show_alert: true,
+      });
+    }
+    await showSupplierCatalogProduct(ctx, supplierId, page, mode, index);
+  } catch (err) {
+    if (/locked_profit/i.test(String((err as { message?: string })?.message ?? ''))) {
+      await ctx.answerCallbackQuery({
+        text: 'Run supabase/migrations/0050_buff_profit_lock.sql in Supabase first.',
+        show_alert: true,
+      }).catch(() => undefined);
+      return;
+    }
     await showSupplierError(ctx, err);
   }
 });
