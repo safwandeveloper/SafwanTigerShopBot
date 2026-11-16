@@ -5629,6 +5629,11 @@ function announceBroadcastKeyboard(buy?: AnnounceBuy, links: AnnounceLink[] = []
   }
   links.forEach((link, index) => {
     kb.url(link.label, link.url);
+    if (link.icon_custom_emoji_id) kb.icon(link.icon_custom_emoji_id);
+    if (link.color) {
+      const linkStyle = colorModeToStyle(link.color);
+      if (linkStyle !== undefined) kb.style(linkStyle);
+    }
     if (index % 2 === 1 && index + 1 < links.length) kb.row();
   });
   return kb;
@@ -5668,7 +5673,9 @@ async function showAnnounceConfirm(ctx: AppCtx): Promise<void> {
       flow.step === 'confirm' ||
       flow.step === 'buy_label' ||
       flow.step === 'buy_icon' ||
-      flow.step === 'link_url'
+      flow.step === 'link_url' ||
+      flow.step === 'link_label' ||
+      flow.step === 'link_icon'
     )
   ) {
     return;
@@ -5701,7 +5708,7 @@ async function showAnnounceConfirm(ctx: AppCtx): Promise<void> {
       `\n   • Icon: ${buy.icon_unicode ? `${buy.icon_unicode} (premium)` : '<i>none</i>'}`
       : '\n\n<i>No Buy button attached. Tap “Add Buy Button” to deep-link an announcement to a specific product.</i>';
   const linksLine = links.length
-    ? `\n\n🔗 <b>Link buttons:</b>\n${links.map((link) => `• ${escapeHtml(link.label)}`).join('\n')}`
+    ? `\n\n🔗 <b>Link buttons:</b>\n${links.map((link) => `• ${escapeHtml(link.label)}${link.color ? ` · ${link.color}` : ''}${link.icon_unicode ? ' · premium icon' : ''}`).join('\n')}`
     : '\n\n<i>No link buttons attached.</i>';
   try {
     await ctx.reply(previewHtml, {
@@ -6120,13 +6127,215 @@ function announceLinkPickerKeyboard(links: AnnounceLink[]): InlineKeyboard {
   const selected = new Set(links.map((link) => link.kind));
   const kb = new InlineKeyboard();
   for (const preset of ANNOUNCE_LINK_PRESETS) {
-    kb.text(`${selected.has(preset.kind) ? '✅' : '➕'} ${preset.label}`, `adm:ann:link:set:${preset.kind}`).row();
+    const idx = links.findIndex((link) => link.kind === preset.kind);
+    kb.text(`${idx >= 0 ? '✅' : '➕'} ${preset.label}`, `adm:ann:link:set:${preset.kind}`);
+    if (idx >= 0) kb.text('✏️', `adm:ann:link:edit:${idx}`);
+    kb.row();
   }
+  links.forEach((link, idx) => {
+    if (link.kind === 'url') {
+      kb.text(`🔗 ${link.label}`.slice(0, 40), `adm:ann:link:edit:${idx}`).row();
+    }
+  });
   kb.text('✏️ Custom URL', 'adm:ann:link:custom')
     .row()
     .text('⬅️ Back', 'adm:ann:buy:cancel');
   return kb;
 }
+
+function announceLinkEditKeyboard(index: number, link: AnnounceLink): InlineKeyboard {
+  return new InlineKeyboard()
+    .text('📝 Edit Label', `adm:ann:link:label:${index}`)
+    .row()
+    .text(`🎨 Color: ${COLOR_PREFIX[link.color ?? 'none'] || '∅'} ${link.color ?? 'none'}`, `adm:ann:link:color:${index}`)
+    .row()
+    .text(
+      link.icon_custom_emoji_id ? `✨ Icon: ${link.icon_unicode ?? ''} (set)` : '✨ Icon: (none)',
+      `adm:ann:link:icon:${index}`,
+    )
+    .row()
+    .text('🗑 Remove Link', `adm:ann:link:del:${index}`)
+    .row()
+    .text('✅ Done', 'adm:ann:link:add');
+}
+
+async function showAnnounceLinkEdit(ctx: AppCtx, index: number): Promise<void> {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') return;
+  const links = flow.data.links ?? [];
+  const link = links[index];
+  if (!link) {
+    await ctx.editMessageText(
+      '🔗 *Link Buttons*\n\nTap a preset to toggle it, or add a custom URL. You can attach up to six links.',
+      { parse_mode: 'Markdown', reply_markup: announceLinkPickerKeyboard(links) },
+    );
+    return;
+  }
+  const previewKb = new InlineKeyboard();
+  previewKb.url(link.label, link.url);
+  if (link.icon_custom_emoji_id) previewKb.icon(link.icon_custom_emoji_id);
+  if (link.color) {
+    const style = colorModeToStyle(link.color);
+    if (style !== undefined) previewKb.style(style);
+  }
+  const previewText =
+    `🔗 *Link Button ${index + 1} — preview*\n\n` +
+    `• Label: \`${link.label}\`\n` +
+    `• URL: \`${link.url}\`\n` +
+    `• Color: \`${link.color ?? 'none'}\`\n` +
+    `• Icon: ${link.icon_unicode ? `${link.icon_unicode} (premium)` : '_(none)_'}`;
+  if (ctx.callbackQuery) {
+    await ctx.editMessageText(previewText, { parse_mode: 'Markdown', reply_markup: previewKb });
+  } else {
+    await ctx.reply(previewText, { parse_mode: 'Markdown', reply_markup: previewKb });
+  }
+  await ctx.reply('Configure this link button:', {
+    reply_markup: announceLinkEditKeyboard(index, link),
+  });
+}
+
+function announceLinkColorPickerKeyboard(index: number): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (const c of Object.keys(COLOR_PREFIX)) {
+    kb.text(`${COLOR_PREFIX[c as ColorMode] || '∅'} ${c}`, `adm:ann:link:colr:${index}:${c}`);
+  }
+  kb.row().text('⬅️ Back', `adm:ann:link:edit:${index}`);
+  return kb;
+}
+
+adminBot.callbackQuery(/^adm:ann:link:edit:(\d+)$/, async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  flow.step = 'confirm';
+  await ctx.answerCallbackQuery();
+  await showAnnounceLinkEdit(ctx, Number(ctx.match[1]));
+});
+
+adminBot.callbackQuery(/^adm:ann:link:label:(\d+)$/, async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  const index = Number(ctx.match[1]);
+  ctx.session.adminFlow = {
+    type: 'announce',
+    step: 'link_label',
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy: flow.data.buy,
+      share_sales: flow.data.share_sales,
+      links: flow.data.links,
+      link_index: index,
+    },
+  };
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(
+    '📝 *Edit link label*\n\nSend the new button label (1-64 characters), or `/cancel`.',
+    { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('⬅️ Back', `adm:ann:link:edit:${index}`) },
+  );
+});
+
+adminBot.callbackQuery(/^adm:ann:link:icon:(\d+)$/, async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  const index = Number(ctx.match[1]);
+  ctx.session.adminFlow = {
+    type: 'announce',
+    step: 'link_icon',
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy: flow.data.buy,
+      share_sales: flow.data.share_sales,
+      links: flow.data.links,
+      link_index: index,
+    },
+  };
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(
+    '✨ *Set link button icon*\n\n' +
+      'Send a *premium* emoji message — the bot reads its `custom_emoji_id` automatically.\n\n' +
+      'Type `clear` to remove the icon, or `/cancel` to keep the current one.',
+    { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('⬅️ Back', `adm:ann:link:edit:${index}`) },
+  );
+});
+
+adminBot.callbackQuery(/^adm:ann:link:color:(\d+)$/, async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText('🎨 *Pick a button color*', {
+    parse_mode: 'Markdown',
+    reply_markup: announceLinkColorPickerKeyboard(Number(ctx.match[1])),
+  });
+});
+
+adminBot.callbackQuery(/^adm:ann:link:colr:(\d+):(.+)$/, async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  const index = Number(ctx.match[1]);
+  const color = ctx.match[2] as ColorMode;
+  const links = [...(flow.data.links ?? [])];
+  const link = links[index];
+  if (!link || !(color in COLOR_PREFIX)) {
+    await ctx.answerCallbackQuery({ text: 'Unknown option.' });
+    return;
+  }
+  links[index] = { ...link, color };
+  ctx.session.adminFlow = {
+    type: 'announce',
+    step: 'confirm',
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy: flow.data.buy,
+      share_sales: flow.data.share_sales,
+      links,
+    },
+  };
+  await ctx.answerCallbackQuery({ text: `Color → ${color}` });
+  await showAnnounceLinkEdit(ctx, index);
+});
+
+adminBot.callbackQuery(/^adm:ann:link:del:(\d+)$/, async (ctx) => {
+  const flow = ctx.session.adminFlow;
+  if (flow?.type !== 'announce') {
+    await ctx.answerCallbackQuery({ text: 'Open Broadcast first.' });
+    return;
+  }
+  const links = [...(flow.data.links ?? [])];
+  links.splice(Number(ctx.match[1]), 1);
+  ctx.session.adminFlow = {
+    type: 'announce',
+    step: 'confirm',
+    data: {
+      text: flow.data.text,
+      format: flow.data.format,
+      buy: flow.data.buy,
+      share_sales: flow.data.share_sales,
+      links,
+    },
+  };
+  await ctx.answerCallbackQuery({ text: 'Link removed.' });
+  await ctx.editMessageText(
+    '🔗 *Link Buttons*\n\nTap a preset to toggle it, or add a custom URL. You can attach up to six links.',
+    { parse_mode: 'Markdown', reply_markup: announceLinkPickerKeyboard(links) },
+  );
+});
 
 adminBot.callbackQuery('adm:ann:link:add', async (ctx) => {
   const flow = ctx.session.adminFlow;
@@ -10187,6 +10396,89 @@ adminBot.on('message:text', async (ctx, next) => {
         };
         await ctx.reply(`✅ Link added → \`${label}\``, { parse_mode: 'Markdown' });
         await showAnnounceConfirm(ctx);
+        return;
+      }
+      if (flow.step === 'link_label') {
+        const index = flow.data.link_index;
+        const links = [...(flow.data.links ?? [])];
+        const link = links[index];
+        if (!link) {
+          await ctx.reply('❌ That link no longer exists.');
+          await showAnnounceConfirm(ctx);
+          return;
+        }
+        const trimmed = text
+          .replace(/\{\{ce:[^|}]+\|([^}]*)\}\}/g, '$1')
+          .trim()
+          .slice(0, 64);
+        if (!trimmed) {
+          await ctx.reply('❌ Empty label. Send the new button label or `/cancel`.');
+          return;
+        }
+        links[index] = { ...link, label: trimmed };
+        ctx.session.adminFlow = {
+          type: 'announce',
+          step: 'confirm',
+          data: {
+            text: flow.data.text,
+            format: flow.data.format,
+            buy: flow.data.buy,
+            share_sales: flow.data.share_sales,
+            links,
+          },
+        };
+        await ctx.reply(`✅ Label updated → \`${trimmed}\``, { parse_mode: 'Markdown' });
+        await showAnnounceLinkEdit(ctx, index);
+        return;
+      }
+      if (flow.step === 'link_icon') {
+        const index = flow.data.link_index;
+        const links = [...(flow.data.links ?? [])];
+        const link = links[index];
+        if (!link) {
+          await ctx.reply('❌ That link no longer exists.');
+          await showAnnounceConfirm(ctx);
+          return;
+        }
+        const writeLinks = (patch: Partial<AnnounceLink>) => {
+          links[index] = { ...link, ...patch };
+          ctx.session.adminFlow = {
+            type: 'announce',
+            step: 'confirm',
+            data: {
+              text: flow.data.text,
+              format: flow.data.format,
+              buy: flow.data.buy,
+              share_sales: flow.data.share_sales,
+              links,
+            },
+          };
+        };
+        if (text.trim().toLowerCase() === 'clear') {
+          writeLinks({ icon_unicode: undefined, icon_custom_emoji_id: undefined });
+          await ctx.reply('🗑 Icon cleared.');
+          await showAnnounceLinkEdit(ctx, index);
+          return;
+        }
+        const ce = (ctx.message.entities ?? []).find(
+          (e) => e.type === 'custom_emoji' && 'custom_emoji_id' in e,
+        ) as { offset: number; length: number; custom_emoji_id: string } | undefined;
+        if (!ce) {
+          await ctx.reply(
+            '❌ Send a *premium* emoji message (the bot will read its `custom_emoji_id`), or type `clear` / `/cancel`.',
+            { parse_mode: 'Markdown' },
+          );
+          return;
+        }
+        const unicode = ctx.message.text.slice(ce.offset, ce.offset + ce.length);
+        const customId = ce.custom_emoji_id;
+        if (!unicode || !customId || !/^\d{8,}$/.test(customId)) {
+          await ctx.reply('❌ That emoji has no valid premium id. Send a real premium emoji, or type `clear`.');
+          return;
+        }
+        writeLinks({ icon_unicode: unicode, icon_custom_emoji_id: customId });
+        await ctx.reply('✅ Icon updated.');
+        await showAnnounceLinkEdit(ctx, index);
         return;
       }
       if (flow.step === 'buy_label') {
