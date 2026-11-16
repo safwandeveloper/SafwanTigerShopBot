@@ -4,6 +4,9 @@ export type AnnounceLink = {
   kind: 'refer' | 'api' | 'settings' | 'shop' | 'topup' | 'support' | 'url';
   label: string;
   url: string;
+  color?: import('../../config/index.js').ColorMode;
+  icon_unicode?: string;
+  icon_custom_emoji_id?: string;
 };
 
 /** Multi-step admin input flow state. */
@@ -291,6 +294,48 @@ export type AdminFlow =
         format?: 'md' | 'html';
         share_sales?: boolean;
         links?: AnnounceLink[];
+        buy?: {
+          product_id: number;
+          product_name: string;
+          label: string;
+          color: import('../../config/index.js').ColorMode;
+          icon_unicode?: string;
+          icon_custom_emoji_id?: string;
+        };
+      };
+    }
+  | {
+      // Waiting for the admin to send a new label for link button
+      // `link_index`. Same payload as the confirm step + the index.
+      type: 'announce';
+      step: 'link_label';
+      data: {
+        text: string;
+        format?: 'md' | 'html';
+        share_sales?: boolean;
+        links?: AnnounceLink[];
+        link_index: number;
+        buy?: {
+          product_id: number;
+          product_name: string;
+          label: string;
+          color: import('../../config/index.js').ColorMode;
+          icon_unicode?: string;
+          icon_custom_emoji_id?: string;
+        };
+      };
+    }
+  | {
+      // Waiting for the admin to send a premium emoji for link
+      // button `link_index`.
+      type: 'announce';
+      step: 'link_icon';
+      data: {
+        text: string;
+        format?: 'md' | 'html';
+        share_sales?: boolean;
+        links?: AnnounceLink[];
+        link_index: number;
         buy?: {
           product_id: number;
           product_name: string;
